@@ -26,7 +26,9 @@ import java.io.PrintStream;
 import java.math.BigDecimal;
 import java.security.SecureRandom;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.RejectedExecutionException;
 
+import org.eclipse.swt.widgets.Display;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GLCapabilities;
@@ -53,6 +55,8 @@ public final class GLThread extends Thread {
 	protected volatile double deltaTime = (((this.nanoTime = System.nanoTime()) - this.lastFrameTime) + 0.0D) / 1000000000.0D;
 	
 	protected volatile Renderer renderer = Renderer.colorDemo;
+	
+	private final ConcurrentLinkedDeque<Runnable> tasksToRun = new ConcurrentLinkedDeque<>();
 	
 	/** Creates a new GLThread that will use the given GLCanvas.
 	 * 
@@ -84,14 +88,17 @@ public final class GLThread extends Thread {
 		super.start();
 	}
 	
+	/** @return True if this {@link GLThread} is currently running */
 	public final boolean isRunning() {
 		return this.running && this.isAlive();
 	}
 	
+	/** @return True if this {@link GLThread} should be running */
 	public final boolean shouldBeRunning() {
 		return this.shouldBeRunning && !this.glCanvas.isDisposed();
 	}
 	
+	/** @return Whether or not this {@link GLThread} is shutting down */
 	public final boolean isShuttingDown() {
 		return !this.shouldBeRunning();
 	}
@@ -110,28 +117,163 @@ public final class GLThread extends Thread {
 		}
 	}
 	
+	/** Has this {@link GLThread} execute the given runnable at the nearest
+	 * opportunity.
+	 * 
+	 * @param runnable The runnable to run
+	 * @return <tt>false</tt> if the code was enqueued; <tt>true</tt> if the
+	 *         code was executed immediately
+	 * @throws RejectedExecutionException Thrown if this GLThread has the same
+	 *             number of tasks enqueued (or more) than it does milliseconds
+	 *             in a frame */
+	public final boolean asyncExec(Runnable runnable) throws RejectedExecutionException {
+		if(runnable == null) {
+			throw new NullPointerException();
+		}
+		if(Thread.currentThread() == this) {
+			runnable.run();
+			return true;
+		}
+		int size = this.tasksToRun.size();
+		int max = Long.valueOf(Math.round(Math.floor(1000.0D / this.timer.getTargetFrequency()))).intValue();
+		max = max <= 0 ? 16 : max;
+		if(size >= max) {
+			throw new RejectedExecutionException(String.format("This GLThread has %s/%s tasks already enqueued!", Integer.toString(size), Integer.toString(max)));
+		}
+		this.tasksToRun.add(runnable);
+		return false;
+	}
+	
 	//===========================================================================================================================
 	
+	/** Attempts to have the renderer handle the exception it threw, or handles
+	 * it and returns false if the renderer failed to even do that.
+	 * 
+	 * @param renderer The renderer that threw an exception
+	 * @param problemMethod The renderer method that threw the exception
+	 * @param ex The exception that was thrown
+	 * @return Whether or not the renderer was able to handle the exception */
+	protected static final boolean handleListenerException(Renderer renderer, String problemMethod, Throwable ex) {
+		String name = renderer.getClass().getName();
+		boolean handled = false;
+		try {
+			name = renderer.getName();
+			handled = renderer.handleException(ex);
+		} catch(Throwable ex1) {
+			ex.addSuppressed(ex1);
+			handled = false;
+		}
+		if(!handled) {
+			System.err.print(String.format("Renderer \"%s\" threw an exception while executing %s: ", name, problemMethod));
+			ex.printStackTrace(System.err);
+			System.err.flush();
+		}
+		return handled;
+	}
+	
+	public Renderer getRenderer() {
+		return this.renderer;
+	}
+	
+	public boolean setRenderer(final Renderer renderer) {
+		if(Thread.currentThread() != this) {
+			final Boolean[] rtrn = {null};
+			this.tasksToRun.add(() -> {
+				rtrn[0] = Boolean.valueOf(this.setRenderer(renderer));
+			});
+			Display display;
+			while(rtrn[0] == null) {
+				display = Display.getCurrent();
+				if(display != null) {
+					if(!display.readAndDispatch()) {
+						CodeUtil.sleep(10L);
+					}
+				} else {
+					CodeUtil.sleep(10L);
+				}
+			}
+			return rtrn[0].booleanValue();
+		}
+		
+		final Renderer oldRenderer = this.renderer;
+		boolean initialized;
+		try {
+			initialized = renderer.isInitialized();
+		} catch(Throwable ex) {
+			handleListenerException(oldRenderer, "isInitialized()", ex);
+			return false;
+		}
+		if(!initialized) {
+			try {
+				renderer.initialize();
+			} catch(Throwable ex) {
+				handleListenerException(oldRenderer, "initialize()", ex);
+				return false;
+			}
+		}
+		try {
+			renderer.onSelected();
+		} catch(Throwable ex) {
+			handleListenerException(oldRenderer, "onSelected()", ex);
+			return false;
+		}
+		
+		this.renderer = renderer;
+		if(oldRenderer != null) {
+			try {
+				oldRenderer.onDeselected();
+			} catch(Throwable ex) {
+				handleListenerException(oldRenderer, "onDeselected()", ex);
+			}
+		}
+		return true;
+	}
+	
+	//===========================================================================================================================
+	
+	/** Returns whether or not vertical sync is enabled.
+	 * 
+	 * @return Whether or not vertical sync is enabled */
 	public final boolean isVsyncEnabled() {
 		return this.vsync;
 	}
 	
+	/** Sets whether or not vertical sync is enabled.
+	 * 
+	 * @param vsync Whether or not vertical sync will be enabled
+	 * @return This GLThread */
 	public final GLThread setVsyncEnabled(boolean vsync) {
 		this.vsync = vsync;
 		return this;
 	}
 	
-	public double getTargetFramerate() {
+	/** Returns the current target framerate per period.<br>
+	 * The period defaults to a second, but may be different if
+	 * {@link #setFPS(double, double)} has been used.
+	 * 
+	 * @return The current target framerate. */
+	public double getTargetFPS() {
 		return (this.timer.getTargetFrequency() * 1000.0D) / this.timer.getTargetPeriodInMilliseconds();
 	}
 	
-	public final GLThread setFramerate(double framerate, double period) {
+	/** Sets the target frame rate that this GLThread will attempt to run at.
+	 * 
+	 * @param framerate The frames per period to set
+	 * @param period The length of time after which the frame count will reset
+	 *            to zero and begin counting anew
+	 * @return This GLThread */
+	public final GLThread setFPS(double framerate, double period) {
 		this.timer.setFrequency(framerate, period);
 		return this;
 	}
 	
-	public final GLThread setFramerate(double framerate) {
-		return this.setFramerate(framerate, this.timer.getTargetPeriodInMilliseconds());
+	/** Sets the target frames per second that this GLThread will attempt to run
+	 * at.
+	 * 
+	 * @param framerate The frames per second to set
+	 * @return This GLThread */
+	public final GLThread setFPS(double framerate) {
+		return this.setFPS(framerate, this.timer.getTargetPeriodInMilliseconds());
 	}
 	
 	/** @return The current frame number being rendered */
@@ -212,6 +354,8 @@ public final class GLThread extends Thread {
 			this.lastSwap = this.glCanvas.glGetSwapInterval();
 			this.lastVsync = this.lastSwap == 1;
 			
+			Runnable task;
+			
 			Renderer loop;
 			this.nanoTime = System.nanoTime();
 			this.lastFrameTime = this.nanoTime;
@@ -259,6 +403,17 @@ public final class GLThread extends Thread {
 				if(!this.vsync) {
 					this.timer.frequencySleep();
 				}
+				
+				while((task = this.tasksToRun.pollFirst()) != null) {
+					try {
+						task.run();
+					} catch(Throwable ex) {
+						System.err.print("A GLThread async task threw an exception: ");
+						ex.printStackTrace(System.err);
+						System.err.flush();
+					}
+				}
+				
 				this.lastFrameTime = this.nanoTime;
 				this.nanoTime = System.nanoTime();
 			}
@@ -310,6 +465,8 @@ public final class GLThread extends Thread {
 		
 		//=======================================================================================================================
 		
+		/** A simple OpenGL demo that changes the background color a little bit
+		 * each frame randomly. */
 		public static final Renderer colorDemo = new Renderer() {
 			
 			boolean initialized = false;
