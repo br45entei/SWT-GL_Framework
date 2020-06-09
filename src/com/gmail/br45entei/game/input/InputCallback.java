@@ -20,10 +20,14 @@ package com.gmail.br45entei.game.input;
 
 import com.gmail.br45entei.game.input.Keyboard.Keys;
 
-/** Class used to provide a way for listeners to receive and use data from input
- * events
+/** Interface used to provide a way for listeners to receive and use data from
+ * input events.<br>
+ * <br>
+ * <b>Note:</b>&nbsp;The methods that this interface defines are called by the
+ * {@link com.gmail.br45entei.game.Window Window}'s display thread.
  *
- * @author Brian_Entei */
+ * @author Brian_Entei
+ * @since 1.0 */
 public interface InputCallback {
 	
 	/** @return Whether or not {@link #initialize()} has been called at least

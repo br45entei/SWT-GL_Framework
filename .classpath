@@ -4,9 +4,12 @@
 	<classpathentry kind="src" path="resources"/>
 	<classpathentry kind="src" path="sdl2gdx/src"/>
 	<classpathentry kind="src" path="sdl2gdx/res"/>
-	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+	<classpathentry kind="src" path="apacheCommons">
+		<attributes>
+			<attribute name="ignore_optional_problems" value="true"/>
+		</attributes>
+	</classpathentry>
 	<classpathentry combineaccessrules="false" kind="src" path="/lwjgl3-swt"/>
-	<classpathentry combineaccessrules="false" kind="src" path="/org.eclipse.swt_x86_64"/>
 	<classpathentry kind="lib" path="sdl2gdx/libs/gdx-1.9.10.jar" sourcepath="sdl2gdx/libs/gdx-1.9.10-src.jar"/>
 	<classpathentry kind="lib" path="sdl2gdx/libs/gdx-controllers-1.9.10.jar" sourcepath="sdl2gdx/libs/gdx-controllers-1.9.10-src.jar"/>
 	<classpathentry kind="lib" path="sdl2gdx/libs/gdx-jnigen-1.9.10.jar" sourcepath="sdl2gdx/libs/gdx-jnigen-1.9.10-src.jar"/>
@@ -51,5 +54,6 @@
 			<attribute name="javadoc_location" value="jar:platform:/resource/lwjgl3-swt/libs/lwjgl-javadoc.jar!/"/>
 		</attributes>
 	</classpathentry>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

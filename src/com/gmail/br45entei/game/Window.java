@@ -19,6 +19,8 @@
 package com.gmail.br45entei.game;
 
 import com.badlogic.gdx.controllers.Controller;
+import com.gmail.br45entei.game.GLThread.Renderer;
+import com.gmail.br45entei.game.input.InputCallback;
 import com.gmail.br45entei.game.input.Keyboard;
 import com.gmail.br45entei.game.input.Mouse;
 import com.gmail.br45entei.lwjgl.natives.LWJGL_Natives;
@@ -37,6 +39,7 @@ import org.eclipse.swt.events.ShellEvent;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Display;
+import org.eclipse.swt.widgets.Menu;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.wb.swt.SWTResourceManager;
 import org.lwjgl.opengl.swt.GLCanvas;
@@ -49,7 +52,8 @@ import uk.co.electronstudio.sdl2gdx.SDL2ControllerManager.InputPreference;
 /** The main Window class which manages background tasks such as maintaining the
  * application window.
  *
- * @author Brian_Entei */
+ * @author Brian_Entei
+ * @since 1.0 */
 public class Window {
 	
 	static {
@@ -220,7 +224,7 @@ public class Window {
 		}
 		
 		this.glThread = new GLThread(this.glCanvas);
-		this.glThread.setDaemon(true);
+		
 	}
 	
 	/** Maintains the application window, polls the mouse and keyboard, and
@@ -257,7 +261,7 @@ public class Window {
 		return this.display.isDisposed() ? null : this.display.getThread();
 	}
 	
-	public final Thread getGLThread() {
+	public final GLThread getGLThread() {
 		return this.glThread;
 	}
 	
@@ -425,4 +429,107 @@ public class Window {
 		}
 	}
 	
+	//======================================================================================================================================
+	
+	public final boolean isGameRegistered(Game game) {
+		if(game != null) {
+			
+		}
+		return false;
+	}
+	
+	public final boolean isInputCallbackRegistered(InputCallback inputCallback) {
+		if(inputCallback != null) {
+			
+		}
+		return false;
+	}
+	
+	public final boolean registerInputCallback(InputCallback inputCallback) {
+		if(inputCallback != null) {
+			
+		}
+		return false;
+	}
+	
+	public final boolean unregisterInputCallback(InputCallback inputCallback) {
+		if(inputCallback != null) {
+			
+		}
+		return false;
+	}
+	
+	public final boolean isRendererRegistered(Renderer renderer) {
+		if(renderer != null) {
+			
+		}
+		return false;
+	}
+	
+	public final boolean registerRenderer(Renderer renderer) {
+		if(renderer != null) {
+			
+		}
+		return false;
+	}
+	
+	public final boolean unregisterRenderer(Renderer renderer) {
+		if(renderer != null) {
+			
+		}
+		return false;
+	}
+	
+	//======================================================================================================================================
+	
+	/** MenuProvider is an interface which provides developers a way to add
+	 * context menus to their game implementations.<br>
+	 * 'MenuBar' menus appear in the top menu bar of the main application
+	 * {@link Window}, and 'PopupMenu' menus appear in the right-click context
+	 * menu of the main Window's {@link GLCanvas}.
+	 * 
+	 * @author Brian_Entei
+	 * @since 1.0 */
+	public static interface MenuProvider {
+		
+		/** Called when a new {@link Menu MenuBar} is being created for the main
+		 * {@link Window}.<br>
+		 * This allows you to use the provided menu to add your own
+		 * {@link org.eclipse.swt.widgets.MenuItem menu items} which can perform
+		 * various tasks when clicked.
+		 * 
+		 * @param menu The {@link Menu MenuBar} that you can populate with your
+		 *            own {@link org.eclipse.swt.widgets.MenuItem menu items} */
+		public void onMenuBarCreation(Menu menu);
+		
+		/** Called when the main {@link Window}'s existing {@link Menu MenuBar}
+		 * is about to be disposed.<br>
+		 * This gives you the opportunity to free up any system resources and
+		 * perform any necessary tasks before the menu is destroyed.
+		 * 
+		 * @param menu The {@link Menu MenuBar} that is about to be disposed */
+		public void onMenuBarDeletion(Menu menu);
+		
+		/** Called when a new {@link Menu PopupMenu} is being created for the
+		 * main @link Window}'s {@link GLCanvas}.<br>
+		 * This allows you to use the provided menu to add your own
+		 * {@link org.eclipse.swt.widgets.MenuItem menu items} which can perform
+		 * various tasks when clicked.
+		 * 
+		 * @param menu The {@link Menu PopupMenu} that you can populate with
+		 *            your
+		 *            own {@link org.eclipse.swt.widgets.MenuItem menu items} */
+		public void onPopupMenuCreation(Menu menu);
+		
+		/** Called when the main {@link Window}'s {@link GLCanvas}' existing
+		 * {@link Menu PopupMenu} (right-click menu) is about to be
+		 * disposed.<br>
+		 * This gives you the opportunity to free up any system resources and
+		 * perform any necessary tasks before the menu is destroyed.
+		 * 
+		 * @param menu The {@link Menu PopupMenu} that is about to be
+		 *            disposed */
+		public void onPopupMenuDeletion(Menu menu);
+		
+	}
 }

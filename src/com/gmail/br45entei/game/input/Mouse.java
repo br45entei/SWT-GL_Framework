@@ -30,6 +30,7 @@ import java.awt.Robot;
 import java.util.ArrayList;
 import java.util.EventListener;
 import java.util.List;
+import java.util.concurrent.ConcurrentLinkedDeque;
 
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.SWTException;
@@ -56,7 +57,8 @@ import org.eclipse.swt.widgets.TypedListener;
 /** This class provides a simple way to retrieve input from and manage the
  * mouse and system cursor.
  *
- * @author Brian_Entei */
+ * @author Brian_Entei
+ * @since 1.0 */
 public class Mouse {
 	
 	private static final Robot robot;
@@ -85,6 +87,48 @@ public class Mouse {
 	protected static final boolean[] mouseDownStates = new boolean[Math.max(3, MouseInfo.getNumberOfButtons())];
 	protected static final boolean[] lastMouseDownStates = new boolean[mouseDownStates.length];
 	protected static final boolean[] currentMouseDownStates = new boolean[mouseDownStates.length];
+	
+	private static final ConcurrentLinkedDeque<InputCallback> listeners = new ConcurrentLinkedDeque<>();
+	
+	/** Checks if the given InputCallback is registered with this input source.
+	 * 
+	 * @param listener The InputCallback to check
+	 * @return Whether or not the specified listener is currently registered */
+	public static final boolean isInputCallbackRegistered(InputCallback listener) {
+		if(listener != null) {
+			return listeners.contains(listener);
+		}
+		return false;
+	}
+	
+	/** Registers the given InputCallback with this input source.<br>
+	 * This method will return <tt><b>false</b></tt> if the listener was already
+	 * registered.
+	 * 
+	 * @param listener The InputCallback to register
+	 * @return Whether or not the specified listener was just registered */
+	public static final boolean registerInputCallback(InputCallback listener) {
+		if(listener != null && !isInputCallbackRegistered(listener)) {
+			listeners.add(listener);
+			return isInputCallbackRegistered(listener);
+		}
+		return false;
+	}
+	
+	/** Unregisters the given InputCallback from this input source.<br>
+	 * This method will return <tt><b>false</b></tt> if the listener was never
+	 * registered.
+	 * 
+	 * @param listener The InputCallback to unregister
+	 * @return Whether or not the specified listener was just unregistered */
+	public static final boolean unregisterInputCallback(InputCallback listener) {
+		if(listener != null && isInputCallbackRegistered(listener)) {
+			while(listeners.remove(listener)) {
+			}
+			return !isInputCallbackRegistered(listener);
+		}
+		return false;
+	}
 	
 	/** Polls the mouse buttons, and then polls the system cursor for its
 	 * location. */

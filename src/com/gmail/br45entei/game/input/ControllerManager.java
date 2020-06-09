@@ -20,7 +20,8 @@ package com.gmail.br45entei.game.input;
 
 /** This class makes it easier to manage any controllers that are plugged in.
  *
- * @author Brian_Entei */
+ * @author Brian_Entei
+ * @since 1.0 */
 public class ControllerManager {
 	
 }

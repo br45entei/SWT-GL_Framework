@@ -29,7 +29,8 @@ import org.eclipse.swt.widgets.Display;
 
 /** This class provides a simple way to retrieve input from the keyboard.
  *
- * @author Brian_Entei */
+ * @author Brian_Entei
+ * @since 1.0 */
 public class Keyboard {
 	
 	protected static volatile boolean[] lastKeyboardButtonStates = new boolean[256];
@@ -134,13 +135,15 @@ public class Keyboard {
 		public static final int VK_MIDDLE_CLICK = 4;
 		public static final int VK_XBUTTON1 = 5;
 		public static final int VK_XBUTTON2 = 6;
-		
+		//public static final int VK_ = 7;//							Undefined
 		public static final int VK_BACKSPACE = 8;
 		public static final int VK_TAB = 9;
-		
-		public static final int VK_RETURN = 13;
+		//public static final int VK_ = 10;//							Undefined, but the ASCII value is '\n'
+		//public static final int VK_ = 11;//							Undefined
+		//public static final int VK_ = 12;//							Undefined
+		public static final int VK_RETURN = 13;//						ASCII value is '\r'
 		public static final int VK_VERTICAL_TAB = 14;
-		//public static final int VK_ = 15;							Undefined
+		//public static final int VK_ = 15;								Undefined
 		public static final int VK_SHIFT = 16;
 		/** Either one of the CTRL(control) modifier keys */
 		public static final int VK_CONTROL = 17;
@@ -149,8 +152,8 @@ public class Keyboard {
 		public static final int VK_PAUSE_BREAK = 19;
 		public static final int VK_CAPITALS_LOCK = 20;
 		public static final int VK_KANA = 21;//						IME Kana mode
-		//public static final int VK_HANGUEL = 21;//					IME Hanguel mode (maintained for compatibility; use VK_HANGUL)
-		//public static final int VK_HANGUL = 21;//					IME Hangul mode
+		public static final int VK_HANGUEL = 21;//					IME Hanguel mode (maintained for compatibility; use VK_HANGUL)
+		public static final int VK_HANGUL = 21;//					IME Hangul mode
 		//public static final int VK_ = 22;//							Undefined
 		public static final int VK_JUNJA = 23;//					IME Junja mode
 		public static final int VK_FINAL = 24;//					IME final mode

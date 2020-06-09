@@ -23,6 +23,7 @@ import com.gmail.br45entei.util.FrequencyTimer;
 import com.gmail.br45entei.util.FrequencyTimer.TimerCallback;
 
 import java.io.PrintStream;
+import java.math.BigDecimal;
 import java.security.SecureRandom;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
@@ -33,7 +34,8 @@ import org.lwjgl.opengl.swt.GLCanvas;
 
 /** This class is the main OpenGL thread.
  *
- * @author Brian_Entei */
+ * @author Brian_Entei
+ * @since 1.0 */
 public final class GLThread extends Thread {
 	
 	protected final GLCanvas glCanvas;
@@ -46,7 +48,11 @@ public final class GLThread extends Thread {
 	protected final FrequencyTimer timer = new FrequencyTimer(60.0D, 1000.0D);
 	protected final ConcurrentLinkedDeque<String> fpsLog = new ConcurrentLinkedDeque<>();
 	
-	protected volatile GLLoop glLoop = GLLoop.colorDemo;
+	protected volatile long nanoTime = System.nanoTime();
+	protected volatile long lastFrameTime = this.nanoTime;
+	protected volatile double deltaTime = (((this.nanoTime = System.nanoTime()) - this.lastFrameTime) + 0.0D) / 1000000000.0D;
+	
+	protected volatile Renderer renderer = Renderer.colorDemo;
 	
 	/** Creates a new GLThread that will use the given GLCanvas.
 	 * 
@@ -56,6 +62,7 @@ public final class GLThread extends Thread {
 		this.setDaemon(true);
 		this.glCanvas = glCanvas;
 		
+		this.fpsLog.addFirst(new BigDecimal(this.deltaTime).toPlainString());
 		this.timer.setCallback(new TimerCallback() {
 			@Override
 			public void onTick() {
@@ -205,26 +212,31 @@ public final class GLThread extends Thread {
 			this.lastSwap = this.glCanvas.glGetSwapInterval();
 			this.lastVsync = this.lastSwap == 1;
 			
-			GLLoop loop;
+			Renderer loop;
+			this.nanoTime = System.nanoTime();
+			this.lastFrameTime = this.nanoTime;
+			this.nanoTime = System.nanoTime();
 			while(this.shouldBeRunning()) {
-				loop = this.glLoop;
+				this.deltaTime = ((this.nanoTime - this.lastFrameTime) + 0.0D) / 1000000000.0D;
+				
+				loop = this.renderer;
 				if(loop != null) {
 					try {
 						if(!loop.isInitialized()) {
 							loop.initialize();
 						}
-						loop.render();
+						loop.render(this.deltaTime);
 					} catch(Throwable ex) {
 						boolean handled = false;
 						try {
-							handled = this.glLoop.handleException(ex);
+							handled = this.renderer.handleException(ex);
 						} catch(Throwable ex1) {
 							ex.addSuppressed(ex1);
 							handled = false;
 						}
 						if(!handled) {
 							ex.printStackTrace();
-							this.glLoop = null;
+							this.renderer = null;
 						}
 					}
 				}
@@ -247,6 +259,8 @@ public final class GLThread extends Thread {
 				if(!this.vsync) {
 					this.timer.frequencySleep();
 				}
+				this.lastFrameTime = this.nanoTime;
+				this.nanoTime = System.nanoTime();
 			}
 			
 		} finally {
@@ -259,19 +273,44 @@ public final class GLThread extends Thread {
 		}
 	}
 	
-	public static interface GLLoop {
+	/** Renderer is an interface which defines OpenGL related methods which are
+	 * then called by the {@link GLThread}'s render loop.
+	 *
+	 * @author Brian_Entei
+	 * @since 1.0 */
+	public static interface Renderer {
 		
+		/** @return The name of this {@link Renderer} */
+		public String getName();
+		
+		/** @return Whether or not this {@link Renderer}'s {@link #initialize()}
+		 *         method has been called yet */
 		public boolean isInitialized();
 		
+		/** Called by the {@link GLThread}'s render loop just before it begins
+		 * to use this {@link Renderer} for the first time. */
 		public void initialize();
 		
-		public void render();
+		/** Called by the {@link GLThread} when this {@link Renderer} has been
+		 * selected for rendering. */
+		public void onSelected();
+		
+		/** Called by the {@link GLThread}'s render loop once per frame.
+		 * 
+		 * @param deltaTime The delta time of the current frame from the last
+		 *            (with a framerate of <tt>60.0</tt>, this would typically
+		 *            be around <tt>0.0166667</tt>) */
+		public void render(double deltaTime);
+		
+		/** Called by the {@link GLThread} when this {@link Renderer} has been
+		 * unselected for rendering. */
+		public void onDeselected();
 		
 		public boolean handleException(Throwable ex);
 		
 		//=======================================================================================================================
 		
-		public static final GLLoop colorDemo = new GLLoop() {
+		public static final Renderer colorDemo = new Renderer() {
 			
 			boolean initialized = false;
 			
@@ -284,18 +323,32 @@ public final class GLThread extends Thread {
 			volatile boolean rdWait = false, gdWait = false, bdWait = false;
 			
 			@Override
+			public String getName() {
+				return "Color Demo";
+			}
+			
+			@Override
 			public boolean isInitialized() {
 				return this.initialized;
 			}
 			
 			@Override
 			public void initialize() {
+				//...
 				
 				this.initialized = true;
 			}
 			
 			@Override
-			public void render() {
+			public void onSelected() {
+			}
+			
+			@Override
+			public void render(double deltaTime) {
+				if((System.currentTimeMillis() % 1000) <= 16) {
+					Window.getWindow().getGLThread().fpsLog.addLast(String.format("deltaTime: %s", CodeUtil.limitDecimalNoRounding(deltaTime, 9, true)));
+				}
+				
 				GL11.glViewport(0, 0, Window.getWindow().getWidth(), Window.getWindow().getHeight());// Set the viewport to match the glCanvas' size (and optional offset)
 				GL11.glClearColor(this.r, this.g, this.b, 1);// Set the clear color to a random color that changes a bit every frame
 				GL11.glClear(GL11.GL_COLOR_BUFFER_BIT/* | GL11.GL_DEPTH_BUFFER_BIT*/);// Clear the color buffer, setting it to the clear color above
@@ -378,8 +431,12 @@ public final class GLThread extends Thread {
 			}
 			
 			@Override
+			public void onDeselected() {
+			}
+			
+			@Override
 			public boolean handleException(Throwable ex) {
-				
+				ex.printStackTrace();
 				return true;
 			}
 		};
