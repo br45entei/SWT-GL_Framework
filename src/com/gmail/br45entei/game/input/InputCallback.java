@@ -20,11 +20,13 @@ package com.gmail.br45entei.game.input;
 
 import com.gmail.br45entei.game.input.Keyboard.Keys;
 
+import java.util.Objects;
+
 /** Interface used to provide a way for listeners to receive and use data from
  * input events.<br>
  * <br>
  * <b>Note:</b>&nbsp;The methods that this interface defines are called by the
- * {@link com.gmail.br45entei.game.Window Window}'s display thread.
+ * {@link com.gmail.br45entei.game.ui.Window Window}'s display thread.
  *
  * @author Brian_Entei
  * @since 1.0 */
@@ -41,7 +43,9 @@ public interface InputCallback {
 	/** @return Whether or not this callback needs the mouse to be able to move
 	 *         around freely over the {@link Mouse#getCursorCanvas() cursor
 	 *         canvas} */
-	public boolean isModal();
+	default public boolean isModal() {
+		return false;
+	}
 	
 	/** Called once per frame to allow this callback to receive and use input
 	 * data
@@ -117,7 +121,29 @@ public interface InputCallback {
 	 * listeners queue to prevent future unhandled exceptions.
 	 * 
 	 * @param ex The exception that this callback threw
+	 * @param method This callback's method that threw the error
+	 * @param params The method parameters (if any) that were passed in
 	 * @return Whether or not this callback has handled the exception */
-	public boolean handleException(Throwable ex);
+	/*default */public boolean handleException(Throwable ex, String method, Object... params);/* {
+		StringBuilder sb = new StringBuilder();
+		for(int i = 0; i < params.length; i++) {
+			Object param = params[i];
+			String toString;
+			if(param == null || param.getClass().isPrimitive()) {
+				toString = Objects.toString(param);
+			} else {
+				toString = param.toString();
+				if(toString.startsWith(param.getClass().getName().concat("@"))) {
+					toString = param.getClass().getName();
+				}
+			}
+			
+			sb.append(toString).append(i + 1 == params.length ? "" : ", ");
+		}
+		String parameters = sb.toString();
+		System.err.println(String.format("An InputCallback (class \"%s\") threw an exception while executing method %s(%s)!", this.getClass().getName(), method, parameters));
+		System.err.flush();
+		return false;
+	}*/
 	
 }

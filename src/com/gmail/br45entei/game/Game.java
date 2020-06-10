@@ -18,9 +18,9 @@
  *******************************************************************************/
 package com.gmail.br45entei.game;
 
-import com.gmail.br45entei.game.GLThread.Renderer;
-import com.gmail.br45entei.game.Window.MenuProvider;
+import com.gmail.br45entei.game.graphics.Renderer;
 import com.gmail.br45entei.game.input.InputCallback;
+import com.gmail.br45entei.game.ui.MenuProvider;
 
 /** Game is an interface which ties {@link Renderer}, {@link InputCallback}
  * together as one, making it easier for developers to create their own 3D

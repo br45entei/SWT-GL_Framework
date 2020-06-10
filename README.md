@@ -7,7 +7,8 @@ You start out by defining your own class which implements either `Game` or `Rend
 
 ```Java
 import com.gmail.br45entei.game.Game;
-import com.gmail.br45entei.game.Window;
+import com.gmail.br45entei.game.graphics.Renderer;
+import com.gmail.br45entei.game.ui.Window;
 
 public class MyGame implements Game {
 
@@ -43,6 +44,7 @@ import org.lwjgl.opengl.swt.GLData;
 		data.swapInterval = Integer.valueOf(1);
 		data.majorVersion = 3;
 		data.minorVersion = 3;
+		data.forwardCompatible = true;
 		
 		Window window = new Window(title, width, height, framerate, data);
 		...

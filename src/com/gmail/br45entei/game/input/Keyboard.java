@@ -22,7 +22,9 @@ import com.gmail.br45entei.lwjgl.natives.LWJGL_Natives;
 import com.gmail.br45entei.util.CodeUtil;
 
 import java.lang.reflect.Field;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
 
 import org.eclipse.swt.widgets.Canvas;
 import org.eclipse.swt.widgets.Display;
@@ -35,8 +37,94 @@ public class Keyboard {
 	
 	protected static volatile boolean[] lastKeyboardButtonStates = new boolean[256];
 	protected static volatile boolean[] keyboardButtonStates = new boolean[lastKeyboardButtonStates.length];
+	protected static volatile long[] keyboardButtonDownTimes = new long[keyboardButtonStates.length];
+	protected static volatile long[] keyboardButtonHoldTimes = new long[keyboardButtonStates.length];
 	
 	protected static volatile boolean pollKeyboardAsynchronously = false;
+	
+	protected static final ConcurrentLinkedDeque<InputCallback> listeners = new ConcurrentLinkedDeque<>();
+	
+	/** Checks if the given InputCallback is registered with this input source.
+	 * 
+	 * @param listener The InputCallback to check
+	 * @return Whether or not the specified listener is currently registered */
+	public static final boolean isInputCallbackRegistered(InputCallback listener) {
+		if(listener != null) {
+			return listeners.contains(listener);
+		}
+		return false;
+	}
+	
+	/** Registers the given InputCallback with this input source.<br>
+	 * This method will return <tt><b>false</b></tt> if the listener was already
+	 * registered.
+	 * 
+	 * @param listener The InputCallback to register
+	 * @return Whether or not the specified listener was just registered */
+	public static final boolean registerInputCallback(InputCallback listener) {
+		if(listener != null && !isInputCallbackRegistered(listener)) {
+			listeners.add(listener);
+			return isInputCallbackRegistered(listener);
+		}
+		return false;
+	}
+	
+	/** Unregisters the given InputCallback from this input source.<br>
+	 * This method will return <tt><b>false</b></tt> if the listener was never
+	 * registered.
+	 * 
+	 * @param listener The InputCallback to unregister
+	 * @return Whether or not the specified listener was just unregistered */
+	public static final boolean unregisterInputCallback(InputCallback listener) {
+		if(listener != null && isInputCallbackRegistered(listener)) {
+			while(listeners.remove(listener)) {
+			}
+			return !isInputCallbackRegistered(listener);
+		}
+		return false;
+	}
+	
+	/** Attempts to have the listener handle the exception it threw, or handles
+	 * it and unregisters the listener if it failed to even do that.
+	 * 
+	 * @param listener The listener that threw an exception
+	 * @param ex The exception that was thrown
+	 * @param method The listener method that threw the exception
+	 * @param params The parameters that were passed to the listener's method
+	 * @return Whether or not the listener was able to handle the exception */
+	public static final boolean handleListenerException(InputCallback listener, Throwable ex, String method, Object... params) {
+		String name = listener.getClass().getName();
+		boolean handled = false;
+		try {
+			handled = listener.handleException(ex, method, params);
+		} catch(Throwable ex1) {
+			ex.addSuppressed(ex1);
+			handled = false;
+		}
+		if(!handled) {
+			StringBuilder sb = new StringBuilder();
+			for(int i = 0; i < params.length; i++) {
+				Object param = params[i];
+				String toString;
+				if(param == null || param.getClass().isPrimitive()) {
+					toString = Objects.toString(param);
+				} else {
+					toString = param.toString();
+					if(toString.startsWith(param.getClass().getName().concat("@"))) {
+						toString = param.getClass().getName();
+					}
+				}
+				
+				sb.append(toString).append(i + 1 == params.length ? "" : ", ");
+			}
+			String parameters = sb.toString();
+			System.err.print(String.format("Listener \"%s\" threw an exception while executing method %s(%s): ", name, method, parameters));
+			ex.printStackTrace(System.err);
+			System.err.flush();
+			unregisterInputCallback(listener);
+		}
+		return handled;
+	}
 	
 	/** Sets the keyboard poll mode.
 	 * 
@@ -78,10 +166,57 @@ public class Keyboard {
 				break;
 			case UNKNOWN:
 			default:
-				break;
+				return false;
 			}
 			
-			//TODO implement InputCallback.onKeyDown(...) and onKeyUp(...) here!
+			long now = System.currentTimeMillis();
+			for(int button = 0; button < keyboardButtonStates.length; button++) {
+				if(!lastKeyboardButtonStates[button] && keyboardButtonStates[button]) {
+					keyboardButtonHoldTimes[button] = 0;
+					keyboardButtonDownTimes[button] = now;
+					for(InputCallback listener : listeners) {
+						try {
+							listener.onKeyDown(button);
+						} catch(Throwable ex) {
+							if(!handleListenerException(listener, ex, "onKeyDown", Integer.valueOf(button))) {
+								unregisterInputCallback(listener);
+								continue;
+							}
+						}
+					}
+				}
+				if(lastKeyboardButtonStates[button] && keyboardButtonStates[button] && now - keyboardButtonDownTimes[button] >= 460) {
+					if(keyboardButtonHoldTimes[button] == 0 || keyboardButtonDownTimes[button] > keyboardButtonHoldTimes[button]) {
+						keyboardButtonHoldTimes[button] = now;
+					}
+					if(now - keyboardButtonHoldTimes[button] >= 40) {
+						keyboardButtonHoldTimes[button] = now;
+						for(InputCallback listener : listeners) {
+							try {
+								listener.onKeyHeld(button);
+							} catch(Throwable ex) {
+								if(!handleListenerException(listener, ex, "onKeyHeld", Integer.valueOf(button))) {
+									unregisterInputCallback(listener);
+									continue;
+								}
+							}
+						}
+					}
+				}
+				if(lastKeyboardButtonStates[button] && !keyboardButtonStates[button]) {
+					keyboardButtonHoldTimes[button] = 0;
+					for(InputCallback listener : listeners) {
+						try {
+							listener.onKeyUp(button);
+						} catch(Throwable ex) {
+							if(!handleListenerException(listener, ex, "onKeyUp", Integer.valueOf(button))) {
+								unregisterInputCallback(listener);
+								continue;
+							}
+						}
+					}
+				}
+			}
 			
 			return true;
 		}
@@ -98,6 +233,10 @@ public class Keyboard {
 		return false;
 	}
 	
+	/** Returns true if the specified key is currently being held down.
+	 * 
+	 * @param key The {@link Keys key} to check
+	 * @return Whether or not the specified key is being held down */
 	public static final boolean isKeyDown(int key) {
 		if(key < 0 || key >= keyboardButtonStates.length) {
 			return false;
@@ -105,6 +244,10 @@ public class Keyboard {
 		return keyboardButtonStates[key];
 	}
 	
+	/** Returns true if the specified key was <em>just</em> pressed down.
+	 * 
+	 * @param key The {@link Keys key} to check
+	 * @return Whether or not the specified key was just pressed */
 	public static final boolean getKeyDown(int key) {
 		if(key < 0 || key >= keyboardButtonStates.length) {
 			return false;
@@ -112,6 +255,10 @@ public class Keyboard {
 		return keyboardButtonStates[key] && !lastKeyboardButtonStates[key];
 	}
 	
+	/** Returns true if the specified key was <em>just</em> released.
+	 * 
+	 * @param key The {@link Keys key} to check
+	 * @return Whether or not the specified key was just released */
 	public static final boolean getKeyUp(int key) {
 		if(key < 0 || key >= keyboardButtonStates.length) {
 			return false;
@@ -120,7 +267,8 @@ public class Keyboard {
 	}
 	
 	/** Class used to store key constants.<br>
-	 * A majority of the key names and values were pulled from this <a href=
+	 * A majority of the key names and values in this class were pulled from
+	 * this <a href=
 	 * "https://docs.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes">Microsoft
 	 * website</a>.
 	 * 

@@ -30,14 +30,13 @@ import java.awt.Robot;
 import java.util.ArrayList;
 import java.util.EventListener;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.SWTException;
 import org.eclipse.swt.events.ControlEvent;
 import org.eclipse.swt.events.ControlListener;
-import org.eclipse.swt.events.KeyEvent;
-import org.eclipse.swt.events.KeyListener;
 import org.eclipse.swt.events.MouseAdapter;
 import org.eclipse.swt.events.MouseEvent;
 import org.eclipse.swt.events.MouseListener;
@@ -88,7 +87,7 @@ public class Mouse {
 	protected static final boolean[] lastMouseDownStates = new boolean[mouseDownStates.length];
 	protected static final boolean[] currentMouseDownStates = new boolean[mouseDownStates.length];
 	
-	private static final ConcurrentLinkedDeque<InputCallback> listeners = new ConcurrentLinkedDeque<>();
+	protected static final ConcurrentLinkedDeque<InputCallback> listeners = new ConcurrentLinkedDeque<>();
 	
 	/** Checks if the given InputCallback is registered with this input source.
 	 * 
@@ -128,6 +127,48 @@ public class Mouse {
 			return !isInputCallbackRegistered(listener);
 		}
 		return false;
+	}
+	
+	/** Attempts to have the listener handle the exception it threw, or handles
+	 * it and unregisters the listener if it failed to even do that.
+	 * 
+	 * @param listener The listener that threw an exception
+	 * @param ex The exception that was thrown
+	 * @param method The listener method that threw the exception
+	 * @param params The parameters that were passed to the listener's method
+	 * @return Whether or not the listener was able to handle the exception */
+	public static final boolean handleListenerException(InputCallback listener, Throwable ex, String method, Object... params) {
+		String name = listener.getClass().getName();
+		boolean handled = false;
+		try {
+			handled = listener.handleException(ex, method, params);
+		} catch(Throwable ex1) {
+			ex.addSuppressed(ex1);
+			handled = false;
+		}
+		if(!handled) {
+			StringBuilder sb = new StringBuilder();
+			for(int i = 0; i < params.length; i++) {
+				Object param = params[i];
+				String toString;
+				if(param == null || param.getClass().isPrimitive()) {
+					toString = Objects.toString(param);
+				} else {
+					toString = param.toString();
+					if(toString.startsWith(param.getClass().getName().concat("@"))) {
+						toString = param.getClass().getName();
+					}
+				}
+				
+				sb.append(toString).append(i + 1 == params.length ? "" : ", ");
+			}
+			String parameters = sb.toString();
+			System.err.print(String.format("Listener \"%s\" threw an exception while executing method %s(%s): ", name, method, parameters));
+			ex.printStackTrace(System.err);
+			System.err.flush();
+			unregisterInputCallback(listener);
+		}
+		return handled;
 	}
 	
 	/** Polls the mouse buttons, and then polls the system cursor for its
@@ -462,35 +503,6 @@ public class Mouse {
 			canvas.getShell().addTraverseListener(traverseListener);
 			list.add(traverseListener);
 			
-			KeyListener keyListener = new KeyListener() {
-				final boolean[] keyStates = new boolean[256];
-				final boolean[] lastKeyStates = new boolean[this.keyStates.length];
-				
-				@Override
-				public void keyPressed(KeyEvent e) {
-					if(cursorCanvas == null || e.widget != cursorCanvas) {
-						return;
-					}
-					this.lastKeyStates[e.character] = this.keyStates[e.character];
-					this.keyStates[e.character] = false;
-					
-					if(this.lastKeyStates[e.character] && this.keyStates[e.character]) {
-						//TODO implement InputCallback.onKeyHeld(...) here!
-					}
-				}
-				
-				@Override
-				public void keyReleased(KeyEvent e) {
-					if(cursorCanvas == null || e.widget != cursorCanvas) {
-						return;
-					}
-					this.lastKeyStates[e.character] = this.keyStates[e.character];
-					this.keyStates[e.character] = false;
-				}
-			};
-			canvas.addKeyListener(keyListener);
-			list.add(keyListener);
-			
 			return list;
 		}
 		return null;
@@ -498,28 +510,28 @@ public class Mouse {
 	
 	/** @return The location of the cursor canvas in SWT display-relative
 	 *         coordinates
-	 * @see com.gmail.br45entei.game.Window#getGLCanvasLocation()
+	 * @see com.gmail.br45entei.game.ui.Window#getGLCanvasLocation()
 	 *      Window.getGLCanvasLocation() */
 	public static final Point getCursorCanvasLocation() {
 		return new Point(cursorCanvasBounds.x, cursorCanvasBounds.y);
 	}
 	
 	/** @return The size of the cursor canvas
-	 * @see com.gmail.br45entei.game.Window#getSize() Window.getSize() */
+	 * @see com.gmail.br45entei.game.ui.Window#getSize() Window.getSize() */
 	public static final Point getCursorCanvasSize() {
 		return new Point(cursorCanvasBounds.width, cursorCanvasBounds.height);
 	}
 	
 	/** @return The bounds of the cursor canvas in SWT display-relative
 	 *         coordinates
-	 * @see com.gmail.br45entei.game.Window#getBounds() Window.getSize() */
+	 * @see com.gmail.br45entei.game.ui.Window#getBounds() Window.getSize() */
 	public static final Rectangle getCursorCanvasBounds() {
 		return new Rectangle(cursorCanvasBounds.x, cursorCanvasBounds.y, cursorCanvasBounds.width, cursorCanvasBounds.height);
 	}
 	
 	/** @return The center of the cursor canvas in SWT display-relative
 	 *         coordinates
-	 * @see com.gmail.br45entei.game.Window#getGLCanvasCenter()
+	 * @see com.gmail.br45entei.game.ui.Window#getGLCanvasCenter()
 	 *      Window.getGLCanvasCenter() */
 	public static final Point getCursorCanvasCenter() {
 		return new Point(cursorCanvasBounds.x + (cursorCanvasBounds.width / 2), cursorCanvasBounds.y + (cursorCanvasBounds.height / 2));
