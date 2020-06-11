@@ -9,51 +9,55 @@
 			<attribute name="ignore_optional_problems" value="true"/>
 		</attributes>
 	</classpathentry>
-	<classpathentry combineaccessrules="false" kind="src" path="/lwjgl3-swt"/>
-	<classpathentry kind="lib" path="sdl2gdx/libs/gdx-1.9.10.jar" sourcepath="sdl2gdx/libs/gdx-1.9.10-src.jar"/>
-	<classpathentry kind="lib" path="sdl2gdx/libs/gdx-controllers-1.9.10.jar" sourcepath="sdl2gdx/libs/gdx-controllers-1.9.10-src.jar"/>
-	<classpathentry kind="lib" path="sdl2gdx/libs/gdx-jnigen-1.9.10.jar" sourcepath="sdl2gdx/libs/gdx-jnigen-1.9.10-src.jar"/>
-	<classpathentry kind="lib" path="sdl2gdx/libs/javaparser-core-2.3.0.jar"/>
-	<classpathentry kind="lib" path="/lwjgl3-swt/libs/lwjgl-glfw.jar" sourcepath="/lwjgl3-swt/libs/lwjgl-glfw-sources.jar">
+	<classpathentry exported="true" kind="lib" path="sdl2gdx/libs/gdx-1.9.10.jar" sourcepath="sdl2gdx/libs/gdx-1.9.10-src.jar"/>
+	<classpathentry exported="true" kind="lib" path="sdl2gdx/libs/gdx-controllers-1.9.10.jar" sourcepath="sdl2gdx/libs/gdx-controllers-1.9.10-src.jar"/>
+	<classpathentry exported="true" kind="lib" path="sdl2gdx/libs/gdx-jnigen-1.9.10.jar" sourcepath="sdl2gdx/libs/gdx-jnigen-1.9.10-src.jar"/>
+	<classpathentry exported="true" kind="lib" path="sdl2gdx/libs/javaparser-core-2.3.0.jar"/>
+	<classpathentry exported="true" kind="lib" path="/lwjgl3-swt/libs/lwjgl-glfw.jar" sourcepath="/lwjgl3-swt/libs/lwjgl-glfw-sources.jar">
 		<attributes>
 			<attribute name="javadoc_location" value="jar:platform:/resource/lwjgl3-swt/libs/lwjgl-glfw-javadoc.jar!/"/>
 		</attributes>
 	</classpathentry>
-	<classpathentry kind="lib" path="/lwjgl3-swt/libs/lwjgl-jemalloc.jar" sourcepath="/lwjgl3-swt/libs/lwjgl-jemalloc-sources.jar">
+	<classpathentry exported="true" kind="lib" path="/lwjgl3-swt/libs/lwjgl-jemalloc.jar" sourcepath="/lwjgl3-swt/libs/lwjgl-jemalloc-sources.jar">
 		<attributes>
 			<attribute name="javadoc_location" value="jar:platform:/resource/lwjgl3-swt/libs/lwjgl-jemalloc-javadoc.jar!/"/>
 		</attributes>
 	</classpathentry>
-	<classpathentry kind="lib" path="/lwjgl3-swt/libs/lwjgl-openal.jar" sourcepath="/lwjgl3-swt/libs/lwjgl-openal-sources.jar">
+	<classpathentry exported="true" kind="lib" path="/lwjgl3-swt/libs/lwjgl-openal.jar" sourcepath="/lwjgl3-swt/libs/lwjgl-openal-sources.jar">
 		<attributes>
 			<attribute name="javadoc_location" value="jar:platform:/resource/lwjgl3-swt/libs/lwjgl-openal-javadoc.jar!/"/>
 		</attributes>
 	</classpathentry>
-	<classpathentry kind="lib" path="/lwjgl3-swt/libs/lwjgl-opengl.jar" sourcepath="/lwjgl3-swt/libs/lwjgl-opengl-sources.jar">
+	<classpathentry exported="true" kind="lib" path="/lwjgl3-swt/libs/lwjgl-opengl.jar" sourcepath="/lwjgl3-swt/libs/lwjgl-opengl-sources.jar">
 		<attributes>
 			<attribute name="javadoc_location" value="jar:platform:/resource/lwjgl3-swt/libs/lwjgl-opengl-javadoc.jar!/"/>
 		</attributes>
 	</classpathentry>
-	<classpathentry kind="lib" path="/lwjgl3-swt/libs/lwjgl-opengles.jar" sourcepath="/lwjgl3-swt/libs/lwjgl-opengles-sources.jar">
+	<classpathentry exported="true" kind="lib" path="/lwjgl3-swt/libs/lwjgl-opengles.jar" sourcepath="/lwjgl3-swt/libs/lwjgl-opengles-sources.jar">
 		<attributes>
 			<attribute name="javadoc_location" value="jar:platform:/resource/lwjgl3-swt/libs/lwjgl-opengles-javadoc.jar!/"/>
 		</attributes>
 	</classpathentry>
-	<classpathentry kind="lib" path="/lwjgl3-swt/libs/lwjgl-stb.jar" sourcepath="/lwjgl3-swt/libs/lwjgl-stb-sources.jar">
+	<classpathentry exported="true" kind="lib" path="/lwjgl3-swt/libs/lwjgl-stb.jar" sourcepath="/lwjgl3-swt/libs/lwjgl-stb-sources.jar">
 		<attributes>
 			<attribute name="javadoc_location" value="jar:platform:/resource/lwjgl3-swt/libs/lwjgl-stb-javadoc.jar!/"/>
 		</attributes>
 	</classpathentry>
-	<classpathentry kind="lib" path="/lwjgl3-swt/libs/lwjgl-vulkan.jar" sourcepath="/lwjgl3-swt/libs/lwjgl-vulkan-sources.jar">
+	<classpathentry exported="true" kind="lib" path="/lwjgl3-swt/libs/lwjgl-vulkan.jar" sourcepath="/lwjgl3-swt/libs/lwjgl-vulkan-sources.jar">
 		<attributes>
 			<attribute name="javadoc_location" value="jar:platform:/resource/lwjgl3-swt/libs/lwjgl-vulkan-javadoc.jar!/"/>
 		</attributes>
 	</classpathentry>
-	<classpathentry kind="lib" path="/lwjgl3-swt/libs/lwjgl.jar" sourcepath="/lwjgl3-swt/libs/lwjgl-sources.jar">
+	<classpathentry exported="true" kind="lib" path="/lwjgl3-swt/libs/lwjgl.jar" sourcepath="/lwjgl3-swt/libs/lwjgl-sources.jar">
 		<attributes>
 			<attribute name="javadoc_location" value="jar:platform:/resource/lwjgl3-swt/libs/lwjgl-javadoc.jar!/"/>
 		</attributes>
 	</classpathentry>
-	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+	<classpathentry combineaccessrules="false" exported="true" kind="src" path="/lwjgl3-swt"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-10">
+		<attributes>
+			<attribute name="module" value="true"/>
+		</attributes>
+	</classpathentry>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

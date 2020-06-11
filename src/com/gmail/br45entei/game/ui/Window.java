@@ -30,6 +30,7 @@ import com.gmail.br45entei.lwjgl.natives.LWJGL_Natives;
 import com.gmail.br45entei.util.CodeUtil;
 import com.gmail.br45entei.util.SWTUtil;
 
+import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
 import java.beans.Beans;
 import java.util.Objects;
@@ -194,8 +195,10 @@ public class Window {
 	}
 	
 	protected volatile String title;
-	protected volatile int x = 0, y = 0, glx = 0, gly = 0, width = 800,
-			height = 600;
+	protected volatile int shellX = 0, shellY = 0;
+	protected volatile int shellWidth = 0, shellHeight = 0;
+	protected volatile int glx = 0, gly = 0;
+	protected volatile int glWidth = 800, glHeight = 600;
 	protected volatile double framerate = 60.0D;
 	
 	protected volatile boolean running = false, shellActive = false;
@@ -212,10 +215,25 @@ public class Window {
 	
 	protected InputCallback uiCallback;
 	
+	/** Returns the default refresh rate of the current local
+	 * {@link GraphicsEnvironment}'s {@link GraphicsDevice default screen
+	 * device}'s display mode.<br>
+	 * <br>
+	 * This is generally either 50, 60, or 75 Hz.<br>
+	 * Some modern gaming displays are capable of 240 Hz (or more!).
+	 * 
+	 * @return The current display mode's refresh rate. */
 	public static final int getDefaultRefreshRate() {
 		return GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice().getDisplayMode().getRefreshRate();
 	}
 	
+	/** Returns a new {@link GLData} with the default settings for creating a
+	 * {@link Window}.<br>
+	 * DoubleBuffer is enabled, the swap interval is set to 1, the OpenGL
+	 * version is set to 3.3, and the context is set to be forward compatible.
+	 * 
+	 * @return A new {@link GLData} with the default settings for creating a
+	 *         {@link Window}. */
 	public static final GLData createDefaultGLData() {
 		GLData data = new GLData();
 		data.doubleBuffer = true;
@@ -229,8 +247,8 @@ public class Window {
 	public Window(String title, int width, int height, double framerate, GLData data) {
 		Thread.currentThread().setPriority(Thread.MAX_PRIORITY - 2);
 		this.title = title == null ? "SWT-LWJGL3 Framework" : title;
-		this.width = width;
-		this.height = height;
+		this.glWidth = width;
+		this.glHeight = height;
 		this.framerate = framerate != framerate || Double.isInfinite(framerate) ? Window.getDefaultRefreshRate() : framerate;
 		this.data = data == null ? Window.createDefaultGLData() : data;
 		
@@ -257,10 +275,19 @@ public class Window {
 		this(null, width, height, framerate);
 	}
 	
+	/** Creates a new Window with the specified viewport size, and the framerate
+	 * is set to {@link #getDefaultRefreshRate()}.
+	 * 
+	 * @param width The width of the viewport (this will be the
+	 *            {@link GLCanvas}' width)
+	 * @param height The width of the viewport (this will be the
+	 *            {@link GLCanvas}' height) */
 	public Window(int width, int height) {
 		this(width, height, Window.getDefaultRefreshRate());
 	}
 	
+	/** Creates a new Window with a viewport of <tt>800x600</tt>, and the
+	 * framerate is set to {@link #getDefaultRefreshRate()}. */
 	public Window() {
 		this(800, 600);
 	}
@@ -282,20 +309,27 @@ public class Window {
 			public void controlResized(ControlEvent e) {
 				Rectangle clientArea = Window.this.shell.getClientArea();
 				Window.this.glCanvas.setBounds(clientArea);
-				Point size = Window.this.glCanvas.getSize();
-				Window.this.width = size.x;
-				Window.this.height = size.y;
+				
+				this.controlMoved(e);
 			}
 			
 			@Override
 			public void controlMoved(ControlEvent e) {
 				Point location = Window.this.shell.getLocation();
-				Window.this.x = location.x;
-				Window.this.y = location.y;
+				Window.this.shellX = location.x;
+				Window.this.shellY = location.y;
 				
 				location = Window.this.display.map(Window.this.glCanvas, null, 0, 0);
 				Window.this.glx = location.x;
 				Window.this.gly = location.y;
+				
+				Point size = Window.this.glCanvas.getSize();
+				Window.this.glWidth = size.x;
+				Window.this.glHeight = size.y;
+				
+				size = Window.this.shell.getSize();
+				Window.this.shellWidth = size.x;
+				Window.this.shellHeight = size.y;
 			}
 		});
 		
@@ -379,14 +413,14 @@ public class Window {
 			}
 		};
 		
-		this.setSize(this.width, this.height);
+		this.setGLCanvasSize(this.glWidth, this.glHeight);
 		if(Beans.isDesignTime()) {
-			this.shell.setSize(this.width, this.height);
+			this.shell.setSize(this.glWidth, this.glHeight);
 			Rectangle clientArea = this.shell.getClientArea();
 			Point size = this.shell.getSize();
 			int xDiff = size.x - clientArea.width,
 					yDiff = size.y - clientArea.height;
-			this.shell.setSize(this.width + xDiff, this.height + yDiff);
+			this.shell.setSize(this.glWidth + xDiff, this.glHeight + yDiff);
 			this.glCanvas.setBounds(this.shell.getClientArea());
 		}
 		
@@ -485,7 +519,11 @@ public class Window {
 		return this.toggleFullscreen(true);
 	}
 	
+	@SuppressWarnings("unused")
 	protected void createMenus() {
+		
+		//==[Main MenuBar]=============================================
+		
 		Menu menu = new Menu(this.shell, SWT.BAR);
 		this.shell.setMenuBar(menu);
 		
@@ -537,16 +575,25 @@ public class Window {
 		this.mntmRenderers = new MenuItem(menu_2, SWT.CASCADE);
 		this.mntmRenderers.setText("Renderers");
 		
-		Menu menu_4 = new Menu(this.mntmRenderers);
-		this.mntmRenderers.setMenu(menu_4);
+		Menu menu_3 = new Menu(this.mntmRenderers);
+		this.mntmRenderers.setMenu(menu_3);
 		
 		new MenuItem(menu, SWT.SEPARATOR);
 		
 		this.mntmRendererOptions = new MenuItem(menu, SWT.CASCADE);
 		this.mntmRendererOptions.setText("Renderer Options");
 		
-		final Menu menu_3 = new Menu(this.mntmRendererOptions);
-		this.mntmRendererOptions.setMenu(menu_3);
+		final MenuItem mntmSeparator = new MenuItem(menu, SWT.SEPARATOR);
+		
+		final Menu menu_4 = new Menu(this.mntmRendererOptions);
+		this.mntmRendererOptions.setMenu(menu_4);
+		
+		//==[Popup Menu]=============================================
+		
+		final Menu menu_5 = new Menu(this.glCanvas);
+		this.glCanvas.setMenu(menu_4);
+		
+		//==[MenuProvider Implementation]=============================================
 		
 		Renderer renderer = this.glThread.getRenderer();
 		if(renderer instanceof MenuProvider) {
@@ -555,29 +602,59 @@ public class Window {
 			try {
 				String name = provider.getMenuName();
 				try {
-					provider.onMenuBarCreation(menu_3);
+					provider.onMenuBarCreation(menu_4);
 					if(name != null && !name.trim().isEmpty()) {
 						this.mntmRendererOptions.setText(name.replace("&", "&&"));
 					}
 					
-					//TODO Implement provider.onPopupMenuCreation(...) here!
+					try {
+						provider.onPopupMenuCreation(menu_5);
+					} catch(Throwable ex) {
+						if(!GLThread.handleRendererException(renderer, ex, "onPopupMenuCreation", menu_5)) {
+							this.glThread.setRenderer(null);
+							mntmSeparator.dispose();
+							this.mntmRendererOptions.dispose();
+							this.mntmRendererOptions = null;
+						}
+					}
 				} catch(Throwable ex) {
-					if(!GLThread.handleRendererException(renderer, ex, "onMenuBarCreation", menu_3)) {
+					if(!GLThread.handleRendererException(renderer, ex, "onMenuBarCreation", menu_4)) {
 						this.glThread.setRenderer(null);
+						mntmSeparator.dispose();
+						this.mntmRendererOptions.dispose();
+						this.mntmRendererOptions = null;
 					}
 				}
 			} catch(Throwable ex) {
 				if(!GLThread.handleRendererException(renderer, ex, "getMenuName")) {
 					this.glThread.setRenderer(null);
+					mntmSeparator.dispose();
+					this.mntmRendererOptions.dispose();
+					this.mntmRendererOptions = null;
 				}
 			}
 		}
 	}
 	
 	protected void destroyMenus() {
+		final Renderer renderer = this.glThread.getRenderer();
+		MenuProvider provider = renderer instanceof MenuProvider ? (MenuProvider) renderer : null;
+		
 		Menu menu = this.shell.getMenuBar();
 		if(menu != null) {
 			this.shell.setMenuBar(null);
+			
+			if(provider != null) {
+				try {
+					provider.onMenuBarDeletion(menu);
+				} catch(Throwable ex) {
+					if(!GLThread.handleRendererException(renderer, ex, "onMenuBarDeletion", menu)) {
+						this.glThread.setRenderer(null);
+						provider = null;
+					}
+				}
+			}
+			
 			menu.dispose();
 		}
 		this.mntmVerticalSync = this.mntmRenderers = this.mntmRendererOptions = null;
@@ -585,6 +662,18 @@ public class Window {
 		menu = this.glCanvas.getMenu();
 		if(menu != null) {
 			this.glCanvas.setMenu(null);
+			
+			if(provider != null) {
+				try {
+					provider.onPopupMenuDeletion(menu);
+				} catch(Throwable ex) {
+					if(!GLThread.handleRendererException(renderer, ex, "onPopupMenuDeletion", menu)) {
+						this.glThread.setRenderer(null);
+						provider = null;
+					}
+				}
+			}
+			
 			menu.dispose();
 		}
 	}
@@ -634,20 +723,33 @@ public class Window {
 		return this;
 	}
 	
+	/** @return The main display thread */
 	public final Thread getWindowThread() {
 		return this.display.isDisposed() ? null : this.display.getThread();
 	}
 	
+	/** Returns the {@link GLThread} that this {@link Window} is using.<br>
+	 * This method is thread safe.
+	 * 
+	 * @return The {@link GLThread} that this {@link Window} is using */
 	public final GLThread getGLThread() {
 		return this.glThread;
 	}
 	
+	/** Returns the width of this {@link Window}'s {@link GLCanvas}.<br>
+	 * This method is thread safe.
+	 * 
+	 * @return The width of this {@link Window}'s {@link GLCanvas} */
 	public int getWidth() {
-		return this.width;
+		return this.glWidth;
 	}
 	
+	/** Returns the height of this {@link Window}'s {@link GLCanvas}.<br>
+	 * This method is thread safe.
+	 * 
+	 * @return The height of this {@link Window}'s {@link GLCanvas} */
 	public int getHeight() {
-		return this.height;
+		return this.glHeight;
 	}
 	
 	/** Convenience method alternative to {@link #getSize()}.<br>
@@ -658,15 +760,23 @@ public class Window {
 	 * 
 	 * @return This {@link Window}'s {@link GLCanvas}' bounds */
 	public Rectangle getViewport() {
-		return new Rectangle(0, 0, this.width, this.height);
+		return new Rectangle(0, 0, this.glWidth, this.glHeight);
+	}
+	
+	/** Returns the size of this {@link Window}.<br>
+	 * This method is thread safe.
+	 * 
+	 * @return The size of this {@link Window} */
+	public Point getSize() {
+		return new Point(this.shellWidth, this.shellHeight);
 	}
 	
 	/** Returns the size of this {@link Window}'s {@link GLCanvas}.<br>
 	 * This method is thread safe.
 	 * 
 	 * @return The size of this {@link Window}'s {@link GLCanvas} */
-	public Point getSize() {
-		return new Point(this.width, this.height);
+	public Point getGLCanvasSize() {
+		return new Point(this.glWidth, this.glHeight);
 	}
 	
 	/** Sets the glCanvas's size to the point specified by the arguments.
@@ -694,7 +804,7 @@ public class Window {
 	 *                disposed</li>
 	 *                </ul>
 	 */
-	public Window setSize(int width, int height) throws SWTException {
+	public Window setGLCanvasSize(int width, int height) throws SWTException {
 		if(Thread.currentThread() == this.getWindowThread()) {
 			this.shell.setSize(width, height);
 			Rectangle clientArea = this.shell.getClientArea();
@@ -704,7 +814,7 @@ public class Window {
 			this.shell.setSize(width + xDiff, height + yDiff);
 		} else {
 			this.display.asyncExec(() -> {
-				this.setSize(width, height);
+				this.setGLCanvasSize(width, height);
 			});
 		}
 		return this;
@@ -738,8 +848,8 @@ public class Window {
 	 *                disposed</li>
 	 *                </ul>
 	 */
-	public Window setSize(Point size) throws SWTException {
-		this.setSize(size.x, size.y);
+	public Window setGLCanvasSize(Point size) throws SWTException {
+		this.setGLCanvasSize(size.x, size.y);
 		return this;
 	}
 	
@@ -749,24 +859,68 @@ public class Window {
 	 * @return The location of this {@link Window}, in display-relative
 	 *         coordinates */
 	public Point getLocation() {
-		return new Point(this.x, this.y);
+		return new Point(this.shellX, this.shellY);
 	}
 	
+	/** Sets the location of this {@link Window}, in display-relative
+	 * coordinates.<br>
+	 * This method is thread-safe.
+	 * 
+	 * @param x The x coordinate where the top-left of this window will be moved
+	 *            to
+	 * @param y The y coordinate where the top-left of this window will be moved
+	 *            to
+	 * @return This Window */
+	public Window setLocation(int x, int y) {
+		if(Thread.currentThread() == this.getWindowThread()) {
+			this.shell.setLocation(x, y);
+		} else {
+			this.display.asyncExec(() -> {
+				this.setLocation(x, y);
+			});
+		}
+		return this;
+	}
+	
+	/** Returns the absolute position of this {@link Window}'s {@link GLCanvas},
+	 * in display-relative coordinates.<br>
+	 * This method is thread safe.
+	 * 
+	 * @return The absolute position of this {@link Window}'s {@link GLCanvas},
+	 *         in display-relative coordinates */
 	public Point getGLCanvasLocation() {
 		return new Point(this.glx, this.gly);
 	}
 	
+	/** Returns the absolute position of this {@link Window}'s {@link GLCanvas}'
+	 * center, in display-relative coordinates.<br>
+	 * This method is thread safe.
+	 * 
+	 * @return The absolute position of this {@link Window}'s {@link GLCanvas}'
+	 *         center, in display-relative coordinates */
 	public Point getGLCanvasCenter() {
 		Point location = this.getGLCanvasLocation();
-		location.x += this.width / 2;
-		location.y += this.height / 2;
+		location.x += this.glWidth / 2;
+		location.y += this.glHeight / 2;
 		return location;
 	}
 	
-	public Rectangle getBounds() {
-		return new Rectangle(this.x, this.y, this.width, this.height);
+	/** Returns the absolute position and size of this {@link Window}'s
+	 * {@link GLCanvas}, in display-relative coordinates.<br>
+	 * This method is thread safe.
+	 * 
+	 * @return The absolute position and size of this {@link Window}, in
+	 *         display-relative coordinates */
+	public Rectangle getGLCanvasBounds() {
+		return new Rectangle(this.glx, this.gly, this.glWidth, this.glHeight);
 	}
 	
+	/** Returns whether or not this {@link Window} is currently the foreground
+	 * window; meaning the end-user is currently using this Window.<br>
+	 * This method is thread safe.
+	 * 
+	 * @return Whether or not this {@link Window} is currently the foreground
+	 *         window. */
 	public boolean isActive() {
 		return this.shellActive;
 	}

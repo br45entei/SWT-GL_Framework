@@ -25,8 +25,6 @@ import java.io.OutputStream;
 import java.io.PrintStream;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
-import java.security.AccessController;
-import java.security.PrivilegedAction;
 
 /** Utility class used for housing common file-related functions.
  * 
@@ -45,18 +43,12 @@ public class FileUtil {
 		if(lineSeparator == null) {
 			return new PrintStream(out, true);
 		}
-		final String originalLineSeparator = AccessController.doPrivileged(new sun.security.action.GetPropertyAction("line.separator"));
+		final String originalLineSeparator = CodeUtil.getProperty("line.separator");
 		try {
-			AccessController.doPrivileged(new PrivilegedAction<Void>() {
-				@Override
-				public Void run() {
-					System.setProperty("line.separator", lineSeparator);
-					return null;
-				}
-			});
+			CodeUtil.setProperty("line.separator", lineSeparator);
 			return new PrintStream(out, true);
 		} finally {
-			System.setProperty("line.separator", originalLineSeparator);
+			CodeUtil.setProperty("line.separator", originalLineSeparator);
 		}
 	}
 	

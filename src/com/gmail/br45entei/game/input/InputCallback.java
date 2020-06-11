@@ -20,8 +20,6 @@ package com.gmail.br45entei.game.input;
 
 import com.gmail.br45entei.game.input.Keyboard.Keys;
 
-import java.util.Objects;
-
 /** Interface used to provide a way for listeners to receive and use data from
  * input events.<br>
  * <br>

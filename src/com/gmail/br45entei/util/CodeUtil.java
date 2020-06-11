@@ -47,14 +47,12 @@ public class CodeUtil {
 	 * @return The string value of the system property, or <tt><b>null</b></tt>
 	 *         if there is no property with that key. */
 	public static final String getProperty(String property) {
-		return AccessController.doPrivileged(new sun.security.action.GetPropertyAction(property));
-		/*return AccessController.doPrivileged(new PrivilegedAction<String>() {
+		return AccessController.doPrivileged(new PrivilegedAction<String>() {
 			@Override
 			public String run() {
 				return System.getProperty(property);
 			}
-			
-		});*/
+		});
 	}
 	
 	/** Sets the specified system property with the proper authority.
@@ -115,7 +113,7 @@ public class CodeUtil {
 	 * @param capacity The buffer's capacity, in bytes
 	 * @return The new byte buffer */
 	public static final ByteBuffer createByteBuffer(int capacity) {
-		return (ByteBuffer) ByteBuffer.allocateDirect(capacity * Byte.SIZE).order(ByteOrder.nativeOrder()).rewind();
+		return ByteBuffer.allocateDirect(capacity * Byte.SIZE).order(ByteOrder.nativeOrder()).rewind();
 	}
 	
 	/** Creates a new direct {@link CharBuffer} with the given capacity.
@@ -123,7 +121,7 @@ public class CodeUtil {
 	 * @param capacity The buffer's capacity, in bytes
 	 * @return The new character buffer */
 	public static final CharBuffer createCharBuffer(int capacity) {
-		return (CharBuffer) ByteBuffer.allocateDirect(capacity * Character.SIZE).order(ByteOrder.nativeOrder()).asCharBuffer().rewind();
+		return ByteBuffer.allocateDirect(capacity * Character.SIZE).order(ByteOrder.nativeOrder()).asCharBuffer().rewind();
 	}
 	
 	/** Creates a new direct {@link ShortBuffer} with the given capacity.
@@ -131,7 +129,7 @@ public class CodeUtil {
 	 * @param capacity The buffer's capacity, in bytes
 	 * @return The new byte buffer */
 	public static final ShortBuffer createShortBuffer(int capacity) {
-		return (ShortBuffer) ByteBuffer.allocateDirect(capacity * Short.SIZE).order(ByteOrder.nativeOrder()).asShortBuffer().rewind();
+		return ByteBuffer.allocateDirect(capacity * Short.SIZE).order(ByteOrder.nativeOrder()).asShortBuffer().rewind();
 	}
 	
 	/** Creates a new direct {@link IntBuffer} with the given capacity.
@@ -139,7 +137,7 @@ public class CodeUtil {
 	 * @param capacity The buffer's capacity, in bytes
 	 * @return The new integer buffer */
 	public static final IntBuffer createIntBuffer(int capacity) {
-		return (IntBuffer) ByteBuffer.allocateDirect(capacity * Integer.SIZE).order(ByteOrder.nativeOrder()).asIntBuffer().rewind();
+		return ByteBuffer.allocateDirect(capacity * Integer.SIZE).order(ByteOrder.nativeOrder()).asIntBuffer().rewind();
 	}
 	
 	/** Creates a new direct {@link FloatBuffer} with the given capacity.
@@ -147,7 +145,7 @@ public class CodeUtil {
 	 * @param capacity The buffer's capacity, in bytes
 	 * @return The new float buffer */
 	public static final FloatBuffer createFloatBuffer(int capacity) {
-		return (FloatBuffer) ByteBuffer.allocateDirect(capacity * Float.SIZE).order(ByteOrder.nativeOrder()).asFloatBuffer().rewind();
+		return ByteBuffer.allocateDirect(capacity * Float.SIZE).order(ByteOrder.nativeOrder()).asFloatBuffer().rewind();
 	}
 	
 	/** Creates a new direct {@link LongBuffer} with the given capacity.
@@ -155,7 +153,7 @@ public class CodeUtil {
 	 * @param capacity The buffer's capacity, in bytes
 	 * @return The new long buffer */
 	public static final LongBuffer createLongBuffer(int capacity) {
-		return (LongBuffer) ByteBuffer.allocateDirect(capacity * Long.SIZE).order(ByteOrder.nativeOrder()).asLongBuffer().rewind();
+		return ByteBuffer.allocateDirect(capacity * Long.SIZE).order(ByteOrder.nativeOrder()).asLongBuffer().rewind();
 	}
 	
 	/** Creates a new direct {@link DoubleBuffer} with the given capacity.
@@ -163,7 +161,7 @@ public class CodeUtil {
 	 * @param capacity The buffer's capacity, in bytes
 	 * @return The new double buffer */
 	public static final DoubleBuffer createDoubleBuffer(int capacity) {
-		return (DoubleBuffer) ByteBuffer.allocateDirect(capacity * Double.SIZE).order(ByteOrder.nativeOrder()).asDoubleBuffer().rewind();
+		return ByteBuffer.allocateDirect(capacity * Double.SIZE).order(ByteOrder.nativeOrder()).asDoubleBuffer().rewind();
 	}
 	
 	/** @param buf The buffer to get the data from
