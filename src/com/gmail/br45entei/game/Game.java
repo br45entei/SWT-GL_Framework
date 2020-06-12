@@ -22,7 +22,7 @@ import com.gmail.br45entei.game.graphics.Renderer;
 import com.gmail.br45entei.game.input.InputCallback;
 import com.gmail.br45entei.game.ui.MenuProvider;
 
-/** Game is an interface which ties {@link Renderer}, {@link InputCallback}
+/** Game is an interface which ties {@link Renderer} and {@link InputCallback}
  * together as one, making it easier for developers to create their own 3D
  * desktop applications.<br>
  * <br>
