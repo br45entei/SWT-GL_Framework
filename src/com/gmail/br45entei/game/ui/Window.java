@@ -27,6 +27,7 @@ import com.gmail.br45entei.game.input.Keyboard;
 import com.gmail.br45entei.game.input.Keyboard.Keys;
 import com.gmail.br45entei.game.input.Mouse;
 import com.gmail.br45entei.lwjgl.natives.LWJGL_Natives;
+import com.gmail.br45entei.lwjgl.natives.LWJGL_Natives.Platform;
 import com.gmail.br45entei.util.CodeUtil;
 import com.gmail.br45entei.util.SWTUtil;
 
@@ -34,10 +35,13 @@ import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
 import java.beans.Beans;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.RejectedExecutionException;
 
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.SWTException;
+import org.eclipse.swt.events.ArmEvent;
+import org.eclipse.swt.events.ArmListener;
 import org.eclipse.swt.events.ControlEvent;
 import org.eclipse.swt.events.ControlListener;
 import org.eclipse.swt.events.SelectionAdapter;
@@ -198,7 +202,9 @@ public class Window {
 	protected volatile int shellX = 0, shellY = 0;
 	protected volatile int shellWidth = 0, shellHeight = 0;
 	protected volatile int glx = 0, gly = 0;
-	protected volatile int glWidth = 800, glHeight = 600;
+	protected volatile int glTargetWidth = 800, glTargetHeight = 600;
+	protected volatile int glWidth = this.glTargetWidth,
+			glHeight = this.glTargetHeight;
 	protected volatile double framerate = 60.0D;
 	
 	protected volatile boolean running = false, shellActive = false;
@@ -206,6 +212,7 @@ public class Window {
 	
 	protected Display display;
 	protected Shell shell;
+	protected long shellHandle;
 	
 	protected GLData data;
 	protected GLCanvas glCanvas;
@@ -214,6 +221,40 @@ public class Window {
 	protected MenuItem mntmVerticalSync, mntmRenderers, mntmRendererOptions;
 	
 	protected InputCallback uiCallback;
+	
+	protected final ConcurrentLinkedDeque<Game> games = new ConcurrentLinkedDeque<>();
+	protected final ConcurrentLinkedDeque<Renderer> renderers = new ConcurrentLinkedDeque<>();
+	protected final ConcurrentLinkedDeque<InputCallback> inputListeners = new ConcurrentLinkedDeque<>();
+	protected final ConcurrentLinkedDeque<MenuProvider> menuProviders = new ConcurrentLinkedDeque<>();
+	
+	private final void resetFieldsOnClose() {
+		//this.title = null;
+		this.shellX = this.shellY = 0;
+		this.shellWidth = this.shellHeight = 0;
+		this.glx = this.gly = 0;
+		//this.glWidth = 800;
+		//this.glHeight = 600;
+		//this.framerate = 60.0D;
+		
+		this.running = false;
+		this.shellActive = false;
+		this.isFullscreen = false;
+		
+		this.display = null;
+		this.shell = null;
+		
+		//this.data = null;
+		this.glCanvas = null;
+		this.glThread = null;
+		
+		this.mntmVerticalSync = this.mntmRenderers = this.mntmRendererOptions = null;
+		
+		this.uiCallback = null;
+		
+		if(instance == this) {
+			instance = null;
+		}
+	}
 	
 	/** Returns the default refresh rate of the current local
 	 * {@link GraphicsEnvironment}'s {@link GraphicsDevice default screen
@@ -244,39 +285,124 @@ public class Window {
 		return data;
 	}
 	
+	/** Creates a new Window with the specified {@link GLData}, the specified
+	 * viewport size, and the specified framerate.<br>
+	 * <br>
+	 * <b>Note:</b>&nbsp;The thread that creates this Window needs to be the
+	 * thread that {@link #open()}s it, as it will become the main display
+	 * thread.
+	 * 
+	 * @param title The title that this Window will display
+	 * @param width The width of the viewport (this will be the
+	 *            {@link GLCanvas}' width)
+	 * @param height The width of the viewport (this will be the
+	 *            {@link GLCanvas}' height)
+	 * @param framerate The framerate that the {@link GLThread} will run at
+	 * @param data The {@link GLData} that the {@link GLThread} will use when
+	 *            creating the OpenGL context */
 	public Window(String title, int width, int height, double framerate, GLData data) {
 		Thread.currentThread().setPriority(Thread.MAX_PRIORITY - 2);
 		this.title = title == null ? "SWT-LWJGL3 Framework" : title;
-		this.glWidth = width;
-		this.glHeight = height;
+		this.glTargetWidth = width;
+		this.glTargetHeight = height;
 		this.framerate = framerate != framerate || Double.isInfinite(framerate) ? Window.getDefaultRefreshRate() : framerate;
 		this.data = data == null ? Window.createDefaultGLData() : data;
 		
 		this.createContents();
-		
-		if(instance == null || instance.shell == null || instance.shell.isDisposed()) {
-			instance = this;
-		}
 	}
 	
+	/** Creates a new Window with the specified viewport size and framerate.<br>
+	 * A default {@link GLData} is created and used via
+	 * {@link #createDefaultGLData()}.<br>
+	 * <br>
+	 * <b>Note:</b>&nbsp;The thread that creates this Window needs to be the
+	 * thread that {@link #open()}s it, as it will become the main display
+	 * thread.
+	 * 
+	 * @param title The title that this Window will display
+	 * @param width The width of the viewport (this will be the
+	 *            {@link GLCanvas}' width)
+	 * @param height The width of the viewport (this will be the
+	 *            {@link GLCanvas}' height)
+	 * @param framerate The framerate that the {@link GLThread} will run at */
 	public Window(String title, int width, int height, double framerate) {
 		this(title, width, height, framerate, Window.createDefaultGLData());
 	}
 	
+	/** Creates a new Window with the specified viewport size and framerate.<br>
+	 * A default {@link GLData} is created and used via
+	 * {@link #createDefaultGLData()}.<br>
+	 * <br>
+	 * <b>Note:</b>&nbsp;The thread that creates this Window needs to be the
+	 * thread that {@link #open()}s it, as it will become the main display
+	 * thread.
+	 * 
+	 * @param title The title that this Window will display
+	 * @param framerate The framerate that the {@link GLThread} will run at */
 	public Window(String title, double framerate) {
 		this(title, 800, 600, framerate);
 	}
 	
+	/** Creates a new Window with the specified viewport size and framerate.<br>
+	 * A default {@link GLData} is created and used via
+	 * {@link #createDefaultGLData()}.<br>
+	 * <br>
+	 * <b>Note:</b>&nbsp;The thread that creates this Window needs to be the
+	 * thread that {@link #open()}s it, as it will become the main display
+	 * thread.
+	 * 
+	 * @param title The title that this Window will display
+	 * @param width The width of the viewport (this will be the
+	 *            {@link GLCanvas}' width)
+	 * @param height The width of the viewport (this will be the
+	 *            {@link GLCanvas}' height) */
 	public Window(String title, int width, int height) {
 		this(title, width, height, Window.getDefaultRefreshRate());
 	}
 	
+	/** Creates a new Window with the specified viewport size and framerate.<br>
+	 * A default {@link GLData} is created and used via
+	 * {@link #createDefaultGLData()}.<br>
+	 * <br>
+	 * <b>Note:</b>&nbsp;The thread that creates this Window needs to be the
+	 * thread that {@link #open()}s it, as it will become the main display
+	 * thread.
+	 * 
+	 * @param width The width of the viewport (this will be the
+	 *            {@link GLCanvas}' width)
+	 * @param height The width of the viewport (this will be the
+	 *            {@link GLCanvas}' height)
+	 * @param framerate The framerate that the {@link GLThread} will run at */
 	public Window(int width, int height, double framerate) {
 		this(null, width, height, framerate);
 	}
 	
+	/** Creates a new Window with the specified {@link GLData}, the specified
+	 * viewport size, and the framerate is set to
+	 * {@link #getDefaultRefreshRate()}.<br>
+	 * <br>
+	 * <b>Note:</b>&nbsp;The thread that creates this Window needs to be the
+	 * thread that {@link #open()}s it, as it will become the main display
+	 * thread.
+	 * 
+	 * @param width The width of the viewport (this will be the
+	 *            {@link GLCanvas}' width)
+	 * @param height The width of the viewport (this will be the
+	 *            {@link GLCanvas}' height)
+	 * @param data The {@link GLData} that the {@link GLThread} will use when
+	 *            creating the OpenGL context */
+	public Window(int width, int height, GLData data) {
+		this(null, width, height, Window.getDefaultRefreshRate(), data);
+	}
+	
 	/** Creates a new Window with the specified viewport size, and the framerate
-	 * is set to {@link #getDefaultRefreshRate()}.
+	 * is set to {@link #getDefaultRefreshRate()}.<br>
+	 * A default {@link GLData} is created and used via
+	 * {@link #createDefaultGLData()}.<br>
+	 * <br>
+	 * <b>Note:</b>&nbsp;The thread that creates this Window needs to be the
+	 * thread that {@link #open()}s it, as it will become the main display
+	 * thread.
 	 * 
 	 * @param width The width of the viewport (this will be the
 	 *            {@link GLCanvas}' width)
@@ -286,8 +412,26 @@ public class Window {
 		this(width, height, Window.getDefaultRefreshRate());
 	}
 	
-	/** Creates a new Window with a viewport of <tt>800x600</tt>, and the
-	 * framerate is set to {@link #getDefaultRefreshRate()}. */
+	/** Creates a new Window with the specified {@link GLData}, a default
+	 * viewport size of <tt>800x600</tt>, and the framerate is set to
+	 * {@link #getDefaultRefreshRate()}.<br>
+	 * <br>
+	 * <b>Note:</b>&nbsp;The thread that creates this Window needs to be the
+	 * thread that {@link #open()}s it, as it will become the main display
+	 * thread.
+	 * 
+	 * @param data The {@link GLData} that the {@link GLThread} will use when
+	 *            creating the OpenGL context */
+	public Window(GLData data) {
+		this(null, 800, 600, getDefaultRefreshRate(), data);
+	}
+	
+	/** Creates a new Window with a default viewport size of <tt>800x600</tt>,
+	 * and the framerate is set to {@link #getDefaultRefreshRate()}.<br>
+	 * <br>
+	 * <b>Note:</b>&nbsp;The thread that creates this Window needs to be the
+	 * thread that {@link #open()}s it, as it will become the main display
+	 * thread. */
 	public Window() {
 		this(800, 600);
 	}
@@ -307,8 +451,10 @@ public class Window {
 		this.shell.addControlListener(new ControlListener() {
 			@Override
 			public void controlResized(ControlEvent e) {
-				Rectangle clientArea = Window.this.shell.getClientArea();
-				Window.this.glCanvas.setBounds(clientArea);
+				if(Window.this.glThread == null || !Window.this.glThread.isRecording()) {
+					Rectangle clientArea = Window.this.shell.getClientArea();
+					Window.this.glCanvas.setBounds(clientArea);
+				}
 				
 				this.controlMoved(e);
 			}
@@ -378,6 +524,38 @@ public class Window {
 			
 			@Override
 			public void onKeyDown(int key) {
+				if(key == Keys.VK_ESCAPE) {
+					if(!Mouse.isCaptured() && Mouse.getTimeSinceReleased() > 160) {
+						if(Window.this.isFullscreen()) {
+							Window.this.setFullscreen(false);
+						} else {
+							Window.this.close();
+							return;
+						}
+					}
+				}
+				if(key == Keys.VK_F2) {
+					if(Keyboard.isKeyDown(Keys.VK_SHIFT)) {
+						if(Window.this.glThread.isRecording() || Window.this.glThread.isRecordingStartingUp()) {
+							Window.this.glThread.stopRecording((v) -> Boolean.valueOf(Window.this.swtLoop()));
+						} else {
+							Window.this.glThread.startRecording(Window.this.getViewport());
+						}
+					} else {
+						Window.this.glThread.takeScreenshot();
+					}
+				}
+				if(key == Keys.VK_F11) {
+					Window.this.toggleFullscreen();
+				}
+				
+				if(key == Keys.VK_V) {
+					if(Keyboard.isKeyDown(Keys.VK_SHIFT)) {
+						//TODO add dialog for adjusting frequency from the LWJGL_SWT_Demo
+					} else {
+						Window.this.toggleVsyncEnabled();
+					}
+				}
 			}
 			
 			@Override
@@ -412,21 +590,34 @@ public class Window {
 				return true;
 			}
 		};
+		this.registerInputCallback(this.uiCallback);
 		
-		this.setGLCanvasSize(this.glWidth, this.glHeight);
 		if(Beans.isDesignTime()) {
-			this.shell.setSize(this.glWidth, this.glHeight);
+			this.shell.setSize(this.glTargetWidth, this.glTargetHeight);
 			Rectangle clientArea = this.shell.getClientArea();
 			Point size = this.shell.getSize();
 			int xDiff = size.x - clientArea.width,
 					yDiff = size.y - clientArea.height;
-			this.shell.setSize(this.glWidth + xDiff, this.glHeight + yDiff);
+			this.shell.setSize(this.glTargetWidth + xDiff, this.glTargetHeight + yDiff);
 			this.glCanvas.setBounds(this.shell.getClientArea());
 		}
 		
 		this.glThread = new GLThread(this.glCanvas);
 		
 		this.createMenus();
+		
+		if(instance == null || instance.shell == null || instance.shell.isDisposed()) {
+			instance = this;
+		}
+	}
+	
+	/** Returns this {@link Window}'s current target FPS (frames per
+	 * second).<br>
+	 * This method is thread-safe.
+	 * 
+	 * @return The current target FPS */
+	public int getRefreshRate() {
+		return this.glThread.isVsyncEnabled() ? Window.getDefaultRefreshRate() : Long.valueOf(Math.round(Math.ceil(this.glThread.getTargetFPS()))).intValue();
 	}
 	
 	/** @return Whether or not this {@link Window} is in fullscreen mode */
@@ -519,6 +710,42 @@ public class Window {
 		return this.toggleFullscreen(true);
 	}
 	
+	public boolean isVsyncEnabled() {
+		return this.getGLThread().getRefreshRate() == Window.getDefaultRefreshRate();
+	}
+	
+	private volatile double lastNonDefaultFramerate = 0;
+	
+	public Window setVSyncEnabled(boolean vsync) {
+		Runnable code = () -> {
+			double fps = Window.this.getGLThread().getTargetFPS();
+			int check = Window.this.getGLThread().getRefreshRate();
+			int defaultRefreshRate = Window.getDefaultRefreshRate();
+			
+			this.getGLThread().setFPS(vsync ? defaultRefreshRate : this.lastNonDefaultFramerate);
+			if(this.mntmVerticalSync != null && !this.mntmVerticalSync.isDisposed()) {
+				this.mntmVerticalSync.setSelection(this.isVsyncEnabled());
+			}
+			
+			if(check != Window.this.getGLThread().getRefreshRate() && check != defaultRefreshRate) {
+				this.lastNonDefaultFramerate = fps;
+			}
+		};
+		if(Thread.currentThread() == this.getWindowThread()) {
+			code.run();
+			return this;
+		}
+		if(this.display.isDisposed()) {
+			throw new RejectedExecutionException("Display is disposed!");
+		}
+		this.display.asyncExec(code);
+		return this;
+	}
+	
+	public Window toggleVsyncEnabled() {
+		return this.setVSyncEnabled(!this.isVsyncEnabled());
+	}
+	
 	@SuppressWarnings("unused")
 	protected void createMenus() {
 		
@@ -536,6 +763,12 @@ public class Window {
 		new MenuItem(menu_1, SWT.SEPARATOR);
 		
 		MenuItem mntmExit = new MenuItem(menu_1, SWT.NONE);
+		mntmExit.addSelectionListener(new SelectionAdapter() {
+			@Override
+			public void widgetSelected(SelectionEvent e) {
+				Window.this.close();
+			}
+		});
 		mntmExit.setText("E&xit\tAlt+F4");
 		
 		MenuItem mntmwindow = new MenuItem(menu, SWT.CASCADE);
@@ -553,19 +786,52 @@ public class Window {
 		});
 		mntmTakeScreenshot.setText("Take Screenshot\tF2");
 		
-		this.mntmVerticalSync = new MenuItem(menu_2, SWT.CHECK);
-		this.mntmVerticalSync.setText("Vertical Sync\tV");
-		this.mntmVerticalSync.addSelectionListener(new SelectionAdapter() {
+		final MenuItem mntmStartRecording = new MenuItem(menu_2, SWT.CHECK);
+		mntmStartRecording.addSelectionListener(new SelectionAdapter() {
 			@Override
 			public void widgetSelected(SelectionEvent e) {
-				Window.this.getGLThread().setVsyncEnabled(Window.this.mntmVerticalSync.getSelection());
+				try {
+					if(Window.this.glThread.isRecording() || Window.this.glThread.isRecordingFinishingUp()) {
+						mntmStartRecording.setEnabled(false);
+						mntmStartRecording.setText("Recording finishing up...");
+						Window.this.glThread.stopRecording((v) -> Boolean.valueOf(Window.this.swtLoop()));
+					} else {
+						Window.this.glThread.startRecording(Window.this.getViewport());
+						while(Window.this.glThread.isRecordingStartingUp() && Window.this.swtLoop() && !mntmStartRecording.isDisposed()) {
+							SWTUtil.setEnabled(mntmStartRecording, !Window.this.glThread.isRecordingStartingUp());
+							SWTUtil.setText(mntmStartRecording, mntmStartRecording.getEnabled() ? "Stop Recording\tShift+F2" : "Recording starting up...");
+						}
+					}
+				} finally {
+					if(!Window.this.shell.isDisposed() && !mntmStartRecording.isDisposed()) {
+						mntmStartRecording.setEnabled(!Window.this.glThread.isRecordingStartingUp() && !Window.this.glThread.isRecordingFinishingUp());
+						mntmStartRecording.setSelection(Window.this.glThread.isRecording());
+						mntmStartRecording.setText(mntmStartRecording.getSelection() ? "Stop Recording\tShift+F2" : (Window.this.glThread.isRecordingStartingUp() ? "Recording starting up..." : "Start Recording\tShift+F2"));
+					}
+				}
+			}
+		});
+		mntmStartRecording.setText("Start Recording\tShift+F2");
+		
+		new MenuItem(menu_2, SWT.SEPARATOR);
+		
+		this.mntmVerticalSync = new MenuItem(menu_2, SWT.CHECK);
+		this.mntmVerticalSync.setText("Vertical Sync\tV");
+		this.mntmVerticalSync.setSelection(this.getGLThread().getRefreshRate() == Window.getDefaultRefreshRate());
+		this.mntmVerticalSync.addSelectionListener(new SelectionAdapter() {
+			
+			@Override
+			public void widgetSelected(SelectionEvent e) {
+				Window.this.toggleVsyncEnabled();
+				//Window.this.getGLThread().setVsyncEnabled(Window.this.mntmVerticalSync.getSelection());
 			}
 		});
 		
-		MenuItem mntmFullscreen = new MenuItem(menu_2, SWT.CHECK);
+		final MenuItem mntmFullscreen = new MenuItem(menu_2, SWT.CHECK);
 		mntmFullscreen.addSelectionListener(new SelectionAdapter() {
 			@Override
 			public void widgetSelected(SelectionEvent e) {
+				Window.this.toggleFullscreen();
 			}
 		});
 		mntmFullscreen.setText("Fullscreen\tF11");
@@ -574,6 +840,31 @@ public class Window {
 		
 		this.mntmRenderers = new MenuItem(menu_2, SWT.CASCADE);
 		this.mntmRenderers.setText("Renderers");
+		
+		mntmwindow.addArmListener(new ArmListener() {
+			@Override
+			public void widgetArmed(ArmEvent e) {
+				if(!Window.this.shell.isDisposed()) {
+					if(!mntmStartRecording.isDisposed()) {
+						if(Window.this.glThread.isRecordingFinishingUp()) {
+							mntmStartRecording.setEnabled(false);
+							mntmStartRecording.setText("Recording finishing up...");
+							Window.this.glThread.stopRecording((v) -> Boolean.valueOf(Window.this.swtLoop()));
+						}
+						mntmStartRecording.setEnabled(!Window.this.glThread.isRecordingStartingUp() && !Window.this.glThread.isRecordingFinishingUp());
+						mntmStartRecording.setSelection(Window.this.glThread.isRecording());
+						mntmStartRecording.setText(mntmStartRecording.getSelection() ? "Stop Recording\tShift+F2" : (Window.this.glThread.isRecordingStartingUp() ? "Recording starting up..." : "Start Recording\tShift+F2"));
+					}
+					if(!Window.this.mntmVerticalSync.isDisposed()) {
+						Window.this.mntmVerticalSync.setSelection(Window.this.getGLThread().getRefreshRate() == Window.getDefaultRefreshRate());
+					}
+					if(!mntmFullscreen.isDisposed()) {
+						mntmFullscreen.setSelection(Window.this.isFullscreen());// This will probably always return false, but just in case ...
+					}
+					
+				}
+			}
+		});
 		
 		Menu menu_3 = new Menu(this.mntmRenderers);
 		this.mntmRenderers.setMenu(menu_3);
@@ -591,7 +882,7 @@ public class Window {
 		//==[Popup Menu]=============================================
 		
 		final Menu menu_5 = new Menu(this.glCanvas);
-		this.glCanvas.setMenu(menu_4);
+		this.glCanvas.setMenu(menu_5);
 		
 		//==[MenuProvider Implementation]=============================================
 		
@@ -679,7 +970,9 @@ public class Window {
 	}
 	
 	/** Maintains the application window, polls the mouse and keyboard, and
-	 * performs various other upkeep tasks.
+	 * performs various other upkeep tasks.<br>
+	 * <b>Note:</b>&nbsp;This method should only be called by the main display
+	 * thread.
 	 * 
 	 * @return Whether or not this window should continue running */
 	public boolean swtLoop() {
@@ -687,7 +980,17 @@ public class Window {
 			CodeUtil.sleep(10L);
 		}
 		if(!this.shell.isDisposed()) {
-			this.shellActive = this.display.getActiveShell() == this.shell && this.shell.isVisible();
+			switch(Platform.get()) {
+			case WINDOWS:
+				this.shellActive = org.eclipse.swt.internal.win32.OS.GetForegroundWindow() == this.shellHandle;
+				break;
+			case LINUX:
+			case MACOSX:
+			case UNKNOWN:
+			default:
+				this.shellActive = this.display.getActiveShell() == this.shell && this.shell.isVisible();
+				break;
+			}
 			if(this.shell.isDisposed()) {
 				return false;
 			}
@@ -812,6 +1115,7 @@ public class Window {
 			int xDiff = size.x - clientArea.width,
 					yDiff = size.y - clientArea.height;
 			this.shell.setSize(width + xDiff, height + yDiff);
+			this.glCanvas.setBounds(this.shell.getClientArea());
 		} else {
 			this.display.asyncExec(() -> {
 				this.setGLCanvasSize(width, height);
@@ -928,13 +1232,21 @@ public class Window {
 	/** Opens this window.<br>
 	 * This method blocks until the window has been closed. */
 	public void open() {
+		if(this.display == null || this.display.isDisposed() || this.shell == null || this.shell.isDisposed()) {
+			if(this.glThread != null) {
+				this.glThread.stopRunning(true);
+				this.resetFieldsOnClose();
+			}
+			this.createContents();
+		}
 		this.running = true;
-		Mouse.setCursorCanvas(this.glCanvas);
+		if(instance == this) {
+			Mouse.setCursorCanvas(this.glCanvas);
+		}
 		
-		this.shell.open();
-		this.shell.layout();
-		this.shell.forceActive();
-		this.glCanvas.forceFocus();
+		this.show();
+		this.shellHandle = SWTUtil.getHandle(this.shell);
+		this.setGLCanvasSize(this.glTargetWidth, this.glTargetHeight);
 		
 		try {
 			this.glThread.start();
@@ -980,83 +1292,248 @@ public class Window {
 		}
 	}
 	
+	/** Marks this {@link Window} as visible and brings it to the front of the
+	 * drawing order, displaying it to the end-user.<br>
+	 * This method is thread-safe.
+	 * 
+	 * @return This Window
+	 * @throws RejectedExecutionException Thrown if this method was called
+	 *             outside of the display thread after this {@link Window} has
+	 *             been closed. */
+	public Window show() throws RejectedExecutionException {
+		if(Thread.currentThread() != this.getWindowThread()) {
+			if(this.display.isDisposed()) {
+				throw new RejectedExecutionException("Display is disposed!");
+			}
+			this.display.asyncExec(() -> {
+				this.show();
+			});
+			return this;
+		}
+		this.shell.open();
+		this.shell.layout();
+		this.shell.forceActive();
+		this.glCanvas.forceFocus();
+		return this;
+	}
+	
+	/** Sets this {@link Window}'s visibility state to false, hiding it from the
+	 * end-user.<br>
+	 * This method is thread-safe.
+	 * 
+	 * @return This Window
+	 * @throws RejectedExecutionException Thrown if this method was called
+	 *             outside of the display thread after this {@link Window} has
+	 *             been closed. */
+	public Window hide() throws RejectedExecutionException {
+		if(Thread.currentThread() != this.getWindowThread()) {
+			if(this.display.isDisposed()) {
+				throw new RejectedExecutionException("Display is disposed!");
+			}
+			this.display.asyncExec(() -> {
+				this.hide();
+			});
+			return this;
+		}
+		this.shell.setVisible(false);
+		return this;
+	}
+	
+	/** Closes this {@link Window}, disposing of it.<br>
+	 * This method is thread-safe. */
+	public void close() {
+		this.running = false;
+	}
+	
 	//======================================================================================================================================
 	
+	/** Checks if the specified game is registered with this {@link Window}.<br>
+	 * This method is thread-safe.
+	 * 
+	 * @param game The game to check
+	 * @return Whether or not the specified game is registered with this
+	 *         Window */
 	public final boolean isGameRegistered(Game game) {
 		if(game != null) {
-			
+			return this.games.contains(game);
 		}
 		return false;
 	}
 	
+	/** Registers the specified game with this {@link Window}, making it
+	 * available for selection in the main {@link Menu MenuBar}.<br>
+	 * This method is thread-safe.<br>
+	 * <br>
+	 * <b>Note:</b>&nbsp;This method will return <tt>false</tt> if the specified
+	 * game was already registered beforehand.
+	 * 
+	 * @param game The game that will be registered with this Window
+	 * @return Whether or not the game was just registered */
 	public final boolean registerGame(Game game) {
 		if(game != null) {
-			
+			boolean registeredAnywhere = false;
+			if(!this.isGameRegistered(game)) {
+				registeredAnywhere |= this.games.add(game);
+			}
+			registeredAnywhere |= Mouse.registerInputCallback(game);
+			registeredAnywhere |= Keyboard.registerInputCallback(game);
+			if(game instanceof MenuProvider && !this.menuProviders.contains((MenuProvider) game)) {
+				registeredAnywhere |= this.menuProviders.add((MenuProvider) game);
+			}
+			return registeredAnywhere;
 		}
 		return false;
 	}
 	
+	/** Unregisters the specified game from this {@link Window}, removing it
+	 * from the selection of games within the main {@link Menu MenuBar}.<br>
+	 * This method is thread-safe.<br>
+	 * <br>
+	 * <b>Note:</b>&nbsp;This method will return <tt>false</tt> if the specified
+	 * game was not registered beforehand.
+	 * 
+	 * @param game The game that will be unregistered from this Window
+	 * @return Whether or not the game was just unregistered */
 	public final boolean unregisterGame(Game game) {
 		if(game != null) {
-			
+			boolean unregisteredAnywhere = false;
+			if(this.isGameRegistered(game)) {
+				while(this.games.remove(game)) {
+					unregisteredAnywhere |= true;
+				}
+			}
+			unregisteredAnywhere |= Mouse.unregisterInputCallback(game);
+			unregisteredAnywhere |= Keyboard.unregisterInputCallback(game);
+			if(game instanceof MenuProvider && this.menuProviders.contains((MenuProvider) game)) {
+				while(this.menuProviders.remove((MenuProvider) game)) {
+					unregisteredAnywhere |= true;
+				}
+			}
+			return unregisteredAnywhere;
 		}
 		return false;
 	}
 	
 	public final boolean isInputCallbackRegistered(InputCallback inputCallback) {
-		return Mouse.isInputCallbackRegistered(inputCallback) && Keyboard.isInputCallbackRegistered(inputCallback);
+		if(inputCallback instanceof Game) {
+			while(this.inputListeners.remove(inputCallback)) {
+			}
+			return this.isGameRegistered((Game) inputCallback);
+		}
+		if(inputCallback != null) {
+			return this.inputListeners.contains(inputCallback);
+		}
+		return false;
 	}
 	
 	public final boolean registerInputCallback(InputCallback inputCallback) {
-		return Mouse.registerInputCallback(inputCallback) | Keyboard.registerInputCallback(inputCallback);
+		if(inputCallback instanceof Game) {
+			while(this.inputListeners.remove(inputCallback)) {
+			}
+			return this.registerGame((Game) inputCallback);
+		}
+		if(inputCallback != null) {
+			boolean registeredAnywhere = false;
+			if(!this.isInputCallbackRegistered(inputCallback)) {
+				registeredAnywhere |= this.inputListeners.add(inputCallback);
+			}
+			registeredAnywhere |= Mouse.registerInputCallback(inputCallback);
+			registeredAnywhere |= Keyboard.registerInputCallback(inputCallback);
+			return registeredAnywhere;
+		}
+		return false;
 	}
 	
 	public final boolean unregisterInputCallback(InputCallback inputCallback) {
-		return Mouse.unregisterInputCallback(inputCallback) | Keyboard.unregisterInputCallback(inputCallback);
+		if(inputCallback instanceof Game) {
+			while(this.inputListeners.remove(inputCallback)) {
+			}
+			return this.unregisterGame((Game) inputCallback);
+		}
+		if(inputCallback != null) {
+			boolean unregisteredAnywhere = false;
+			if(this.isInputCallbackRegistered(inputCallback)) {
+				while(this.inputListeners.remove(inputCallback)) {
+					unregisteredAnywhere |= true;
+				}
+			}
+			unregisteredAnywhere |= Mouse.unregisterInputCallback(inputCallback);
+			unregisteredAnywhere |= Keyboard.unregisterInputCallback(inputCallback);
+			return unregisteredAnywhere;
+		}
+		return false;
 	}
 	
 	public final boolean isRendererRegistered(Renderer renderer) {
+		if(renderer instanceof Game) {
+			while(this.renderers.remove(renderer)) {
+			}
+			return this.isGameRegistered((Game) renderer);
+		}
 		if(renderer != null) {
-			
+			return this.renderers.contains(renderer);
 		}
 		return false;
 	}
 	
 	public final boolean registerRenderer(Renderer renderer) {
-		if(renderer != null) {
-			
+		if(renderer instanceof Game) {
+			while(this.renderers.remove(renderer)) {
+			}
+			return this.registerGame((Game) renderer);
+		}
+		if(renderer != null && !this.isRendererRegistered(renderer)) {
+			return this.renderers.add(renderer);
 		}
 		return false;
 	}
 	
 	public final boolean unregisterRenderer(Renderer renderer) {
-		if(renderer != null) {
-			
+		if(renderer instanceof Game) {
+			while(this.renderers.remove(renderer)) {
+			}
+			return this.unregisterGame((Game) renderer);
+		}
+		if(renderer != null && this.isRendererRegistered(renderer)) {
+			while(this.renderers.remove(renderer)) {
+			}
+			return true;
 		}
 		return false;
 	}
 	
 	public final boolean isMenuProviderRegistered(MenuProvider provider) {
-		if(provider != null) {
-			
+		if(provider instanceof Renderer) {
+			while(this.menuProviders.remove(provider)) {
+			}
+			return this.isRendererRegistered((Renderer) provider);
 		}
-		return false;
+		return provider == null ? false : this.menuProviders.contains(provider);
 	}
 	
 	public final boolean registerMenuProvider(MenuProvider provider) {
-		if(provider != null && !(provider instanceof Renderer)) {
-			
+		if(provider instanceof Renderer) {
+			while(this.menuProviders.remove(provider)) {
+			}
+			return this.registerRenderer((Renderer) provider);
+		}
+		if(provider != null && !this.isMenuProviderRegistered(provider)) {
+			return this.menuProviders.add(provider);
 		}
 		return false;
 	}
 	
 	public final boolean unregisterMenuProvider(MenuProvider provider) {
-		if(provider != null) {
-			
+		if(provider instanceof Renderer) {
+			while(this.menuProviders.remove(provider)) {
+			}
+			return this.unregisterRenderer((Renderer) provider);
+		}
+		if(provider != null && this.isMenuProviderRegistered(provider)) {
+			while(this.menuProviders.remove(provider)) {
+			}
+			return true;
 		}
 		return false;
 	}
-	
-	//======================================================================================================================================
-	
 }
