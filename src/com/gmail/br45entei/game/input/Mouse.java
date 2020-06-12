@@ -83,6 +83,8 @@ public class Mouse {
 	protected static final org.eclipse.swt.graphics.Rectangle cursorCanvasBounds = new org.eclipse.swt.graphics.Rectangle(0, 0, 800, 600);
 	protected static volatile Cursor invisibleCursor;
 	
+	private static volatile long captureTime = -1L, releaseTime = 0L;
+	
 	protected static final boolean[] mouseDownStates = new boolean[Math.max(3, MouseInfo.getNumberOfButtons())];
 	protected static final boolean[] lastMouseDownStates = new boolean[mouseDownStates.length];
 	protected static final boolean[] currentMouseDownStates = new boolean[mouseDownStates.length];
@@ -324,6 +326,9 @@ public class Mouse {
 		if(captured && modal) {
 			modal = false;
 		}
+		long now = System.currentTimeMillis();
+		Mouse.captureTime = captured ? now : -1L;
+		Mouse.releaseTime = captured ? -1L : now;
 		Mouse.captured = captured;
 		if(captured) {
 			Point mLoc = getLocation();
@@ -333,6 +338,22 @@ public class Mouse {
 		} else {
 			setLocation(captureX, captureY);
 		}
+	}
+	
+	public static final long getCaptureTime() {
+		return Mouse.captureTime;
+	}
+	
+	public static final long getReleaseTime() {
+		return Mouse.releaseTime;
+	}
+	
+	public static final long getTimeSinceCaptured() {
+		return Mouse.captureTime == -1L ? -1L : System.currentTimeMillis() - Mouse.captureTime;
+	}
+	
+	public static final long getTimeSinceReleased() {
+		return Mouse.releaseTime == -1L ? -1L : System.currentTimeMillis() - Mouse.releaseTime;
 	}
 	
 	/** Returns whether or not the system cursor is currently able to move
