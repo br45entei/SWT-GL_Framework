@@ -20,6 +20,7 @@ package com.gmail.br45entei.util;
 
 import java.awt.MouseInfo;
 import java.io.File;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -120,6 +121,14 @@ public class SWTUtil {
 		if(!label.getText().equals(string)) {
 			label.setText(string);
 			return label.getText().equals(string);
+		}
+		return false;
+	}
+	
+	public static final boolean setText(MenuItem menuItem, String string) {
+		if(!menuItem.getText().equals(string)) {
+			menuItem.setText(string);
+			return menuItem.getText().equals(string);
 		}
 		return false;
 	}
@@ -650,6 +659,81 @@ public class SWTUtil {
 		
 		stxt.setMenu(menu);
 		return menu;
+	}
+	
+	//===================================================================================================================
+	
+	private static final Class<?> getClass(String name) {
+		try {
+			return Class.forName(name);
+		} catch(LinkageError | ClassNotFoundException ex) {
+			return null;
+		}
+	}
+	
+	private static final Field getField(Class<?> clazz, String name) {
+		for(Field field : clazz.getDeclaredFields()) {
+			if(field.getName().equals(name)) {
+				return field;
+			}
+		}
+		return null;
+	}
+	
+	private static final Object getValue(Field field, Object obj) {
+		boolean accessible = field.isAccessible();
+		try {
+			field.setAccessible(true);
+			return field.get(obj);
+		} catch(SecurityException | IllegalArgumentException | IllegalAccessException ex) {
+			return null;
+		} finally {
+			try {
+				field.setAccessible(accessible);
+			} catch(SecurityException ignored) {
+			}
+		}
+	}
+	
+	public static final long /*int*/ getHandle(Shell shell) {
+		Field handle = getField(Shell.class, "shellHandle");//Linux
+		if(handle == null) {
+			handle = getField(Control.class, "handle");//Win32
+		}
+		//handle = handle == null ? getField(Widget.class, "handle") : handle;//Win32
+		Object value;
+		if(handle == null) {//OSX
+			handle = getField(Shell.class, "window");
+			if(handle == null) {
+				return 0;//Unknown OS or SWT distribution
+			}
+			Class<?> NSWindow = getClass("org.eclipse.swt.internal.cocoa.NSWindow");
+			Class<?> id = getClass("org.eclipse.swt.internal.cocoa.id");
+			if(NSWindow == null || id == null) {
+				return 0;//Unknown OS or SWT distribution
+			}
+			Object nsWindow = getValue(handle, shell);
+			if(nsWindow == null) {
+				return 0;//Unknown SWT distribution/state
+			}
+			Field _id = getField(id, "id");
+			if(_id == null) {
+				return 0;
+			}
+			value = getValue(_id, nsWindow);
+		} else {//Windows or Linux
+			value = getValue(handle, shell);
+		}
+		if(value == null) {
+			return 0;
+		}
+		if(value instanceof Long) {
+			return ((Long) value).longValue();
+		}
+		if(value instanceof Integer) {
+			return ((Integer) value).longValue();
+		}
+		return 0;
 	}
 	
 }
