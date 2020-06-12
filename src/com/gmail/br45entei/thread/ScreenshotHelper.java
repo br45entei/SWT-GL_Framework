@@ -94,7 +94,15 @@ public class ScreenshotHelper extends Thread {
 		}
 	}
 	
-	/** Reads the current front buffer and stores it into a file. */
+	/** Reads the current front buffer and enqueues it to be stored to file.
+	 * 
+	 * @param x The x coordinate marking the beginning of the viewport to
+	 *            capture
+	 * @param y The y coordinate marking the beginning of the viewport to
+	 *            capture
+	 * @param width The width of the viewport to capture
+	 * @param height The height of the viewport to capture */
+	@SuppressWarnings("unused")
 	public static final void saveScreenshot(int x, int y, int width, int height) {
 		//System.out.println("Saving screenshot...");// with viewport (".concat(Integer.toString(x)).concat(", ").concat(Integer.toString(viewport.y)).concat(", ").concat(Integer.toString(width)).concat(", ").concat(Integer.toString(height)).concat(")..."));
 		// read current buffer
