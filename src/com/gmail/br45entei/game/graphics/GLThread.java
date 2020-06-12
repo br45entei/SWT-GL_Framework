@@ -20,6 +20,7 @@ package com.gmail.br45entei.game.graphics;
 
 import com.gmail.br45entei.game.ui.Window;
 import com.gmail.br45entei.thread.ScreenshotHelper;
+import com.gmail.br45entei.thread.VideoHelper;
 import com.gmail.br45entei.util.CodeUtil;
 import com.gmail.br45entei.util.FrequencyTimer;
 import com.gmail.br45entei.util.FrequencyTimer.TimerCallback;
@@ -29,6 +30,7 @@ import java.math.BigDecimal;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.function.Function;
 
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Display;
@@ -62,6 +64,9 @@ public final class GLThread extends Thread {
 	private final ConcurrentLinkedDeque<Runnable> tasksToRun = new ConcurrentLinkedDeque<>();
 	
 	private final ScreenshotHelper screenshotHelper = new ScreenshotHelper(this.state);
+	private final VideoHelper videoHelper = new VideoHelper(this.state);
+	private volatile boolean recordingWaitingOnRemainingFrames = false;
+	private final Rectangle recordingViewport = new Rectangle(0, 0, 800, 600);
 	
 	/** Creates a new GLThread that will use the given GLCanvas.
 	 * 
@@ -72,6 +77,7 @@ public final class GLThread extends Thread {
 		this.setPriority(Thread.MAX_PRIORITY);
 		this.glCanvas = glCanvas;
 		this.screenshotHelper.start();
+		this.videoHelper.start();
 		
 		this.fpsLog.addFirst(new BigDecimal(this.deltaTime).toPlainString());
 		this.timer.setCallback(new TimerCallback() {
@@ -181,7 +187,7 @@ public final class GLThread extends Thread {
 	public final GLThread takeScreenshot(int x, int y, int width, int height) throws IndexOutOfBoundsException {
 		Rectangle viewport = Window.getWindow().getViewport();
 		if(x < 0 || y < 0 || width < 0 || height < 0 || (x + width) > (viewport.x + viewport.width) || (y + height) > (viewport.y + viewport.height)) {
-			throw new IndexOutOfBoundsException(String.format("takeScreenshot: Viewport \"%s, %s, %s, %s\" out of range! Current window viewport: %s, %s, %s, %s", Integer.toString(x), Integer.toString(y), Integer.toString(width), Integer.toString(height), Integer.toString(viewport.x), Integer.toString(viewport.y), Integer.toString(viewport.width), Integer.toString(viewport.height)));
+			throw new IndexOutOfBoundsException(String.format("takeScreenshot: Viewport \"%s, %s, %s, %s\" is out of range! Current window viewport: %s, %s, %s, %s", Integer.toString(x), Integer.toString(y), Integer.toString(width), Integer.toString(height), Integer.toString(viewport.x), Integer.toString(viewport.y), Integer.toString(viewport.width), Integer.toString(viewport.height)));
 		}
 		this.tasksToRun.add(() -> {
 			ScreenshotHelper.saveScreenshot(x, y, width, height);
@@ -194,6 +200,253 @@ public final class GLThread extends Thread {
 	 * @return The helper thread that saves screenshots to disk. */
 	public final ScreenshotHelper getScreenshotHelper() {
 		return this.screenshotHelper;
+	}
+	
+	/** Returns whether or not this {@link GLThread} is capturing frames of
+	 * video and enqueueing them to be encoded and written to file.<br>
+	 * This method is thread-safe.
+	 * 
+	 * @return Whether or not this {@link GLThread} is capturing video */
+	public final boolean isRecording() {
+		return this.videoHelper.isRecording() && this.videoHelper.shouldBeRecording();
+	}
+	
+	/** Returns whether or not this {@link GLThread} is starting up a
+	 * recording.<br>
+	 * This method is thread-safe.
+	 * 
+	 * @return Whether or not this GLThread is starting up a recording */
+	public final boolean isRecordingStartingUp() {
+		return !this.videoHelper.isRecording() && this.videoHelper.shouldBeRecording();
+	}
+	
+	/** Returns whether or not this {@link GLThread} is finishing up a
+	 * recording.<br>
+	 * This method is thread-safe.
+	 * 
+	 * @return Whether or not this GLThread is finishing up a recording */
+	public final boolean isRecordingFinishingUp() {
+		return this.recordingWaitingOnRemainingFrames || (this.videoHelper.isRecording() && !this.videoHelper.shouldBeRecording());
+	}
+	
+	/** Tells this {@link GLThread} to open a new video file for writing.<br>
+	 * The video's framerate will be what {@link #getRefreshRate()} returns.<br>
+	 * This method is thread-safe.
+	 * 
+	 * @param x The x coordinate marking the leftmost edge of the desired
+	 *            viewport to be captured
+	 * @param y The y coordinate marking the topmost edge of the desired
+	 *            viewport to be captured
+	 * @param width The desired width of the video
+	 * @param height The desired height of the video
+	 * @return This GLThread */
+	public final GLThread startRecording(int x, int y, int width, int height) {
+		Rectangle viewport = Window.getWindow().getViewport();
+		if(x < 0 || y < 0 || width < 0 || height < 0 || (x + width) > (viewport.x + viewport.width) || (y + height) > (viewport.y + viewport.height)) {
+			throw new IndexOutOfBoundsException(String.format("startRecording: Viewport \"%s, %s, %s, %s\" is out of range! Current window viewport: %s, %s, %s, %s", Integer.toString(x), Integer.toString(y), Integer.toString(width), Integer.toString(height), Integer.toString(viewport.x), Integer.toString(viewport.y), Integer.toString(viewport.width), Integer.toString(viewport.height)));
+		}
+		this.recordingViewport.x = x;
+		this.recordingViewport.y = y;
+		this.recordingViewport.width = width;
+		this.recordingViewport.height = height;
+		this.videoHelper.startRecording(this.getRefreshRate(), width, height);
+		this.tasksToRun.add(() -> {
+			this.recordedAFrame = this.videoHelper.recordBlankFrame();
+			/*while(this.shouldBeRunning() && !this.videoHelper.isRecording() && this.videoHelper.shouldBeRecording()) {
+				this._display();
+				this._swapBuffers();
+				this.updateFrameTime();
+			}*/
+		});
+		return this;
+	}
+	
+	/** Tells this {@link GLThread} to open a new video file for writing.<br>
+	 * The video's framerate will be what {@link #getRefreshRate()} returns.<br>
+	 * This method is thread-safe.
+	 * 
+	 * @param viewport The viewport to be captured
+	 * @return This GLThread */
+	public final GLThread startRecording(Rectangle viewport) {
+		return this.startRecording(viewport.x, viewport.y, viewport.width, viewport.height);
+	}
+	
+	/** Captures the specified viewport and enqueues it to be encoded into a
+	 * frame of video data.<br>
+	 * This method is thread-safe.<br>
+	 * <br>
+	 * <b>Note:</b>&nbsp;If {@link #startRecording(int, int, int, int)} was not
+	 * called prior to calling this method, this method simply returns.
+	 * 
+	 * @return This GLThread */
+	public final GLThread recordFrame() {
+		Runnable code = () -> {
+			this.recordedAFrame = this.videoHelper.recordFrame(Window.getWindow().getViewport());
+		};
+		if(Thread.currentThread() == this) {
+			code.run();
+			return this;
+		}
+		this.tasksToRun.add(code);
+		return this;
+	}
+	
+	/** 'Captures' a solid black frame of video and enqueues it to be encoded
+	 * into a frame of video data.<br>
+	 * This method is thread-safe.<br>
+	 * <br>
+	 * <b>Note:</b>&nbsp;If {@link #startRecording(int, int, int, int)} was not
+	 * called prior to calling this method, this method simply returns.
+	 * 
+	 * @return This GLThread */
+	public final GLThread recordBlankFrame() {
+		Runnable code = () -> {
+			this.recordedAFrame = this.videoHelper.recordBlankFrame();
+		};
+		if(Thread.currentThread() == this) {
+			code.run();
+			return this;
+		}
+		this.tasksToRun.add(code);
+		return this;
+	}
+	
+	/** Captures the specified viewport and enqueues it to be encoded into a
+	 * frame of video data.<br>
+	 * This method is thread-safe.<br>
+	 * <br>
+	 * <b>Note:</b>&nbsp;If {@link #startRecording(int, int, int, int)} was not
+	 * called prior to calling this method, this method simply returns.
+	 * 
+	 * @param x The x coordinate marking the leftmost edge of the desired
+	 *            frame
+	 * @param y The y coordinate marking the topmost edge of the desired
+	 *            frame
+	 * @param width The width of the desired frame
+	 * @param height The height of the desired frame
+	 * @return This GLThread */
+	public final GLThread recordFrame(int x, int y, int width, int height) {
+		Rectangle viewport = Window.getWindow().getViewport();
+		if(x < 0 || y < 0 || width < 0 || height < 0 || (x + width) > (viewport.x + viewport.width) || (y + height) > (viewport.y + viewport.height)) {
+			throw new IndexOutOfBoundsException(String.format("recordFrame: Viewport \"%s, %s, %s, %s\" is out of range! Current window viewport: %s, %s, %s, %s", Integer.toString(x), Integer.toString(y), Integer.toString(width), Integer.toString(height), Integer.toString(viewport.x), Integer.toString(viewport.y), Integer.toString(viewport.width), Integer.toString(viewport.height)));
+		}
+		Runnable code = () -> {
+			this.recordedAFrame = this.videoHelper.recordFrame(x, y, width, height);
+		};
+		if(Thread.currentThread() == this) {
+			code.run();
+			return this;
+		}
+		this.tasksToRun.add(code);
+		return this;
+	}
+	
+	/** Captures the specified viewport and enqueues it to be encoded into a
+	 * frame of video data.<br>
+	 * This method is thread-safe.<br>
+	 * <br>
+	 * <b>Note:</b>&nbsp;If {@link #startRecording(int, int, int, int)} was not
+	 * called prior to calling this method, this method simply returns.
+	 * 
+	 * @param viewport The bounds of the frame to capture
+	 * @return This GLThread */
+	public final GLThread recordFrame(Rectangle viewport) {
+		return this.recordFrame(viewport.x, viewport.y, viewport.width, viewport.height);
+	}
+	
+	/** Tells this {@link GLThread} to stop recording video frames.<br>
+	 * This method is thread-safe, but may <b>not</b> be called by the GLThread
+	 * itself when <tt>waitForPendingFrames</tt> is set to <tt>true</tt>.<br>
+	 * <br>
+	 * <b>Note:</b>&nbsp;If <tt>waitForPendingFrames</tt> is set to
+	 * <tt>false</tt>, any remaining frames that have yet to be encoded and
+	 * written to file will be discarded, and the video file will end abruptly.
+	 * 
+	 * @param waitForPendingFrames Whether or not this method should block until
+	 *            any remaining captured frames have finished being encoded and
+	 *            written to file
+	 * @return This GLThread */
+	public final GLThread stopRecording(boolean waitForPendingFrames) {
+		if(waitForPendingFrames) {
+			if(Thread.currentThread() instanceof GLThread) {
+				throw new IllegalArgumentException("Cannot make the GLThread wait for pending video frames to finish encoding!");
+			}
+			this.recordingWaitingOnRemainingFrames = true;
+			try {
+				this.recordedAFrame = this.videoHelper.recordBlankFrame();
+				Display display;
+				while(this.videoHelper.isRecording() && this.videoHelper.getNumFramesLeftToEncode() > 0) {
+					display = Display.getCurrent();
+					if(display != null && !display.isDisposed()) {
+						if(!display.readAndDispatch()) {
+							CodeUtil.sleep(10L);
+						}
+					} else {
+						CodeUtil.sleep(10L);
+					}
+				}
+			} finally {
+				this.recordingWaitingOnRemainingFrames = false;
+			}
+		}
+		this.videoHelper.stopRecording();
+		return this;
+	}
+	
+	/** Tells this {@link GLThread} to stop recording video frames.<br>
+	 * This method is thread-safe, but may <b>not</b> be called by the GLThread.
+	 * 
+	 * @param waitCode A function that will be called while the method is
+	 *            waiting for the video frames to finish being encoded.<br>
+	 *            The function may return {@link Boolean#FALSE} to signify that
+	 *            the method should stop waiting and stop the encoding process
+	 *            prematurely.<br>
+	 *            This may be <tt><b>null</b></tt>.
+	 * @return This GLThread */
+	public final GLThread stopRecording(Function<Void, Boolean> waitCode) {
+		if(Thread.currentThread() instanceof GLThread) {
+			throw new IllegalArgumentException("Cannot make the GLThread wait for pending video frames to finish encoding!");
+		}
+		this.recordingWaitingOnRemainingFrames = true;
+		try {
+			this.recordedAFrame = this.videoHelper.recordBlankFrame();
+			Display display;
+			while(this.videoHelper.isRecording() && this.videoHelper.getNumFramesLeftToEncode() > 0) {
+				if(waitCode != null) {
+					try {
+						Boolean result = waitCode.apply(null);
+						if(result != null && !result.booleanValue()) {
+							break;
+						}
+					} catch(Throwable ex) {
+						ex.printStackTrace();
+						waitCode = null;
+					}
+				} else {
+					display = Display.getCurrent();
+					if(display != null && !display.isDisposed()) {
+						if(!display.readAndDispatch()) {
+							CodeUtil.sleep(10L);
+						}
+					} else {
+						CodeUtil.sleep(10L);
+					}
+				}
+			}
+		} finally {
+			this.recordingWaitingOnRemainingFrames = false;
+		}
+		this.videoHelper.stopRecording();
+		return this;
+	}
+	
+	/** Returns this {@link GLThread}'s {@link VideoHelper} which is used to
+	 * capture videos and save them to file.<br>
+	 * This method is thread-safe.
+	 * 
+	 * @return This {@link GLThread}'s {@link VideoHelper} */
+	public final VideoHelper getVideoHelper() {
+		return this.videoHelper;
 	}
 	
 	/** Returns the GLCapabilities that were returned by
@@ -382,6 +635,17 @@ public final class GLThread extends Thread {
 		return (this.timer.getTargetFrequency() * 1000.0D) / this.timer.getTargetPeriodInMilliseconds();
 	}
 	
+	/** Returns this {@link GLThread}'s current target FPS (frames per
+	 * second).<br>
+	 * This method is thread-safe.
+	 * 
+	 * @return The current target FPS
+	 * @see #getLastFPS()
+	 * @see #getLastAverageFPS() */
+	public int getRefreshRate() {
+		return this.isVsyncEnabled() ? Window.getDefaultRefreshRate() : Long.valueOf(Math.round(Math.ceil(this.getTargetFPS()))).intValue();
+	}
+	
 	/** Sets the target frame rate that this GLThread will attempt to run
 	 * at.<br>
 	 * This method is thread safe.
@@ -514,7 +778,10 @@ public final class GLThread extends Thread {
 		return this;
 	}
 	
+	private volatile boolean recordedAFrame = false;
+	
 	protected final void runTasks() {
+		this.recordedAFrame = false;
 		Runnable task;
 		while((task = this.tasksToRun.pollFirst()) != null) {
 			try {
@@ -524,6 +791,9 @@ public final class GLThread extends Thread {
 				ex.printStackTrace(System.err);
 				System.err.flush();
 			}
+		}
+		if(!this.recordedAFrame && this.isRecording() && !this.isRecordingFinishingUp()) {
+			this.videoHelper.recordFrame(this.recordingViewport);
 		}
 	}
 	
