@@ -226,6 +226,36 @@ public class CodeUtil {
 	
 	/** @param buf The buffer to get the data from
 	 * @return The buffer's data */
+	public static float[] getData(FloatBuffer buf) {
+		float[] data = new float[buf.capacity()];
+		if(buf.hasArray()) {
+			System.arraycopy(buf.array(), 0, data, 0, data.length);
+			return buf.array();
+		}
+		buf.rewind();
+		for(int i = 0; i < data.length; i++) {
+			data[i] = buf.get();
+		}
+		return data;
+	}
+	
+	/** @param buf The buffer to get the data from
+	 * @param array The array to store the data in
+	 * @return The buffer's data */
+	public static float[] getData(FloatBuffer buf, float[] array) {
+		if(buf.hasArray()) {
+			System.arraycopy(buf.array(), 0, array, 0, array.length);
+			return buf.array();
+		}
+		buf.rewind();
+		for(int i = 0; i < array.length; i++) {
+			array[i] = buf.get();
+		}
+		return array;
+	}
+	
+	/** @param buf The buffer to get the data from
+	 * @return The buffer's data */
 	public static long[] getData(LongBuffer buf) {
 		long[] data = new long[buf.capacity()];
 		if(buf.hasArray()) {
