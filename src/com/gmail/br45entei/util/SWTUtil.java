@@ -736,4 +736,42 @@ public class SWTUtil {
 		return 0;
 	}
 	
+	public static final boolean getAlwaysOnTop(Shell shell) {
+		return (shell.getStyle() & SWT.ON_TOP) != 0;
+	}
+	
+	public static final boolean setAlwaysOnTop(Shell shell, boolean onTop) {
+		Point location = shell.getLocation();
+		Point dimension = shell.getSize();
+		switch(Platform.get()) {
+		case WINDOWS:
+			org.eclipse.swt.internal.win32.OS.SetWindowPos(SWTUtil.getHandle(shell), onTop ? org.eclipse.swt.internal.win32.OS.HWND_TOPMOST : org.eclipse.swt.internal.win32.OS.HWND_NOTOPMOST, location.x, location.y, dimension.x, dimension.y, 0);
+			Field style = getField(Shell.class, "style");
+			@SuppressWarnings("deprecation")
+			boolean wasAccessible = style.isAccessible();
+			try {
+				style.setAccessible(true);
+				int originalStyle = shell.getStyle();
+				style.set(shell, Integer.valueOf(onTop ? originalStyle | SWT.ON_TOP : originalStyle & ~SWT.ON_TOP));
+			} catch(IllegalArgumentException | IllegalAccessException e) {
+				System.err.print("setAlwaysOnTop() threw an error: ");
+				e.printStackTrace(System.err);
+				System.err.flush();
+			} finally {
+				style.setAccessible(wasAccessible);
+			}
+			return true;
+		case LINUX:
+			// TODO Figure out how to do this for Linux
+			return false;
+		case MACOSX:
+			// TODO Figure out how to do this for MacOS
+			return false;
+		case UNKNOWN:
+		default:
+			return false;
+		}
+		
+	}
+	
 }
