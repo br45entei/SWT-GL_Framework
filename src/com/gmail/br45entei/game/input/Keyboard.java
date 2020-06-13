@@ -18,8 +18,8 @@
  *******************************************************************************/
 package com.gmail.br45entei.game.input;
 
-import com.gmail.br45entei.lwjgl.natives.LWJGL_Natives;
 import com.gmail.br45entei.util.CodeUtil;
+import com.gmail.br45entei.util.Platform;
 
 import java.lang.reflect.Field;
 import java.util.Objects;
@@ -146,7 +146,7 @@ public class Keyboard {
 	public static final boolean poll() {
 		Canvas canvas = Mouse.cursorCanvas;
 		if(canvas != null && !canvas.isDisposed() && canvas.getDisplay().getThread() == Thread.currentThread()) {
-			switch(LWJGL_Natives.Platform.get()) {
+			switch(Platform.get()) {
 			case WINDOWS:
 				canvas.getDisplay().readAndDispatch();
 				if(canvas.isDisposed()) {
