@@ -53,13 +53,15 @@ public final class GLThread extends Thread {
 	protected volatile int lastSwap = 0;
 	protected volatile boolean logFPS = true;
 	protected final FrequencyTimer timer = new FrequencyTimer(60.0D, 1000.0D);
+	protected volatile double lastSetFrequency = this.timer.getTargetFrequency();
+	protected volatile double lastSetPeriod = this.timer.getTargetPeriodInMilliseconds();
 	protected final ConcurrentLinkedDeque<String> fpsLog = new ConcurrentLinkedDeque<>();
 	
 	protected volatile long nanoTime = System.nanoTime();
 	protected volatile long lastFrameTime = this.nanoTime;
 	protected volatile double deltaTime = (((this.nanoTime = System.nanoTime()) - this.lastFrameTime) + 0.0D) / 1000000000.0D;
 	
-	protected volatile Renderer renderer = Renderer.colorDemo;
+	protected volatile Renderer renderer = null;//Renderer.colorDemo;
 	
 	private final ConcurrentLinkedDeque<Runnable> tasksToRun = new ConcurrentLinkedDeque<>();
 	
@@ -249,6 +251,7 @@ public final class GLThread extends Thread {
 		this.recordingViewport.y = y;
 		this.recordingViewport.width = width;
 		this.recordingViewport.height = height;
+		this.timer.setFrequency(30.0D, 1000.0D);
 		this.videoHelper.startRecording(this.getRefreshRate(), width, height);
 		this.tasksToRun.add(() -> {
 			this.recordedAFrame = this.videoHelper.recordBlankFrame();
@@ -374,6 +377,7 @@ public final class GLThread extends Thread {
 			this.recordingWaitingOnRemainingFrames = true;
 			try {
 				this.recordedAFrame = this.videoHelper.recordBlankFrame();
+				this.videoHelper.stopAcceptingNewFrames();
 				Display display;
 				while(this.videoHelper.isRecording() && this.videoHelper.getNumFramesLeftToEncode() > 0) {
 					display = Display.getCurrent();
@@ -389,7 +393,7 @@ public final class GLThread extends Thread {
 				this.recordingWaitingOnRemainingFrames = false;
 			}
 		}
-		this.videoHelper.stopRecording();
+		this.videoHelper.stopEncoding();
 		return this;
 	}
 	
@@ -410,6 +414,7 @@ public final class GLThread extends Thread {
 		this.recordingWaitingOnRemainingFrames = true;
 		try {
 			this.recordedAFrame = this.videoHelper.recordBlankFrame();
+			this.videoHelper.stopAcceptingNewFrames();
 			Display display;
 			while(this.videoHelper.isRecording() && this.videoHelper.getNumFramesLeftToEncode() > 0) {
 				if(waitCode != null) {
@@ -436,7 +441,7 @@ public final class GLThread extends Thread {
 		} finally {
 			this.recordingWaitingOnRemainingFrames = false;
 		}
-		this.videoHelper.stopRecording();
+		this.videoHelper.stopEncoding();
 		return this;
 	}
 	
@@ -528,8 +533,16 @@ public final class GLThread extends Thread {
 	 * 
 	 * @param renderer The {@link Renderer renderer} that this GLThread will
 	 *            attempt to use to display graphics
-	 * @return True if the renderer */
+	 * @return Whether or not this {@link GLThread} was able to begin using the
+	 *         specified renderer */
 	public final boolean setRenderer(final Renderer renderer) {
+		if(!this.isAlive()) {
+			if(this.getState() == Thread.State.TERMINATED) {
+				return false;
+			}
+			this.renderer = renderer;
+			return true;
+		}
 		if(Thread.currentThread() != this) {
 			final Boolean[] rtrn = {null};
 			this.tasksToRun.add(() -> {
@@ -656,6 +669,8 @@ public final class GLThread extends Thread {
 	 * @return This GLThread */
 	public final GLThread setFPS(double framerate, double period) {
 		this.timer.setFrequency(framerate, period);
+		this.lastSetFrequency = this.timer.getTargetFrequency();
+		this.lastSetPeriod = this.timer.getTargetPeriodInMilliseconds();
 		return this;
 	}
 	
@@ -745,18 +760,34 @@ public final class GLThread extends Thread {
 	//===========================================================================================================================
 	
 	protected final void _swapBuffers() {
-		if(this.vsync != this.lastVsync) {
-			this.glCanvas.glSwapInterval(this.lastSwap = (this.vsync ? 1 : 0));
-			this.lastVsync = this.vsync;
-		}
-		if(!this.lastVsync) {
-			int currentRefreshRate = Long.valueOf(Math.round(this.timer.getTargetFrequency())).intValue();
-			boolean tmpVsync = (currentRefreshRate == Window.getDefaultRefreshRate());
-			if(tmpVsync != (this.lastSwap == 1)) {
-				this.glCanvas.glSwapInterval(tmpVsync ? 1 : 0);
-				this.lastSwap = this.glCanvas.glGetSwapInterval();
+		boolean isRecording = this.isRecordingStartingUp() || this.isRecording();
+		if(this.timer.getTargetFrequency() != this.lastSetFrequency || this.timer.getTargetPeriodInMilliseconds() != this.lastSetPeriod) {
+			if(!isRecording) {
+				this.timer.setFrequency(this.lastSetFrequency, this.lastSetPeriod);
 			}
 		}
+		
+		if(!isRecording) {
+			if(this.vsync != this.lastVsync) {
+				this.glCanvas.glSwapInterval(this.lastSwap = (this.vsync ? 1 : 0));
+				this.lastVsync = this.vsync;
+			}
+			if(!this.lastVsync) {
+				int currentRefreshRate = Long.valueOf(Math.round(this.timer.getTargetFrequency())).intValue();
+				boolean tmpVsync = (currentRefreshRate == Window.getDefaultRefreshRate());
+				if(tmpVsync != (this.lastSwap == 1)) {
+					this.glCanvas.glSwapInterval(tmpVsync ? 1 : 0);
+					this.lastSwap = this.glCanvas.glGetSwapInterval();
+				}
+			}
+		} else {
+			if(this.lastSwap == 1) {
+				this.glCanvas.glSwapInterval(0);
+				this.lastSwap = this.glCanvas.glGetSwapInterval();
+				this.lastVsync = this.lastSwap == 1;
+			}
+		}
+		
 		this.glCanvas.swapBuffers();
 		if(!this.vsync) {
 			this.timer.frequencySleep();

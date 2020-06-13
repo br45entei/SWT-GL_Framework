@@ -221,7 +221,7 @@ public class VideoHelper extends Thread {
 			} catch(OutOfMemoryError ex) {
 				this.ex = ex;
 				System.err.println("Failed to record video frame: ".concat(ex.getClass().getName()).concat(": ").concat(ex.getMessage() == null ? "null" : ex.getMessage()));
-				this.stopRecording();
+				this.stopAcceptingNewFrames();
 				return null;
 			}
 			this.bufferMap.put(key, buffer);
@@ -240,7 +240,7 @@ public class VideoHelper extends Thread {
 			} catch(OutOfMemoryError ex) {
 				this.ex = ex;
 				System.err.println("Failed to record video frame: ".concat(ex.getClass().getName()).concat(": ").concat(ex.getMessage() == null ? "null" : ex.getMessage()));
-				this.stopRecording();
+				this.stopAcceptingNewFrames();
 				return null;
 			}
 			this.arrayMap.put(key, buffer);
@@ -300,8 +300,7 @@ public class VideoHelper extends Thread {
 			return true;
 		} catch(OutOfMemoryError ex) {
 			ex.printStackTrace();
-			this.closeCurrentFile();
-			this.framesToEncode.clear();
+			this.stopAcceptingNewFrames();
 			return false;
 		}
 		
@@ -324,14 +323,14 @@ public class VideoHelper extends Thread {
 		} catch(IOException ex) {
 			this.ex = ex;
 			System.err.println("Failed to record video frame: ".concat(ex.getClass().getName()).concat(": ").concat(ex.getMessage() == null ? "null" : ex.getMessage()));
-			this.stopRecording();
+			this.stopAcceptingNewFrames();
 			return false;
 		}*/
 	}
 	
 	private final boolean[] state;
 	
-	private volatile boolean stopEncoding = true;
+	private volatile boolean stopEncoding = true, stopAcceptingNewFrames = true;
 	protected final ConcurrentLinkedDeque<VideoFrameTask> framesToEncode = new ConcurrentLinkedDeque<>();
 	private volatile File videoFile = null;
 	private volatile Throwable ex;
@@ -403,12 +402,12 @@ public class VideoHelper extends Thread {
 		this.fps = fps;
 		this.width = width;
 		this.height = height;
-		this.stopEncoding = false;
+		this.stopEncoding = this.stopAcceptingNewFrames = false;
 	}
 	
-	/** Tells this VideoHelperThread to stop recording if it was recording. */
-	public final void stopRecording() {
-		this.stopEncoding = true;
+	/** Tells this VideoHelperThread to stop recording if it is doing so. */
+	public final void stopEncoding() {
+		this.stopEncoding = this.stopAcceptingNewFrames = true;
 	}
 	
 	/** @return True if this VideoHelper is currently recording cached frames
@@ -416,6 +415,22 @@ public class VideoHelper extends Thread {
 	 *         {@link #shouldBeRecording()}) */
 	public final boolean isRecording() {
 		return this.encoder != null && this.outputStream != null;// && this.videoFile != null;
+	}
+	
+	/** Tells this VideoHelperThread to stop accepting new frames. */
+	public final void stopAcceptingNewFrames() {
+		this.stopAcceptingNewFrames = true;
+	}
+	
+	public final boolean isAcceptingNewFrames() {
+		return !this.stopEncoding && !this.stopAcceptingNewFrames && this.isRecording();
+	}
+	
+	public final void startAcceptingNewFrames() {
+		if(this.stopEncoding) {
+			return;
+		}
+		this.stopAcceptingNewFrames = false;
 	}
 	
 	/** Returns the number of frames that this {@link VideoHelper} has left to
@@ -430,11 +445,11 @@ public class VideoHelper extends Thread {
 	/** @return Whether or not this VideoHelper has been told to start recording
 	 *         (and hasn't been told to stop yet) */
 	public final boolean shouldBeRecording() {
-		return !this.stopEncoding;
+		return !this.stopEncoding && !this.stopAcceptingNewFrames;
 	}
 	
 	private final void closeCurrentFile() {
-		this.stopEncoding = true;
+		this.stopEncoding = this.stopAcceptingNewFrames = true;
 		try {
 			if(this.encoder != null) {
 				this.encoder.finish();
@@ -506,7 +521,7 @@ public class VideoHelper extends Thread {
 	@SuppressWarnings("resource")
 	private final void openNextFile(String fileName) throws IOException {
 		this.closeCurrentFile();
-		this.stopEncoding = false;
+		this.stopEncoding = this.stopAcceptingNewFrames = false;
 		this.videoFile = getNextVideoFile(fileName);
 		this.outputStream = new FileOutputStream(this.videoFile);
 		// for Android use: AndroidSequenceEncoder
@@ -541,14 +556,20 @@ public class VideoHelper extends Thread {
 	 * @return Whether or not the blank frame was enqueued for encoding */
 	@SuppressWarnings("unused")
 	public final boolean recordBlankFrame() {
-		if(this.stopEncoding) {
+		if(this.stopEncoding || this.stopAcceptingNewFrames) {
 			return false;
 		}
-		if(this.blankPicture == null) {
-			this.blankPicture = blankPicture(this.width, this.height);
+		try {
+			if(this.blankPicture == null) {
+				this.blankPicture = blankPicture(this.width, this.height);
+			}
+			new VideoFrameTask(this, this.width, this.height, this.blankPicture);
+			return true;
+		} catch(OutOfMemoryError ex) {
+			ex.printStackTrace();
+			this.stopAcceptingNewFrames();
+			return false;
 		}
-		new VideoFrameTask(this, this.width, this.height, this.blankPicture);
-		return true;
 	}
 	
 	/** 'Captures' a solid black frame of video and enqueues it to be encoded
@@ -563,14 +584,20 @@ public class VideoHelper extends Thread {
 	 * @return Whether or not the blank frame was enqueued for encoding */
 	@SuppressWarnings("unused")
 	public final boolean recordBlankFrame(int width, int height) {
-		if(this.stopEncoding) {
+		if(this.stopEncoding || this.stopAcceptingNewFrames) {
 			return false;
 		}
-		if(this.blankPicture == null) {
-			this.blankPicture = blankPicture(this.width, this.height);
+		try {
+			if(this.blankPicture == null) {
+				this.blankPicture = blankPicture(this.width, this.height);
+			}
+			new VideoFrameTask(this, Math.min(Math.max(1, width), this.width), Math.min(Math.max(1, height), this.height), this.blankPicture);
+			return true;
+		} catch(OutOfMemoryError ex) {
+			ex.printStackTrace();
+			this.stopAcceptingNewFrames();
+			return false;
 		}
-		new VideoFrameTask(this, Math.min(Math.max(1, width), this.width), Math.min(Math.max(1, height), this.height), this.blankPicture);
-		return true;
 	}
 	
 	@Override
@@ -584,7 +611,7 @@ public class VideoHelper extends Thread {
 		VideoFrameTask frame;
 		while(true) {
 			if(!this.state[0]) {
-				this.stopRecording();
+				this.stopEncoding();
 				if(this.framesToEncode.isEmpty()) {
 					break;
 				}
@@ -617,6 +644,8 @@ public class VideoHelper extends Thread {
 					this.framesToEncode.clear();
 				}
 				continue;
+			} else if(!this.stopEncoding && this.isRecording() && this.stopAcceptingNewFrames) {
+				this.closeCurrentFile();
 			}
 			if(this.stopEncoding && (this.outputStream != null || this.encoder != null)) {
 				this.closeCurrentFile();

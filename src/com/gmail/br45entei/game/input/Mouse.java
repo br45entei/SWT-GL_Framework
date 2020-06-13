@@ -18,6 +18,7 @@
  *******************************************************************************/
 package com.gmail.br45entei.game.input;
 
+import com.gmail.br45entei.game.ui.Window;
 import com.stackoverflow.DeviceConfig;
 
 import java.awt.AWTException;
@@ -182,26 +183,47 @@ public class Mouse {
 		System.arraycopy(currentMouseDownStates, 0, mouseDownStates, 0, mouseDownStates.length);
 		
 		Canvas canvas = cursorCanvas;
+		Point mLoc = getLocation();
+		Point topLeft = getCursorCanvasLocation();
+		Point center = getCursorCanvasCenter();
+		boolean shellActive = false;
+		
 		if(canvas != null && !canvas.isDisposed() && canvas.getDisplay().getThread() == Thread.currentThread()) {
-			Point mLoc = getLocation();
-			
+			shellActive = Window.isShellActive(canvas.getShell());
 			if(captured && !modal && !movingCursor) {
-				Point center = getCursorCanvasCenter();
-				setLocation(center);
-				deltaX = mLoc.x - center.x;
-				deltaY = mLoc.y - center.y;
-				
-				//TODO implement InputCallback.onMouseMoved(...) here!
+				if(shellActive) {
+					setLocation(center);
+					deltaX = mLoc.x - center.x;
+					deltaY = mLoc.y - center.y;
+				}
 			} else if(!captured || modal) {
 				deltaX = mLoc.x - lastFreeX;
 				deltaY = mLoc.y - lastFreeY;
 				lastFreeX = mLoc.x;
 				lastFreeY = mLoc.y;
-				
-				//TODO implement InputCallback.onMouseMoved(...) here!
 			}
 		} else {
 			deltaX = deltaY = 0;
+		}
+		
+		if(shellActive && (deltaX != 0 || deltaY != 0)) {
+			Point oldLoc = new Point(mLoc);
+			oldLoc.x -= (topLeft.x + deltaX);
+			oldLoc.y -= (topLeft.y + deltaY);
+			Point newLoc = new Point(mLoc);
+			newLoc.x -= topLeft.x;
+			newLoc.y -= topLeft.y;
+			
+			for(InputCallback listener : listeners) {
+				try {
+					listener.onMouseMoved(deltaX, deltaY, oldLoc.x, oldLoc.y, newLoc.x, newLoc.y);
+				} catch(Throwable ex) {
+					if(!handleListenerException(listener, ex, "onMouseMoved", Integer.toString(deltaX), Integer.toString(deltaY), Integer.toString(oldLoc.x), Integer.toString(oldLoc.y), Integer.toString(newLoc.x), Integer.toString(newLoc.y))) {
+						unregisterInputCallback(listener);
+					}
+					continue;
+				}
+			}
 		}
 	}
 	

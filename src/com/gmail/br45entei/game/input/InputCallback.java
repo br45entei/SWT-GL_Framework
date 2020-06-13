@@ -19,6 +19,9 @@
 package com.gmail.br45entei.game.input;
 
 import com.gmail.br45entei.game.input.Keyboard.Keys;
+import com.gmail.br45entei.util.CodeUtil;
+
+import java.io.PrintStream;
 
 /** Interface used to provide a way for listeners to receive and use data from
  * input events.<br>
@@ -62,12 +65,14 @@ public interface InputCallback {
 	/** Called whenever system cursor movement is detected by
 	 * {@link Mouse#poll()}.
 	 * 
-	 * @param oldX The mouse's old x coordinate in canvas-relative coordinates
-	 * @param oldY The mouse's old y coordinate in canvas-relative coordinates
-	 * @param newX The mouse's new x coordinate in canvas-relative coordinates
-	 * @param newY The mouse's new y coordinate in canvas-relative
+	 * @param deltaX The amount of pixels that the cursor has moved horizontally
+	 * @param deltaY The amount of pixels that the cursor has moved vertically
+	 * @param oldX The cursor's old x coordinate in canvas-relative coordinates
+	 * @param oldY The cursor's old y coordinate in canvas-relative coordinates
+	 * @param newX The cursor's new x coordinate in canvas-relative coordinates
+	 * @param newY The cursor's new y coordinate in canvas-relative
 	 *            coordinates */
-	public void onMouseMoved(int oldX, int oldY, int newX, int newY);
+	public void onMouseMoved(int deltaX, int deltaY, int oldX, int oldY, int newX, int newY);
 	
 	/** Called whenever a mouse button is pressed while the system cursor is
 	 * over the {@link Mouse#getCursorCanvas() cursor canvas}.
@@ -143,5 +148,101 @@ public interface InputCallback {
 		System.err.flush();
 		return false;
 	}*/
+	
+	/** InputLogger is a class which implements {@link InputCallback} and logs
+	 * the input it receives to a user-provided {@link PrintStream}.
+	 *
+	 * @author Brian_Entei */
+	public static final class InputLogger implements InputCallback {
+		
+		private volatile boolean initialized, printDeltaTime;
+		private final PrintStream pr;
+		
+		/** Creates a new InputLogger with the specified {@link PrintStream}.
+		 * 
+		 * @param pr The PrintStream that input logs will be written to */
+		public InputLogger(PrintStream pr) {
+			this.pr = pr;
+		}
+		
+		/** Creates a new InputLogger with the specified {@link PrintStream}.
+		 * 
+		 * @param pr The PrintStream that input logs will be written to
+		 * @param printDeltaTimes Whether or not the
+		 *            {@link InputCallback#input(double) deltaTime} should be
+		 *            logged each frame */
+		public InputLogger(PrintStream pr, boolean printDeltaTimes) {
+			this.pr = pr;
+			this.printDeltaTime = printDeltaTimes;
+		}
+		
+		@Override
+		public boolean isInitialized() {
+			return this.initialized;
+		}
+		
+		@Override
+		public void initialize() {
+			this.initialized = true;
+		}
+		
+		@Override
+		public void input(double deltaTime) {
+			if(this.printDeltaTime) {
+				this.pr.println(String.format("DeltaTime: %s", CodeUtil.limitDecimalNoRounding(deltaTime, 8, true)));
+			}
+		}
+		
+		@Override
+		public void update(double deltaTime) {
+		}
+		
+		@Override
+		public void onMouseScroll(boolean vertical, int count) {
+			this.pr.println(String.format("On mouse scrolled %s: %s", vertical ? "vertically" : "horizontally", Integer.toString(count)));
+		}
+		
+		@Override
+		public void onMouseMoved(int deltaX, int deltaY, int oldX, int oldY, int newX, int newY) {
+			this.pr.println(String.format("On mouse moved: %s, %s (%s, %s --> %s, %s)", Integer.toString(deltaX), Integer.toString(deltaY), Integer.toString(oldX), Integer.toString(oldY), Integer.toString(newX), Integer.toString(newY)));
+		}
+		
+		@Override
+		public void onMouseDoubleClick(int button) {
+			this.pr.println(String.format("On mouse button double click: ", (button == 1 ? "Left" : button == 2 ? "Middle" : button == 3 ? "Right" : Integer.toString(button))));
+		}
+		
+		@Override
+		public void onMouseButtonUp(int button) {
+			this.pr.println(String.format("On mouse button up: ", (button == 1 ? "Left" : button == 2 ? "Middle" : button == 3 ? "Right" : Integer.toString(button))));
+		}
+		
+		@Override
+		public void onMouseButtonDown(int button) {
+			this.pr.println(String.format("On mouse button down: ", (button == 1 ? "Left" : button == 2 ? "Middle" : button == 3 ? "Right" : Integer.toString(button))));
+		}
+		
+		@Override
+		public void onKeyDown(int key) {
+			this.pr.println(String.format("On key down: %s", Keys.getNameForKey(key)));
+		}
+		
+		@Override
+		public void onKeyHeld(int key) {
+			this.pr.println(String.format("On key held: %s", Keys.getNameForKey(key)));
+		}
+		
+		@Override
+		public void onKeyUp(int key) {
+			this.pr.println(String.format("On key up:   %s", Keys.getNameForKey(key)));
+		}
+		
+		@Override
+		public boolean handleException(Throwable ex, String method, Object... params) {
+			ex.printStackTrace();
+			return true;
+		}
+		
+	}
 	
 }

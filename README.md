@@ -16,7 +16,7 @@ public class MyGame implements Game {
 		Game game = new MyGame(...);
 		
 		Window window = new Window("Window Title", 800, 600, 60.0D); // new Window(title, width, height, framerate);
-		window.setRenderer(game);
+		window.setActiveRenderer(game);
 		window.open();
 	}
 	

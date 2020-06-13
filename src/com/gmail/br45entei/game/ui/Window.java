@@ -18,11 +18,11 @@
  *******************************************************************************/
 package com.gmail.br45entei.game.ui;
 
-import com.badlogic.gdx.controllers.Controller;
 import com.gmail.br45entei.game.Game;
 import com.gmail.br45entei.game.graphics.GLThread;
 import com.gmail.br45entei.game.graphics.Renderer;
 import com.gmail.br45entei.game.input.InputCallback;
+import com.gmail.br45entei.game.input.InputCallback.InputLogger;
 import com.gmail.br45entei.game.input.Keyboard;
 import com.gmail.br45entei.game.input.Keyboard.Keys;
 import com.gmail.br45entei.game.input.Mouse;
@@ -34,6 +34,9 @@ import com.gmail.br45entei.util.SWTUtil;
 import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
 import java.beans.Beans;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.RejectedExecutionException;
@@ -57,10 +60,6 @@ import org.eclipse.swt.widgets.Shell;
 import org.eclipse.wb.swt.SWTResourceManager;
 import org.lwjgl.opengl.swt.GLCanvas;
 import org.lwjgl.opengl.swt.GLData;
-
-import uk.co.electronstudio.sdl2gdx.SDL2Controller;
-import uk.co.electronstudio.sdl2gdx.SDL2ControllerManager;
-import uk.co.electronstudio.sdl2gdx.SDL2ControllerManager.InputPreference;
 
 /** The main Window class which manages background tasks such as maintaining the
  * application window.
@@ -108,93 +107,38 @@ public class Window {
 		return instance;
 	}
 	
+	/** Returns whether or not the specified {@link Shell} is currently the
+	 * operating system's foreground window; meaning the end-user is currently
+	 * using it.<br>
+	 * This method <b><em>must</em></b> be called from the user-interface thread
+	 * for the specified shell's display.
+	 * 
+	 * @param shell The shell to check
+	 * @return Whether or not the specified shell is active */
+	public static final boolean isShellActive(Shell shell) {
+		boolean shellActive;
+		long shellHandle = SWTUtil.getHandle(shell);
+		switch(Platform.get()) {
+		case WINDOWS:
+			shellActive = org.eclipse.swt.internal.win32.OS.GetForegroundWindow() == shellHandle;
+			break;
+		case LINUX:
+		case MACOSX:
+		case UNKNOWN:
+		default:
+			shellActive = shell.getDisplay().getActiveShell() == shell && shell.isVisible();
+			break;
+		}
+		return shellActive;
+	}
+	
 	/** Launches the application.
 	 * 
 	 * @param args Program command line arguments */
 	public static void main(String[] args) {
-		SDL2ControllerManager manager = new SDL2ControllerManager(InputPreference.XINPUT);
-		for(Controller controller : manager.getControllers()) {
-			String name = controller.getName();
-			name = controller instanceof SDL2Controller ? ((SDL2Controller) controller).getLastKnownJoystickName() : name;
-			System.out.println(name);
-		}
-		manager.close();
-		
 		Window window = new Window(800, 600);
-		window.registerInputCallback(new InputCallback() {
-			
-			volatile boolean initialized;
-			
-			@Override
-			public boolean isInitialized() {
-				return this.initialized;
-			}
-			
-			@Override
-			public void initialize() {
-				this.initialized = true;
-			}
-			
-			@Override
-			public void input(double deltaTime) {
-				if(Keyboard.getKeyDown(Keys.VK_W)) {
-					System.out.println("'W' was just pressed!");
-				}
-				if(Keyboard.getKeyUp(Keys.VK_W)) {
-					System.out.println("'W' was just released!");
-				}
-			}
-			
-			@Override
-			public void update(double deltaTime) {
-			}
-			
-			@Override
-			public void onMouseScroll(boolean vertical, int count) {
-				System.out.println(String.format("On mouse scrolled %s: %s", vertical ? "vertically" : "horizontally", Integer.toString(count)));
-			}
-			
-			@Override
-			public void onMouseMoved(int oldX, int oldY, int newX, int newY) {
-				System.out.println(String.format("On mouse moved: %s, %s --> %s, %s", Integer.toString(oldX), Integer.toString(oldY), Integer.toString(newX), Integer.toString(newY)));
-			}
-			
-			@Override
-			public void onMouseDoubleClick(int button) {
-				System.out.println(String.format("On mouse button double click: ", (button == 1 ? "Left" : button == 2 ? "Middle" : button == 3 ? "Right" : Integer.toString(button))));
-			}
-			
-			@Override
-			public void onMouseButtonUp(int button) {
-				System.out.println(String.format("On mouse button up: ", (button == 1 ? "Left" : button == 2 ? "Middle" : button == 3 ? "Right" : Integer.toString(button))));
-			}
-			
-			@Override
-			public void onMouseButtonDown(int button) {
-				System.out.println(String.format("On mouse button down: ", (button == 1 ? "Left" : button == 2 ? "Middle" : button == 3 ? "Right" : Integer.toString(button))));
-			}
-			
-			@Override
-			public void onKeyDown(int key) {
-				System.out.println(String.format("'%s' was just pressed!", Keys.getNameForKey(key)));
-			}
-			
-			@Override
-			public void onKeyHeld(int key) {
-				System.out.println(String.format("'%s' is being held down!", Keys.getNameForKey(key)));
-			}
-			
-			@Override
-			public void onKeyUp(int key) {
-				System.out.println(String.format("'%s' was just released!", Keys.getNameForKey(key)));
-			}
-			
-			@Override
-			public boolean handleException(Throwable ex, String method, Object... params) {
-				ex.printStackTrace();
-				return true;
-			}
-		});
+		window.registerInputCallback(new InputLogger(System.out));
+		window.setActiveRenderer(Renderer.colorDemo);
 		window.open();
 	}
 	
@@ -203,8 +147,8 @@ public class Window {
 	protected volatile int shellWidth = 0, shellHeight = 0;
 	protected volatile int glx = 0, gly = 0;
 	protected volatile int glTargetWidth = 800, glTargetHeight = 600;
-	protected volatile int glWidth = this.glTargetWidth,
-			glHeight = this.glTargetHeight;
+	protected volatile int glWidth = this.glTargetWidth;
+	protected volatile int glHeight = this.glTargetHeight;
 	protected volatile double framerate = 60.0D;
 	
 	protected volatile boolean running = false, shellActive = false;
@@ -507,7 +451,7 @@ public class Window {
 			}
 			
 			@Override
-			public void onMouseMoved(int oldX, int oldY, int newX, int newY) {
+			public void onMouseMoved(int deltaX, int deltaY, int oldX, int oldY, int newX, int newY) {
 			}
 			
 			@Override
@@ -717,6 +661,9 @@ public class Window {
 	private volatile double lastNonDefaultFramerate = 0;
 	
 	public Window setVSyncEnabled(boolean vsync) {
+		if(this.glThread.isRecordingStartingUp() || this.glThread.isRecording()) {
+			return this;
+		}
 		Runnable code = () -> {
 			double fps = Window.this.getGLThread().getTargetFPS();
 			int check = Window.this.getGLThread().getRefreshRate();
@@ -980,17 +927,7 @@ public class Window {
 			CodeUtil.sleep(10L);
 		}
 		if(!this.shell.isDisposed()) {
-			switch(Platform.get()) {
-			case WINDOWS:
-				this.shellActive = org.eclipse.swt.internal.win32.OS.GetForegroundWindow() == this.shellHandle;
-				break;
-			case LINUX:
-			case MACOSX:
-			case UNKNOWN:
-			default:
-				this.shellActive = this.display.getActiveShell() == this.shell && this.shell.isVisible();
-				break;
-			}
+			this.shellActive = Window.isShellActive(this.shell);
 			if(this.shell.isDisposed()) {
 				return false;
 			}
@@ -1536,4 +1473,50 @@ public class Window {
 		}
 		return false;
 	}
+	
+	/** Sets the renderer that this {@link Window}'s {@link GLThread} will
+	 * attempt to use to display graphics.<br>
+	 * This method is thread safe.
+	 * 
+	 * @param renderer The {@link Renderer renderer} that the GLThread will
+	 *            attempt to use to display graphics
+	 * @return Whether or not the {@link GLThread} was able to begin using the
+	 *         specified renderer */
+	public final boolean setActiveRenderer(Renderer renderer) {
+		if(this.glThread.setRenderer(renderer)) {
+			return this.registerRenderer(renderer);
+		}
+		return false;
+	}
+	
+	/** Returns the renderer that this {@link Window}'s {@link GLThread} is
+	 * currently using to display graphics.<br>
+	 * This method is thread safe.
+	 * 
+	 * @return The {@link Renderer renderer} that this Window's GLThread is
+	 *         currently using to display graphics */
+	public final Renderer getActiveRenderer() {
+		return this.glThread.getRenderer();
+	}
+	
+	/** Returns a list of all of this {@link Window}'s available renderers, some
+	 * of which may or may not be instances of {@link Game}.<br>
+	 * This method is thread-safe.
+	 * 
+	 * @return A list of all of this Window's available renderers */
+	public final Collection<Renderer> getAvailableRenderers() {
+		List<Renderer> list = new ArrayList<>();
+		list.addAll(this.renderers);
+		Renderer activeRenderer = this.getActiveRenderer();
+		if(!list.contains(activeRenderer)) {
+			list.add(activeRenderer);
+		}
+		for(Game game : this.games) {
+			if(!list.contains(game)) {
+				list.add(game);
+			}
+		}
+		return list;
+	}
+	
 }
