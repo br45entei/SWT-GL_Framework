@@ -27,8 +27,9 @@ import com.gmail.br45entei.game.input.Keyboard;
 import com.gmail.br45entei.game.input.Keyboard.Keys;
 import com.gmail.br45entei.game.input.Mouse;
 import com.gmail.br45entei.lwjgl.natives.LWJGL_Natives;
-import com.gmail.br45entei.lwjgl.natives.LWJGL_Natives.Platform;
+import com.gmail.br45entei.util.Architecture;
 import com.gmail.br45entei.util.CodeUtil;
+import com.gmail.br45entei.util.Platform;
 import com.gmail.br45entei.util.SWTUtil;
 
 import java.awt.GraphicsDevice;
@@ -70,10 +71,10 @@ public class Window {
 	
 	static {
 		String[] extraNativesToLoad;
-		switch(LWJGL_Natives.Platform.get()) {
+		switch(Platform.get()) {
 		case WINDOWS:
 			final String pathRoot;
-			switch(LWJGL_Natives.Architecture.get()) {
+			switch(Architecture.get()) {
 			case X86:
 				pathRoot = "/natives/windows32/";
 				extraNativesToLoad = new String[] {pathRoot.concat("libusb-1.0.dll"), pathRoot.concat("sdl2gdx.dll")};
@@ -1177,15 +1178,16 @@ public class Window {
 			this.createContents();
 		}
 		this.running = true;
-		if(instance == this) {
-			Mouse.setCursorCanvas(this.glCanvas);
-		}
-		
-		this.show();
-		this.shellHandle = SWTUtil.getHandle(this.shell);
-		this.setGLCanvasSize(this.glTargetWidth, this.glTargetHeight);
 		
 		try {
+			if(instance == this) {
+				Mouse.setCursorCanvas(this.glCanvas);
+			}
+			
+			this.show();
+			this.shellHandle = SWTUtil.getHandle(this.shell);
+			this.setGLCanvasSize(this.glTargetWidth, this.glTargetHeight);
+			
 			this.glThread.start();
 			while(this.swtLoop() && this.glThread.getState() == Thread.State.NEW) {
 			}
@@ -1223,6 +1225,7 @@ public class Window {
 			
 			return;
 		} finally {
+			this.running = false;
 			this.shell.dispose();
 			SWTResourceManager.dispose();
 			this.display.dispose();
