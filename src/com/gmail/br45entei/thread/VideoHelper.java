@@ -1,18 +1,16 @@
 package com.gmail.br45entei.thread;
 
+import com.gmail.br45entei.util.BufferUtil;
 import com.gmail.br45entei.util.CodeUtil;
 
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
-import java.security.AccessController;
-import java.security.PrivilegedAction;
 import java.util.HashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
@@ -26,8 +24,6 @@ import org.jcodec.common.model.Picture;
 import org.jcodec.common.model.Rational;
 import org.lwjgl.opengl.GL11;
 
-import sun.misc.Unsafe;
-
 /** Helper thread used to capture a frame of graphics data from OpenGL and
  * encode it into a frame of video.
  * 
@@ -36,19 +32,6 @@ import sun.misc.Unsafe;
  * @see #registerCallback(VideoRecordingCallback)
  * @see #unregisterCallback(VideoRecordingCallback) */
 public class VideoHelper extends Thread {
-	
-	protected static final sun.misc.Unsafe unsafe = AccessController.doPrivileged(new PrivilegedAction<sun.misc.Unsafe>() {
-		@Override
-		public Unsafe run() {
-			try {
-				Field f = Unsafe.class.getDeclaredField("theUnsafe");
-				f.setAccessible(true);
-				return (Unsafe) f.get(null);
-			} catch(NoSuchFieldException | SecurityException | IllegalArgumentException | IllegalAccessException ex) {
-				throw new RuntimeException(ex);
-			}
-		}
-	});
 	
 	protected static final Picture blankPicture(int width, int height) {
 		return Picture.create(width, height, ColorSpace.RGB);
@@ -217,7 +200,7 @@ public class VideoHelper extends Thread {
 		ByteBuffer buffer = this.bufferMap.get(key);
 		if(buffer == null) {
 			try {
-				buffer = ByteBuffer.allocateDirect(size * Float.SIZE).order(ByteOrder.nativeOrder());
+				buffer = ByteBuffer.allocateDirect((size * Float.SIZE) / Byte.SIZE).order(ByteOrder.nativeOrder());
 			} catch(OutOfMemoryError ex) {
 				this.ex = ex;
 				System.err.println("Failed to record video frame: ".concat(ex.getClass().getName()).concat(": ").concat(ex.getMessage() == null ? "null" : ex.getMessage()));
@@ -296,7 +279,7 @@ public class VideoHelper extends Thread {
 			FloatBuffer imageData = this.getFloatBuffer(size);
 			float[] data = this.getFloatArray(size);
 			GL11.glReadPixels(viewport.x, viewport.y, viewport.width, viewport.height, GL11.GL_RGB, GL11.GL_FLOAT, imageData);
-			new VideoFrameTask(this, CodeUtil.getData(imageData, data), viewport);
+			new VideoFrameTask(this, BufferUtil.getData(imageData, data), viewport);
 			return true;
 		} catch(OutOfMemoryError ex) {
 			ex.printStackTrace();
