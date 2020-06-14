@@ -592,12 +592,15 @@ public class Window {
 			if(fullScreen) {
 				this.destroyMenus();
 			}
+			SWTUtil.setAlwaysOnTop(this.shell, fullScreen);
 			this.shell.setFullScreen(fullScreen);
 			if(!fullScreen) {
 				this.createMenus();
 			}
 			this.shell.redraw();
 			this.shell.update();
+			this.shell.forceActive();
+			this.shell.forceFocus();
 		}
 		return this;
 	}

@@ -59,6 +59,7 @@ import org.eclipse.swt.widgets.MessageBox;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.swt.widgets.TypedListener;
+import org.eclipse.swt.widgets.Widget;
 import org.eclipse.wb.swt.SWTResourceManager;
 
 import etinyplugins.commons.swt.UndoRedoImpl;
@@ -746,7 +747,7 @@ public class SWTUtil {
 		switch(Platform.get()) {
 		case WINDOWS:
 			org.eclipse.swt.internal.win32.OS.SetWindowPos(SWTUtil.getHandle(shell), onTop ? org.eclipse.swt.internal.win32.OS.HWND_TOPMOST : org.eclipse.swt.internal.win32.OS.HWND_NOTOPMOST, location.x, location.y, dimension.x, dimension.y, 0);
-			Field style = getField(Shell.class, "style");
+			Field style = getField(Widget.class, "style");
 			@SuppressWarnings("deprecation")
 			boolean wasAccessible = style.isAccessible();
 			try {
