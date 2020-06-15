@@ -56,6 +56,7 @@ import org.eclipse.swt.widgets.Listener;
 import org.eclipse.swt.widgets.Menu;
 import org.eclipse.swt.widgets.MenuItem;
 import org.eclipse.swt.widgets.MessageBox;
+import org.eclipse.swt.widgets.Monitor;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.swt.widgets.TypedListener;
@@ -67,15 +68,27 @@ import etinyplugins.commons.swt.UndoRedoImpl;
 /** @author Brian_Entei */
 public class SWTUtil {
 	
+	/** Returns an {@link Image} array containing my (Brian_Entei) profile icon
+	 * for use with {@link Shell#setImages(Image[])}.
+	 * 
+	 * @return An Image array containing my (Brian_Entei) profile icon */
 	public static final Image[] getTitleImages() {
 		return new Image[] {SWTResourceManager.getImage(SWTUtil.class, "/assets/textures/swt/title/Entei-16x16.png"), SWTResourceManager.getImage(SWTUtil.class, "/assets/textures/swt/title/Entei-32x32.png"), SWTResourceManager.getImage(SWTUtil.class, "/assets/textures/swt/title/Entei-48x48.png"), SWTResourceManager.getImage(SWTUtil.class, "/assets/textures/swt/title/Entei-64x64.png"), SWTResourceManager.getImage(SWTUtil.class, "/assets/textures/swt/title/Entei-128x128.png")};
+	}
+	
+	/** @param shell The shell to center */
+	public static final void centerShellOnPrimaryMonitor(Shell shell) {
+		Monitor primary = shell.getDisplay().getPrimaryMonitor();
+		Rectangle bounds = primary.getBounds();
+		Rectangle rect = shell.getBounds();
+		setLocation(shell, bounds.x + (bounds.width - rect.width) / 2, bounds.y + (bounds.height - rect.height) / 2);
 	}
 	
 	public static final void centerShell2OnShell1(Shell shell1, Shell shell2) {
 		Point size1 = shell1.getSize();
 		Point loc1 = shell1.getLocation();
 		Point size2 = shell2.getSize();
-		shell2.setLocation(loc1.x + (size1.x / 2) - (size2.x / 2), loc1.y + (size1.y / 2) - (size2.y / 2));
+		setLocation(shell2, loc1.x + (size1.x / 2) - (size2.x / 2), loc1.y + (size1.y / 2) - (size2.y / 2));
 	}
 	
 	public static final boolean setEnabled(Control control, boolean enabled) {
