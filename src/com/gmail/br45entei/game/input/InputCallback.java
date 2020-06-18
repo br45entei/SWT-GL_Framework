@@ -78,21 +78,40 @@ public interface InputCallback {
 	 * over the {@link Mouse#getCursorCanvas() cursor canvas}.
 	 * 
 	 * @param button The mouse button that was just pressed (1 is left, 2 is
-	 *            middle, 3 is right, etc.) */
+	 *            middle, 3 is right, etc.)
+	 * @see Mouse#BUTTON_LEFT
+	 * @see Mouse#BUTTON_MIDDLE
+	 * @see Mouse#BUTTON_RIGHT */
 	public void onMouseButtonDown(int button);
+	
+	/** Called constantly while a mouse button is being held down when the
+	 * system cursor was over the {@link Mouse#getCursorCanvas() cursor canvas}.
+	 * 
+	 * @param button The mouse button that is being held down (1 is left, 2 is
+	 *            middle, 3 is right, etc.)
+	 * @see Mouse#BUTTON_LEFT
+	 * @see Mouse#BUTTON_MIDDLE
+	 * @see Mouse#BUTTON_RIGHT */
+	public void onMouseButtonHeld(int button);
 	
 	/** Called whenever a mouse button is released while the system cursor is
 	 * over the {@link Mouse#getCursorCanvas() cursor canvas}.
 	 * 
 	 * @param button The mouse button that was just released (1 is left, 2 is
-	 *            middle, 3 is right, etc.) */
+	 *            middle, 3 is right, etc.)
+	 * @see Mouse#BUTTON_LEFT
+	 * @see Mouse#BUTTON_MIDDLE
+	 * @see Mouse#BUTTON_RIGHT */
 	public void onMouseButtonUp(int button);
 	
 	/** Called whenever a mouse button is double-clicked while the system cursor
 	 * is over the {@link Mouse#getCursorCanvas() cursor canvas}.
 	 * 
 	 * @param button The mouse button that was just double-clicked (1 is left, 2
-	 *            is middle, 3 is right, etc.) */
+	 *            is middle, 3 is right, etc.)
+	 * @see Mouse#BUTTON_LEFT
+	 * @see Mouse#BUTTON_MIDDLE
+	 * @see Mouse#BUTTON_RIGHT */
 	public void onMouseDoubleClick(int button);
 	
 	/** Called whenever the mouse's scrollwheel is scrolled while the system
@@ -208,18 +227,23 @@ public interface InputCallback {
 		}
 		
 		@Override
-		public void onMouseDoubleClick(int button) {
-			this.pr.println(String.format("On mouse button double click: ", (button == 1 ? "Left" : button == 2 ? "Middle" : button == 3 ? "Right" : Integer.toString(button))));
+		public void onMouseButtonDown(int button) {
+			this.pr.println(String.format("On mouse button down: %s", (button == 1 ? "Left" : button == 2 ? "Middle" : button == 3 ? "Right" : Integer.toString(button))));
+		}
+		
+		@Override
+		public void onMouseButtonHeld(int button) {
+			this.pr.println(String.format("On mouse button held: %s", (button == 1 ? "Left" : button == 2 ? "Middle" : button == 3 ? "Right" : Integer.toString(button))));
 		}
 		
 		@Override
 		public void onMouseButtonUp(int button) {
-			this.pr.println(String.format("On mouse button up: ", (button == 1 ? "Left" : button == 2 ? "Middle" : button == 3 ? "Right" : Integer.toString(button))));
+			this.pr.println(String.format("On mouse button up: %s", (button == 1 ? "Left" : button == 2 ? "Middle" : button == 3 ? "Right" : Integer.toString(button))));
 		}
 		
 		@Override
-		public void onMouseButtonDown(int button) {
-			this.pr.println(String.format("On mouse button down: ", (button == 1 ? "Left" : button == 2 ? "Middle" : button == 3 ? "Right" : Integer.toString(button))));
+		public void onMouseDoubleClick(int button) {
+			this.pr.println(String.format("On mouse button double click: %s", (button == 1 ? "Left" : button == 2 ? "Middle" : button == 3 ? "Right" : Integer.toString(button))));
 		}
 		
 		@Override
