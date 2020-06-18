@@ -179,7 +179,6 @@ public class Keyboard {
 							listener.onKeyDown(button);
 						} catch(Throwable ex) {
 							if(!handleListenerException(listener, ex, "onKeyDown", Integer.valueOf(button))) {
-								unregisterInputCallback(listener);
 								continue;
 							}
 						}
@@ -196,7 +195,6 @@ public class Keyboard {
 								listener.onKeyHeld(button);
 							} catch(Throwable ex) {
 								if(!handleListenerException(listener, ex, "onKeyHeld", Integer.valueOf(button))) {
-									unregisterInputCallback(listener);
 									continue;
 								}
 							}
@@ -210,7 +208,6 @@ public class Keyboard {
 							listener.onKeyUp(button);
 						} catch(Throwable ex) {
 							if(!handleListenerException(listener, ex, "onKeyUp", Integer.valueOf(button))) {
-								unregisterInputCallback(listener);
 								continue;
 							}
 						}
@@ -277,9 +274,22 @@ public class Keyboard {
 	public static final class Keys {
 		
 		//public static final int VK_ = 0;//							Undefined
+		/** The left click button on the mouse.
+		 * 
+		 * @deprecated May not be available for use on all platforms */
+		@Deprecated
 		public static final int VK_LEFT_CLICK = 1;
+		/** The right click button on the mouse.
+		 * 
+		 * @deprecated May not be available for use on all platforms */
+		@Deprecated
 		public static final int VK_RIGHT_CLICK = 2;
 		public static final int VK_CANCEL = 3;
+		/** The middle click button on the mouse (usually the scrollwheel's
+		 * 'click').
+		 * 
+		 * @deprecated May not be available for use on all platforms */
+		@Deprecated
 		public static final int VK_MIDDLE_CLICK = 4;
 		public static final int VK_XBUTTON1 = 5;
 		public static final int VK_XBUTTON2 = 6;
