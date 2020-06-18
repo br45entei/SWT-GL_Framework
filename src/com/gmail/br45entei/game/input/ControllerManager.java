@@ -18,10 +18,44 @@
  *******************************************************************************/
 package com.gmail.br45entei.game.input;
 
+import com.badlogic.gdx.controllers.Controller;
+
+import java.util.concurrent.ConcurrentLinkedDeque;
+
+import uk.co.electronstudio.sdl2gdx.SDL2Controller;
+import uk.co.electronstudio.sdl2gdx.SDL2ControllerManager;
+import uk.co.electronstudio.sdl2gdx.SDL2ControllerManager.InputPreference;
+
 /** This class makes it easier to manage any controllers that are plugged in.
  *
  * @author Brian_Entei
  * @since 1.0 */
 public class ControllerManager {
+	
+	private volatile SDL2ControllerManager manager;
+	private final ConcurrentLinkedDeque<Controller> controllers = new ConcurrentLinkedDeque<>();
+	
+	public ControllerManager() {
+		this.manager = new SDL2ControllerManager(InputPreference.XINPUT);
+		for(Controller controller : this.manager.getControllers()) {
+			String name = controller.getName();
+			name = controller instanceof SDL2Controller ? ((SDL2Controller) controller).getLastKnownJoystickName() : name;
+			System.out.println(name);
+		}
+	}
+	
+	public boolean pollControllers() {
+		SDL2ControllerManager manager = this.manager;
+		if(manager != null) {
+			// TODO
+			return true;
+		}
+		return false;
+	}
+	
+	public void dispose() {
+		this.manager.close();
+		this.manager = null;
+	}
 	
 }
