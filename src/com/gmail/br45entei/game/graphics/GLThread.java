@@ -18,6 +18,7 @@
  *******************************************************************************/
 package com.gmail.br45entei.game.graphics;
 
+import com.gmail.br45entei.game.input.InputCallback;
 import com.gmail.br45entei.game.ui.Window;
 import com.gmail.br45entei.thread.ScreenshotHelper;
 import com.gmail.br45entei.thread.VideoHelper;
@@ -51,6 +52,7 @@ public final class GLThread extends Thread {
 	protected volatile boolean shouldBeRunning = false;
 	protected volatile boolean vsync = false, lastVsync = false;
 	protected volatile int lastSwap = 0;
+	protected volatile boolean isVsyncAvailable = false;
 	protected volatile boolean logFPS = true;
 	protected final FrequencyTimer timer = new FrequencyTimer(60.0D, 1000.0D);
 	protected volatile double lastSetFrequency = this.timer.getTargetFrequency();
@@ -62,6 +64,7 @@ public final class GLThread extends Thread {
 	protected volatile double deltaTime = (((this.nanoTime = System.nanoTime()) - this.lastFrameTime) + 0.0D) / 1000000000.0D;
 	
 	protected volatile Renderer renderer = null;//Renderer.colorDemo;
+	protected volatile int lastWidth, lastHeight;
 	
 	private final ConcurrentLinkedDeque<Runnable> tasksToRun = new ConcurrentLinkedDeque<>();
 	
@@ -618,6 +621,16 @@ public final class GLThread extends Thread {
 		return true;
 	}
 	
+	/** Returns the delta time of the current frame from the last.<br>
+	 * For a framerate of <tt>60.0</tt>, values are typically around
+	 * <tt>0.01666670</tt>.
+	 * 
+	 * @return The delta time of the current frame from the last
+	 * @see InputCallback#input(double) */
+	public final double getDeltaTime() {
+		return this.deltaTime;
+	}
+	
 	//===========================================================================================================================
 	
 	/** Returns whether or not vertical sync is enabled.<br>
@@ -768,28 +781,37 @@ public final class GLThread extends Thread {
 		}
 		
 		if(!isRecording) {
-			if(this.vsync != this.lastVsync) {
-				this.glCanvas.glSwapInterval(this.lastSwap = (this.vsync ? 1 : 0));
-				this.lastVsync = this.vsync;
-			}
-			if(!this.lastVsync) {
-				int currentRefreshRate = Long.valueOf(Math.round(this.timer.getTargetFrequency())).intValue();
-				boolean tmpVsync = (currentRefreshRate == Window.getDefaultRefreshRate());
-				if(tmpVsync != (this.lastSwap == 1)) {
-					this.glCanvas.glSwapInterval(tmpVsync ? 1 : 0);
-					this.lastSwap = this.glCanvas.glGetSwapInterval();
+			if(this.isVsyncAvailable) {
+				if(this.vsync != this.lastVsync) {
+					this.glCanvas.glSwapInterval(this.lastSwap = (this.vsync ? 1 : 0));
+					this.lastVsync = this.vsync;
+				}
+				if(!this.lastVsync) {
+					int currentRefreshRate = Long.valueOf(Math.round(this.timer.getTargetFrequency())).intValue();
+					boolean tmpVsync = (currentRefreshRate == Window.getDefaultRefreshRate());
+					if(tmpVsync != (this.lastSwap == 1)) {
+						this.glCanvas.glSwapInterval(tmpVsync ? 1 : 0);
+						this.lastSwap = this.glCanvas.glGetSwapInterval();
+					}
+				}
+			} else {
+				if(this.vsync != this.lastVsync) {
+					this.timer.setFrequency(this.vsync ? Window.getDefaultRefreshRate() : this.lastSetFrequency, this.vsync ? 1000.0D : this.lastSetPeriod);
+					this.lastVsync = this.vsync;
 				}
 			}
 		} else {
-			if(this.lastSwap == 1) {
-				this.glCanvas.glSwapInterval(0);
-				this.lastSwap = this.glCanvas.glGetSwapInterval();
-				this.lastVsync = this.lastSwap == 1;
+			if(this.isVsyncAvailable) {
+				if(this.lastSwap == 1) {
+					this.glCanvas.glSwapInterval(0);
+					this.lastSwap = this.glCanvas.glGetSwapInterval();
+					this.lastVsync = this.lastSwap == 1;
+				}
 			}
 		}
 		
 		this.glCanvas.swapBuffers();
-		if(!this.vsync) {
+		if(!this.isVsyncAvailable || !this.vsync) {
 			this.timer.frequencySleep();
 		}
 	}
@@ -837,10 +859,67 @@ public final class GLThread extends Thread {
 	protected final void _display() {
 		Renderer renderer = this.renderer;
 		if(renderer != null) {
+			boolean initialized;
 			try {
-				if(!renderer.isInitialized()) {
+				initialized = renderer.isInitialized();
+			} catch(Throwable ex) {
+				boolean handled = false;
+				try {
+					handled = renderer.handleException(ex, "isInitialized");
+				} catch(Throwable ex1) {
+					ex.addSuppressed(ex1);
+					handled = false;
+				}
+				if(!handled) {
+					ex.printStackTrace();
+					this.renderer = null;
+					return;
+				}
+				initialized = true;
+			}
+			try {
+				if(!initialized) {
 					renderer.initialize();
 				}
+			} catch(Throwable ex) {
+				boolean handled = false;
+				try {
+					handled = renderer.handleException(ex, "initialize");
+				} catch(Throwable ex1) {
+					ex.addSuppressed(ex1);
+					handled = false;
+				}
+				if(!handled) {
+					ex.printStackTrace();
+					this.renderer = null;
+					return;
+				}
+			}
+			
+			int width = Window.getWindow().getWidth();
+			int height = Window.getWindow().getHeight();
+			if(this.lastWidth != width || this.lastHeight != height) {
+				Rectangle oldViewport = new Rectangle(0, 0, this.lastWidth, this.lastHeight);
+				Rectangle newViewport = new Rectangle(0, 0, this.lastWidth = width, this.lastHeight = height);
+				try {
+					renderer.onViewportChanged(oldViewport, newViewport);
+				} catch(Throwable ex) {
+					boolean handled = false;
+					try {
+						handled = renderer.handleException(ex, "onViewportChanged", oldViewport, newViewport);
+					} catch(Throwable ex1) {
+						ex.addSuppressed(ex1);
+						handled = false;
+					}
+					if(!handled) {
+						ex.printStackTrace();
+						this.renderer = null;
+						return;
+					}
+				}
+			}
+			
+			try {
 				renderer.render(this.deltaTime);
 			} catch(Throwable ex) {
 				boolean handled = false;
@@ -853,8 +932,10 @@ public final class GLThread extends Thread {
 				if(!handled) {
 					ex.printStackTrace();
 					this.renderer = null;
+					return;
 				}
 			}
+			
 		}
 	}
 	
@@ -881,7 +962,9 @@ public final class GLThread extends Thread {
 			this.glCanvas.setCurrent();
 			this.glCaps = GL.createCapabilities(this.glCanvas.getGLData().forwardCompatible);
 			
+			this.isVsyncAvailable = this.glCanvas.glSwapInterval(this.vsync ? 1 : 0);
 			this.lastSwap = this.glCanvas.glGetSwapInterval();
+			
 			this.lastVsync = this.lastSwap == 1;
 			
 			this.nanoTime = System.nanoTime();
