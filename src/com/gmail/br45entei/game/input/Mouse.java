@@ -43,8 +43,6 @@ import org.eclipse.swt.events.MouseEvent;
 import org.eclipse.swt.events.MouseListener;
 import org.eclipse.swt.events.MouseMoveListener;
 import org.eclipse.swt.events.MouseWheelListener;
-import org.eclipse.swt.events.TraverseEvent;
-import org.eclipse.swt.events.TraverseListener;
 import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.Cursor;
 import org.eclipse.swt.graphics.ImageData;
@@ -60,6 +58,14 @@ import org.eclipse.swt.widgets.TypedListener;
  * @author Brian_Entei
  * @since 1.0 */
 public class Mouse {
+	
+	/** The left mouse button */
+	public static final int BUTTON_LEFT = 1;
+	/** The middle mouse button (usually the scrollwheel button, may not be
+	 * present) */
+	public static final int BUTTON_MIDDLE = 2;
+	/** The right mouse button */
+	public static final int BUTTON_RIGHT = 3;
 	
 	private static final Robot robot;
 	
@@ -89,6 +95,9 @@ public class Mouse {
 	protected static final boolean[] mouseDownStates = new boolean[Math.max(3, MouseInfo.getNumberOfButtons())];
 	protected static final boolean[] lastMouseDownStates = new boolean[mouseDownStates.length];
 	protected static final boolean[] currentMouseDownStates = new boolean[mouseDownStates.length];
+	
+	protected static volatile long[] mouseButtonDownTimes = new long[mouseDownStates.length];
+	protected static volatile long[] mouseButtonHoldTimes = new long[mouseDownStates.length];
 	
 	protected static final ConcurrentLinkedDeque<InputCallback> listeners = new ConcurrentLinkedDeque<>();
 	
@@ -206,22 +215,85 @@ public class Mouse {
 			deltaX = deltaY = 0;
 		}
 		
-		if(shellActive && (deltaX != 0 || deltaY != 0)) {
-			Point oldLoc = new Point(mLoc);
-			oldLoc.x -= (topLeft.x + deltaX);
-			oldLoc.y -= (topLeft.y + deltaY);
-			Point newLoc = new Point(mLoc);
-			newLoc.x -= topLeft.x;
-			newLoc.y -= topLeft.y;
-			
-			for(InputCallback listener : listeners) {
-				try {
-					listener.onMouseMoved(deltaX, deltaY, oldLoc.x, oldLoc.y, newLoc.x, newLoc.y);
-				} catch(Throwable ex) {
-					if(!handleListenerException(listener, ex, "onMouseMoved", Integer.toString(deltaX), Integer.toString(deltaY), Integer.toString(oldLoc.x), Integer.toString(oldLoc.y), Integer.toString(newLoc.x), Integer.toString(newLoc.y))) {
-						unregisterInputCallback(listener);
+		if(shellActive) {
+			long now = System.currentTimeMillis();
+			for(int button = 1; button <= mouseDownStates.length; button++) {
+				int i = button - 1;
+				Integer b = Integer.valueOf(button);
+				if(!lastMouseDownStates[i] && mouseDownStates[i]) {// XXX onMouseButtonDown
+					mouseButtonHoldTimes[i] = 0;
+					mouseButtonDownTimes[i] = now;
+					
+					for(InputCallback listener : listeners) {
+						try {
+							listener.onMouseButtonDown(button);
+						} catch(Throwable ex) {
+							if(!handleListenerException(listener, ex, "onMouseButtonDown", b)) {
+								continue;
+							}
+						}
 					}
-					continue;
+				}
+				
+				if(lastMouseDownStates[i] && mouseDownStates[i] && now - mouseButtonDownTimes[i] >= 460) {// XXX onMouseButtonHeld
+					if(mouseButtonHoldTimes[i] == 0 || mouseButtonDownTimes[i] > mouseButtonHoldTimes[i]) {
+						mouseButtonHoldTimes[i] = now;
+					}
+					if(now - mouseButtonHoldTimes[i] >= 40) {
+						mouseButtonHoldTimes[i] = now;
+						for(InputCallback listener : listeners) {
+							try {
+								listener.onMouseButtonHeld(button);
+							} catch(Throwable ex) {
+								if(!handleListenerException(listener, ex, "onMouseButtonHeld", b)) {
+									continue;
+								}
+							}
+						}
+					}
+				}
+				
+				if(lastMouseDownStates[i] && !mouseDownStates[i]) {// XXX onMouseButtonUp
+					mouseButtonHoldTimes[i] = 0;
+					
+					for(InputCallback listener : listeners) {
+						try {
+							listener.onMouseButtonUp(button);
+						} catch(Throwable ex) {
+							if(!handleListenerException(listener, ex, "onMouseButtonUp", b)) {
+								continue;
+							}
+						}
+					}
+				}
+				
+			}
+			
+			int deltaX = Mouse.deltaX;
+			int deltaY = Mouse.deltaY;
+			Integer DeltaX = Integer.valueOf(deltaX);
+			Integer DeltaY = Integer.valueOf(deltaY);
+			
+			if(deltaX != 0 || deltaY != 0) {// XXX onMouseMoved
+				Point oldLoc = new Point(mLoc);
+				oldLoc.x -= (topLeft.x + deltaX);
+				oldLoc.y -= (topLeft.y + deltaY);
+				Point newLoc = new Point(mLoc);
+				newLoc.x -= topLeft.x;
+				newLoc.y -= topLeft.y;
+				Integer oldX = Integer.valueOf(oldLoc.x),
+						oldY = Integer.valueOf(oldLoc.y);
+				Integer newX = Integer.valueOf(newLoc.x),
+						newY = Integer.valueOf(newLoc.y);
+				
+				for(InputCallback listener : listeners) {
+					try {
+						listener.onMouseMoved(deltaX, deltaY, oldLoc.x, oldLoc.y, newLoc.x, newLoc.y);
+					} catch(Throwable ex) {
+						if(!handleListenerException(listener, ex, "onMouseMoved", DeltaX, DeltaY, oldX, oldY, newX, newY)) {
+							continue;
+						}
+					}
 				}
 			}
 		}
@@ -332,7 +404,7 @@ public class Mouse {
 	 *                </ul>
 	 */
 	public static final void setCaptured(final boolean captured) throws IllegalArgumentException {
-		Canvas canvas = cursorCanvas;
+		final Canvas canvas = cursorCanvas;
 		if(canvas == null) {
 			SWT.error(SWT.ERROR_NULL_ARGUMENT);
 			return;//this just makes eclipse happy
@@ -347,6 +419,9 @@ public class Mouse {
 		
 		if(captured && modal) {
 			modal = false;
+		}
+		if(captured == Mouse.captured) {
+			return;
 		}
 		long now = System.currentTimeMillis();
 		Mouse.captureTime = captured ? now : -1L;
@@ -436,11 +511,6 @@ public class Mouse {
 					if(cursorCanvas == null || e.widget != cursorCanvas) {
 						return;
 					}
-					if(e.button == 1) {
-						if(!captured && !modal) {
-							setCaptured(true);
-						}
-					}
 					currentMouseDownStates[e.button - 1] = true;
 				}
 				
@@ -527,24 +597,6 @@ public class Mouse {
 			canvas.addControlListener(controlListener);
 			canvas.getShell().addControlListener(controlListener);
 			list.add(controlListener);
-			
-			TraverseListener traverseListener = new TraverseListener() {
-				@Override
-				public void keyTraversed(TraverseEvent e) {
-					if(cursorCanvas == null || (e.widget != cursorCanvas && e.widget != cursorCanvas.getShell())) {
-						return;
-					}
-					
-					if(e.keyCode == SWT.ESC) {
-						if(captured) {
-							setCaptured(false);
-						}
-					}
-				}
-			};
-			canvas.addTraverseListener(traverseListener);
-			canvas.getShell().addTraverseListener(traverseListener);
-			list.add(traverseListener);
 			
 			return list;
 		}
