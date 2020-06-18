@@ -460,7 +460,16 @@ public class Window {
 		if(GL.getFunctionProvider() == null) {
 			GL.create();
 		}
-		this.glCanvas = new GLCanvas(this.shell, SWT.DOUBLE_BUFFERED, this.data);
+		try {
+			this.glCanvas = new GLCanvas(this.shell, SWT.DOUBLE_BUFFERED, this.data);
+		} catch(SWTException ex) {
+			if(ex.getMessage() != null && ex.getMessage().startsWith("Swap interval requested but ") && ex.getMessage().endsWith(" is unavailable")) {
+				this.data.swapInterval = null;
+				this.glCanvas = new GLCanvas(this.shell, SWT.DOUBLE_BUFFERED, this.data);
+			} else {
+				throw ex;
+			}
+		}
 		this.glCanvas.addControlListener(new ControlAdapter() {
 			@Override
 			public void controlResized(ControlEvent e) {

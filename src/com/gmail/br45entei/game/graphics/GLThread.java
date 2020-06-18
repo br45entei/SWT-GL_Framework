@@ -54,7 +54,7 @@ public final class GLThread extends Thread {
 	protected volatile int lastSwap = 0;
 	protected volatile boolean isVsyncAvailable = false;
 	protected volatile boolean logFPS = true;
-	protected final FrequencyTimer timer = new FrequencyTimer(60.0D, 1000.0D);
+	protected final FrequencyTimer timer = new FrequencyTimer(Window.getDefaultRefreshRate(), 1000.0D);
 	protected volatile double lastSetFrequency = this.timer.getTargetFrequency();
 	protected volatile double lastSetPeriod = this.timer.getTargetPeriodInMilliseconds();
 	protected final ConcurrentLinkedDeque<String> fpsLog = new ConcurrentLinkedDeque<>();
@@ -962,8 +962,21 @@ public final class GLThread extends Thread {
 			this.glCanvas.setCurrent();
 			this.glCaps = GL.createCapabilities(this.glCanvas.getGLData().forwardCompatible);
 			
-			this.isVsyncAvailable = this.glCanvas.glSwapInterval(this.vsync ? 1 : 0);
-			this.lastSwap = this.glCanvas.glGetSwapInterval();
+			try {
+				this.isVsyncAvailable = this.glCanvas.glSwapInterval(this.vsync ? 1 : 0);
+				this.lastSwap = this.glCanvas.glGetSwapInterval();
+			} catch(UnsupportedOperationException ex) {
+				if(ex.getMessage() != null && ex.getMessage().endsWith(" is unavailable")) {
+					this.isVsyncAvailable = false;
+					this.lastSwap = 0;
+				} else {
+					ex.printStackTrace(System.err);
+					System.err.flush();
+					System.exit(-1);
+					return;
+				}
+			}
+			this.lastSetFrequency = this.timer.getTargetFrequency();
 			
 			this.lastVsync = this.lastSwap == 1;
 			
