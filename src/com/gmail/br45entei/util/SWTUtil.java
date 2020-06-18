@@ -69,7 +69,7 @@ import etinyplugins.commons.swt.UndoRedoImpl;
 public class SWTUtil {
 	
 	/** Returns an {@link Image} array containing my (Brian_Entei) profile icon
-	 * for use with {@link Shell#setImages(Image[])}.
+	 * for use with {@link Shell#setImages(Image[]) Shell.setImages(Image[])}.
 	 * 
 	 * @return An Image array containing my (Brian_Entei) profile icon */
 	public static final Image[] getTitleImages() {
