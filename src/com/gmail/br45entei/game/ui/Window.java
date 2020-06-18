@@ -24,8 +24,8 @@ import com.gmail.br45entei.game.graphics.Renderer;
 import com.gmail.br45entei.game.input.InputCallback;
 import com.gmail.br45entei.game.input.InputCallback.InputLogger;
 import com.gmail.br45entei.game.input.Keyboard;
-import com.gmail.br45entei.game.input.Keyboard.Keys;
 import com.gmail.br45entei.game.input.Mouse;
+import com.gmail.br45entei.game.ui.swt.RendererMenuItem;
 import com.gmail.br45entei.lwjgl.natives.LWJGL_Natives;
 import com.gmail.br45entei.util.Architecture;
 import com.gmail.br45entei.util.CodeUtil;
@@ -41,13 +41,16 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.function.Function;
 
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.SWTException;
 import org.eclipse.swt.events.ArmEvent;
 import org.eclipse.swt.events.ArmListener;
+import org.eclipse.swt.events.ControlAdapter;
 import org.eclipse.swt.events.ControlEvent;
 import org.eclipse.swt.events.ControlListener;
+import org.eclipse.swt.events.MenuDetectListener;
 import org.eclipse.swt.events.SelectionAdapter;
 import org.eclipse.swt.events.SelectionEvent;
 import org.eclipse.swt.events.ShellAdapter;
@@ -59,6 +62,7 @@ import org.eclipse.swt.widgets.Menu;
 import org.eclipse.swt.widgets.MenuItem;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.wb.swt.SWTResourceManager;
+import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.swt.GLCanvas;
 import org.lwjgl.opengl.swt.GLData;
 
@@ -155,6 +159,8 @@ public class Window {
 	protected volatile boolean running = false, shellActive = false;
 	protected volatile boolean isFullscreen = false;
 	
+	protected volatile long lastMenuInteraction = 0L;
+	
 	protected Display display;
 	protected Shell shell;
 	protected long shellHandle;
@@ -194,7 +200,7 @@ public class Window {
 		
 		this.mntmVerticalSync = this.mntmRenderers = this.mntmRendererOptions = null;
 		
-		this.uiCallback = null;
+		//this.uiCallback = null;
 		
 		if(instance == this) {
 			instance = null;
@@ -244,8 +250,10 @@ public class Window {
 	 *            {@link GLCanvas}' height)
 	 * @param framerate The framerate that the {@link GLThread} will run at
 	 * @param data The {@link GLData} that the {@link GLThread} will use when
-	 *            creating the OpenGL context */
-	public Window(String title, int width, int height, double framerate, GLData data) {
+	 *            creating the OpenGL context
+	 * @param renderer The renderer that this Window's {@link GLThread} will
+	 *            attempt to use to display graphics */
+	public Window(String title, int width, int height, double framerate, GLData data, Renderer renderer) {
 		Thread.currentThread().setPriority(Thread.MAX_PRIORITY - 2);
 		this.title = title == null ? "SWT-LWJGL3 Framework" : title;
 		this.glTargetWidth = width;
@@ -253,7 +261,30 @@ public class Window {
 		this.framerate = framerate != framerate || Double.isInfinite(framerate) ? Window.getDefaultRefreshRate() : framerate;
 		this.data = data == null ? Window.createDefaultGLData() : data;
 		
+		this.registerInputCallback(this.uiCallback = new UICallback(this));
+		
 		this.createContents();
+		
+		this.setActiveRenderer(renderer);
+	}
+	
+	/** Creates a new Window with the specified {@link GLData}, the specified
+	 * viewport size, and the specified framerate.<br>
+	 * <br>
+	 * <b>Note:</b>&nbsp;The thread that creates this Window needs to be the
+	 * thread that {@link #open()}s it, as it will become the main display
+	 * thread.
+	 * 
+	 * @param title The title that this Window will display
+	 * @param width The width of the viewport (this will be the
+	 *            {@link GLCanvas}' width)
+	 * @param height The width of the viewport (this will be the
+	 *            {@link GLCanvas}' height)
+	 * @param framerate The framerate that the {@link GLThread} will run at
+	 * @param data The {@link GLData} that the {@link GLThread} will use when
+	 *            creating the OpenGL context */
+	public Window(String title, int width, int height, double framerate, GLData data) {
+		this(title, width, height, framerate, data, (Renderer) null);
 	}
 	
 	/** Creates a new Window with the specified viewport size and framerate.<br>
@@ -383,6 +414,9 @@ public class Window {
 	
 	private void createContents() {
 		this.display = Display.getDefault();
+		if(this.display.getThread() != Thread.currentThread()) {
+			this.display = new Display();
+		}
 		this.shell = new Shell(this.display, SWT.SHELL_TRIM);
 		this.shell.setText(this.title);
 		this.shell.setImages(SWTUtil.getTitleImages());
@@ -397,8 +431,7 @@ public class Window {
 			@Override
 			public void controlResized(ControlEvent e) {
 				if(Window.this.glThread == null || !Window.this.glThread.isRecording()) {
-					Rectangle clientArea = Window.this.shell.getClientArea();
-					Window.this.glCanvas.setBounds(clientArea);
+					Window.this.glCanvas.setBounds(Window.this.shell.getClientArea());
 				}
 				
 				this.controlMoved(e);
@@ -424,7 +457,19 @@ public class Window {
 			}
 		});
 		
+		if(GL.getFunctionProvider() == null) {
+			GL.create();
+		}
 		this.glCanvas = new GLCanvas(this.shell, SWT.DOUBLE_BUFFERED, this.data);
+		this.glCanvas.addControlListener(new ControlAdapter() {
+			@Override
+			public void controlResized(ControlEvent e) {
+				Point size = Window.this.glCanvas.getSize();
+				Window.this.glWidth = size.x;
+				Window.this.glHeight = size.y;
+			}
+		});
+		
 		//this.glCanvas.setBackground(this.display.getSystemColor(SWT.COLOR_BLACK));
 		/*this.glCanvas.addKeyListener(new KeyAdapter() {
 			@Override
@@ -435,107 +480,6 @@ public class Window {
 				}
 			}
 		});*/
-		
-		this.uiCallback = new InputCallback() {
-			volatile boolean initialized = false;
-			
-			@Override
-			public void input(double deltaTime) {
-			}
-			
-			@Override
-			public void update(double deltaTime) {
-			}
-			
-			@Override
-			public void onMouseScroll(boolean vertical, int count) {
-			}
-			
-			@Override
-			public void onMouseMoved(int deltaX, int deltaY, int oldX, int oldY, int newX, int newY) {
-			}
-			
-			@Override
-			public void onMouseDoubleClick(int button) {
-			}
-			
-			@Override
-			public void onMouseButtonUp(int button) {
-			}
-			
-			@Override
-			public void onMouseButtonDown(int button) {
-			}
-			
-			@Override
-			public void onKeyDown(int key) {
-				if(key == Keys.VK_ESCAPE) {
-					if(!Mouse.isCaptured() && Mouse.getTimeSinceReleased() > 160) {
-						if(Window.this.isFullscreen()) {
-							Window.this.setFullscreen(false);
-						} else {
-							Window.this.close();
-							return;
-						}
-					}
-				}
-				if(key == Keys.VK_F2) {
-					if(Keyboard.isKeyDown(Keys.VK_SHIFT)) {
-						if(Window.this.glThread.isRecording() || Window.this.glThread.isRecordingStartingUp()) {
-							Window.this.glThread.stopRecording((v) -> Boolean.valueOf(Window.this.swtLoop()));
-						} else {
-							Window.this.glThread.startRecording(Window.this.getViewport());
-						}
-					} else {
-						Window.this.glThread.takeScreenshot();
-					}
-				}
-				if(key == Keys.VK_F11) {
-					Window.this.toggleFullscreen();
-				}
-				
-				if(key == Keys.VK_V) {
-					if(Keyboard.isKeyDown(Keys.VK_SHIFT)) {
-						//TODO add dialog for adjusting frequency from the LWJGL_SWT_Demo
-					} else {
-						Window.this.toggleVsyncEnabled();
-					}
-				}
-			}
-			
-			@Override
-			public void onKeyHeld(int key) {
-			}
-			
-			@Override
-			public void onKeyUp(int key) {
-			}
-			
-			@Override
-			public boolean isInitialized() {
-				return this.initialized;
-			}
-			
-			@Override
-			public void initialize() {
-				this.initialized = true;
-			}
-			
-			@Override
-			public boolean handleException(Throwable ex, String method, Object... params) {
-				StringBuilder sb = new StringBuilder();
-				for(int i = 0; i < params.length; i++) {
-					Object param = params[i];
-					sb.append(Objects.toString(param)).append(i + 1 == params.length ? "" : ", ");
-				}
-				String parameters = sb.toString();
-				System.err.print(String.format("The Window's built-in InputCallback threw an exception while executing method %s(%s): ", method, parameters));
-				ex.printStackTrace(System.err);
-				System.err.flush();
-				return true;
-			}
-		};
-		this.registerInputCallback(this.uiCallback);
 		
 		if(Beans.isDesignTime()) {
 			this.shell.setSize(this.glTargetWidth, this.glTargetHeight);
@@ -602,6 +546,7 @@ public class Window {
 			this.shell.forceActive();
 			this.shell.forceFocus();
 		}
+		this.isFullscreen();
 		return this;
 	}
 	
@@ -790,7 +735,7 @@ public class Window {
 		new MenuItem(menu_2, SWT.SEPARATOR);
 		
 		this.mntmRenderers = new MenuItem(menu_2, SWT.CASCADE);
-		this.mntmRenderers.setText("Renderers");
+		this.mntmRenderers.setText("Applications");
 		
 		mntmwindow.addArmListener(new ArmListener() {
 			@Override
@@ -820,6 +765,17 @@ public class Window {
 		Menu menu_3 = new Menu(this.mntmRenderers);
 		this.mntmRenderers.setMenu(menu_3);
 		
+		for(Renderer renderer : this.getAvailableRenderers()) {
+			String name;
+			try {
+				name = renderer.getName();
+			} catch(Throwable ex) {
+				GLThread.handleRendererException(renderer, ex, "getName");
+				continue;
+			}
+			this.addRendererToCascadeMenu(renderer, name);
+		}
+		
 		new MenuItem(menu, SWT.SEPARATOR);
 		
 		this.mntmRendererOptions = new MenuItem(menu, SWT.CASCADE);
@@ -827,13 +783,24 @@ public class Window {
 		
 		final MenuItem mntmSeparator = new MenuItem(menu, SWT.SEPARATOR);
 		
-		final Menu menu_4 = new Menu(this.mntmRendererOptions);
-		this.mntmRendererOptions.setMenu(menu_4);
+		final Menu rendererMenu = new Menu(this.mntmRendererOptions);
+		this.mntmRendererOptions.setMenu(rendererMenu);
 		
 		//==[Popup Menu]=============================================
 		
-		final Menu menu_5 = new Menu(this.glCanvas);
-		this.glCanvas.setMenu(menu_5);
+		final Menu popupMenu;
+		final boolean justCreatedPopupMenu;
+		{
+			Menu check = this.glCanvas.getMenu();
+			if(check != null) {
+				popupMenu = check;
+				justCreatedPopupMenu = false;
+			} else {
+				popupMenu = new Menu(this.glCanvas);
+				this.glCanvas.setMenu(popupMenu);
+				justCreatedPopupMenu = true;
+			}
+		}
 		
 		//==[MenuProvider Implementation]=============================================
 		
@@ -844,23 +811,25 @@ public class Window {
 			try {
 				String name = provider.getMenuName();
 				try {
-					provider.onMenuBarCreation(menu_4);
+					provider.onMenuBarCreation(rendererMenu);
 					if(name != null && !name.trim().isEmpty()) {
 						this.mntmRendererOptions.setText(name.replace("&", "&&"));
 					}
 					
-					try {
-						provider.onPopupMenuCreation(menu_5);
-					} catch(Throwable ex) {
-						if(!GLThread.handleRendererException(renderer, ex, "onPopupMenuCreation", menu_5)) {
-							this.glThread.setRenderer(null);
-							mntmSeparator.dispose();
-							this.mntmRendererOptions.dispose();
-							this.mntmRendererOptions = null;
+					if(justCreatedPopupMenu) {
+						try {
+							provider.onPopupMenuCreation(popupMenu);
+						} catch(Throwable ex) {
+							if(!Window.handleMenuProviderException(provider, ex, "onPopupMenuCreation", popupMenu)) {
+								this.glThread.setRenderer(null);
+								mntmSeparator.dispose();
+								this.mntmRendererOptions.dispose();
+								this.mntmRendererOptions = null;
+							}
 						}
 					}
 				} catch(Throwable ex) {
-					if(!GLThread.handleRendererException(renderer, ex, "onMenuBarCreation", menu_4)) {
+					if(!Window.handleMenuProviderException(provider, ex, "onMenuBarCreation", rendererMenu)) {
 						this.glThread.setRenderer(null);
 						mntmSeparator.dispose();
 						this.mntmRendererOptions.dispose();
@@ -868,13 +837,146 @@ public class Window {
 					}
 				}
 			} catch(Throwable ex) {
-				if(!GLThread.handleRendererException(renderer, ex, "getMenuName")) {
+				if(!Window.handleMenuProviderException(provider, ex, "getMenuName")) {
 					this.glThread.setRenderer(null);
 					mntmSeparator.dispose();
 					this.mntmRendererOptions.dispose();
 					this.mntmRendererOptions = null;
 				}
 			}
+		} else {
+			mntmSeparator.dispose();
+			this.mntmRendererOptions.dispose();
+			this.mntmRendererOptions = null;
+		}
+		
+		final MenuDetectListener menuDetectListener = (e) -> {
+			this.lastMenuInteraction = System.currentTimeMillis();
+		};
+		this.shell.addMenuDetectListener(menuDetectListener);
+		this.glCanvas.addMenuDetectListener(menuDetectListener);
+		
+		final ArmListener armListener = (e) -> {
+			this.lastMenuInteraction = System.currentTimeMillis();
+		};
+		@SuppressWarnings("unchecked")
+		final Function<Menu, Void>[] addArmListener = new Function[1];
+		addArmListener[0] = (m) -> {
+			if(m != null) {
+				for(MenuItem item : m.getItems()) {
+					item.addArmListener(armListener);
+					addArmListener[0].apply(item.getMenu());
+				}
+			}
+			return null;
+		};
+		
+		addArmListener[0].apply(menu);
+		addArmListener[0].apply(popupMenu);
+		
+	}
+	
+	protected boolean addRendererToCascadeMenu(Renderer renderer, String name) {
+		if(renderer != null) {
+			name = name == null || name.trim().isEmpty() ? renderer.getClass().getSimpleName() : name;
+			Menu menu = this.mntmRenderers == null || this.mntmRenderers.isDisposed() ? null : this.mntmRenderers.getMenu();
+			if(menu != null) {
+				for(MenuItem item : menu.getItems()) {
+					if(item instanceof RendererMenuItem) {
+						RendererMenuItem rItem = (RendererMenuItem) item;
+						if(rItem.getRenderer() == renderer) {
+							return SWTUtil.setText(rItem, name);
+						}
+					}
+				}
+				final RendererMenuItem item = new RendererMenuItem(menu, renderer, SWT.RADIO);
+				item.setText(name);
+				item.addSelectionListener(new SelectionAdapter() {
+					@Override
+					public void widgetSelected(SelectionEvent e) {
+						boolean selection = Window.this.setActiveRenderer(item.getRenderer());
+						if(!item.isDisposed()) {
+							item.setSelection(selection);
+						}
+					}
+				});
+				item.setSelection(Window.this.getActiveRenderer() == renderer);
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	protected boolean removeRendererFromCascadeMenu(Renderer renderer) {
+		if(renderer != null) {
+			Menu menu = this.mntmRenderers == null || this.mntmRenderers.isDisposed() ? null : this.mntmRenderers.getMenu();
+			if(menu != null) {
+				boolean removed = false;
+				for(MenuItem item : menu.getItems()) {
+					if(item instanceof RendererMenuItem) {
+						RendererMenuItem rItem = (RendererMenuItem) item;
+						if(rItem.getRenderer() == renderer) {
+							rItem.dispose();
+							removed |= true;
+						}
+					}
+				}
+				return removed;
+			}
+		}
+		return false;
+	}
+	
+	protected void createGLCanvasPopupMenu() {
+		final Menu popupMenu;
+		final boolean justCreatedPopupMenu;
+		{
+			Menu check = this.glCanvas.getMenu();
+			if(check != null) {
+				popupMenu = check;
+				justCreatedPopupMenu = false;
+			} else {
+				popupMenu = new Menu(this.glCanvas);
+				this.glCanvas.setMenu(popupMenu);
+				justCreatedPopupMenu = true;
+			}
+		}
+		if(justCreatedPopupMenu) {
+			Renderer renderer = this.glThread.getRenderer();
+			if(renderer instanceof MenuProvider) {
+				MenuProvider provider = (MenuProvider) renderer;
+				try {
+					provider.onPopupMenuCreation(popupMenu);
+				} catch(Throwable ex) {
+					if(!Window.handleMenuProviderException(provider, ex, "onPopupMenuCreation", popupMenu)) {
+						this.glThread.setRenderer(null);
+						this.mntmRendererOptions.dispose();
+						this.mntmRendererOptions = null;
+					}
+				}
+			}
+		}
+	}
+	
+	protected void destroyGLCanvasPopupMenu() {
+		Menu menu = this.glCanvas.getMenu();
+		if(menu != null) {
+			this.glCanvas.setMenu(null);
+			
+			final Renderer renderer = this.glThread.getRenderer();
+			MenuProvider provider = renderer instanceof MenuProvider ? (MenuProvider) renderer : null;
+			if(provider != null) {
+				try {
+					provider.onPopupMenuDeletion(menu);
+				} catch(Throwable ex) {
+					if(!Window.handleMenuProviderException(provider, ex, "onPopupMenuDeletion", menu)) {
+						this.glThread.setRenderer(null);
+						provider = null;
+					}
+				}
+			}
+			
+			menu.dispose();
 		}
 	}
 	
@@ -890,7 +992,7 @@ public class Window {
 				try {
 					provider.onMenuBarDeletion(menu);
 				} catch(Throwable ex) {
-					if(!GLThread.handleRendererException(renderer, ex, "onMenuBarDeletion", menu)) {
+					if(!Window.handleMenuProviderException(provider, ex, "onMenuBarDeletion", menu)) {
 						this.glThread.setRenderer(null);
 						provider = null;
 					}
@@ -901,23 +1003,7 @@ public class Window {
 		}
 		this.mntmVerticalSync = this.mntmRenderers = this.mntmRendererOptions = null;
 		
-		menu = this.glCanvas.getMenu();
-		if(menu != null) {
-			this.glCanvas.setMenu(null);
-			
-			if(provider != null) {
-				try {
-					provider.onPopupMenuDeletion(menu);
-				} catch(Throwable ex) {
-					if(!GLThread.handleRendererException(renderer, ex, "onPopupMenuDeletion", menu)) {
-						this.glThread.setRenderer(null);
-						provider = null;
-					}
-				}
-			}
-			
-			menu.dispose();
-		}
+		this.destroyGLCanvasPopupMenu();
 	}
 	
 	/** Maintains the application window, polls the mouse and keyboard, and
@@ -927,9 +1013,9 @@ public class Window {
 	 * 
 	 * @return Whether or not this window should continue running */
 	public boolean swtLoop() {
-		if(!this.display.readAndDispatch()) {
-			CodeUtil.sleep(10L);
+		while(this.display.readAndDispatch()) {
 		}
+		CodeUtil.sleep(2L);
 		if(!this.shell.isDisposed()) {
 			this.shellActive = Window.isShellActive(this.shell);
 			if(this.shell.isDisposed()) {
@@ -947,7 +1033,57 @@ public class Window {
 			if(this.shell.isDisposed()) {
 				return false;
 			}
-			// TODO implement InputCallback.input(...) and update(...) here!
+			
+			final double deltaTime = this.glThread.getDeltaTime();
+			final Double dt = Double.valueOf(deltaTime);
+			long startTime = System.currentTimeMillis();
+			for(InputCallback listener : this.inputListeners) {
+				try {
+					listener.input(deltaTime);
+				} catch(Throwable ex) {
+					if(!handleListenerException(listener, ex, "input", dt)) {
+						this.unregisterInputCallback(listener);
+					}
+				}
+				
+				if(System.currentTimeMillis() - startTime >= 4L) {
+					while(this.display.readAndDispatch()) {
+					}
+					CodeUtil.sleep(1L);
+					startTime = System.currentTimeMillis();
+					if(this.shell.isDisposed()) {
+						break;
+					}
+				}
+			}
+			startTime = System.currentTimeMillis();
+			for(InputCallback listener : this.inputListeners) {
+				try {
+					listener.update(deltaTime);
+				} catch(Throwable ex) {
+					if(!handleListenerException(listener, ex, "update", dt)) {
+						this.unregisterInputCallback(listener);
+					}
+				}
+				
+				if(System.currentTimeMillis() - startTime >= 4L) {
+					while(this.display.readAndDispatch()) {
+					}
+					CodeUtil.sleep(1L);
+					startTime = System.currentTimeMillis();
+					if(this.shell.isDisposed()) {
+						break;
+					}
+				}
+			}
+			
+			// XXX Fix for when the cursor is captured and the user right clicks, causing the
+			// cursor to suddenly become visible for a split second in an attempt to bring up the popup menu
+			if(this.isFullscreen() || (Mouse.isCaptured() && !Mouse.isModal())) {
+				this.destroyGLCanvasPopupMenu();
+			} else {
+				this.createGLCanvasPopupMenu();
+			}
 		}
 		return this.running && !this.shell.isDisposed();
 	}
@@ -1225,7 +1361,6 @@ public class Window {
 			}
 			
 			this.glThread.stopRunning(true);
-			
 			return;
 		} finally {
 			this.running = false;
@@ -1314,6 +1449,14 @@ public class Window {
 	 * @return Whether or not the game was just registered */
 	public final boolean registerGame(Game game) {
 		if(game != null) {
+			final String name;
+			try {
+				name = game.getName();
+			} catch(Throwable ex) {
+				GLThread.handleRendererException(game, ex, "getName");
+				return false;
+			}
+			
 			boolean registeredAnywhere = false;
 			if(!this.isGameRegistered(game)) {
 				registeredAnywhere |= this.games.add(game);
@@ -1322,6 +1465,11 @@ public class Window {
 			registeredAnywhere |= Keyboard.registerInputCallback(game);
 			if(game instanceof MenuProvider && !this.menuProviders.contains((MenuProvider) game)) {
 				registeredAnywhere |= this.menuProviders.add((MenuProvider) game);
+			}
+			if(this.display != null && !this.display.isDisposed()) {
+				this.display.asyncExec(() -> {
+					this.addRendererToCascadeMenu(game, name);
+				});
 			}
 			return registeredAnywhere;
 		}
@@ -1351,6 +1499,11 @@ public class Window {
 				while(this.menuProviders.remove((MenuProvider) game)) {
 					unregisteredAnywhere |= true;
 				}
+			}
+			if(this.display != null && !this.display.isDisposed()) {
+				this.display.asyncExec(() -> {
+					this.removeRendererFromCascadeMenu(game);
+				});
 			}
 			return unregisteredAnywhere;
 		}
@@ -1407,6 +1560,48 @@ public class Window {
 		return false;
 	}
 	
+	/** Attempts to have the {@link InputCallback listener} handle the exception
+	 * it threw, or handles it and returns false if the listener failed to even
+	 * do that.
+	 * 
+	 * @param listener The listener that threw an exception
+	 * @param ex The exception that was thrown
+	 * @param method The listener method that threw the exception
+	 * @param params The parameters that were passed to the listener's method
+	 * @return Whether or not the listener was able to handle the exception */
+	public static final boolean handleListenerException(InputCallback listener, Throwable ex, String method, Object... params) {
+		String name = listener.getClass().getName();
+		boolean handled = false;
+		try {
+			handled = listener.handleException(ex, method, params);
+		} catch(Throwable ex1) {
+			ex.addSuppressed(ex1);
+			handled = false;
+		}
+		if(!handled) {
+			StringBuilder sb = new StringBuilder();
+			for(int i = 0; i < params.length; i++) {
+				Object param = params[i];
+				String toString;
+				if(param == null || param.getClass().isPrimitive()) {
+					toString = Objects.toString(param);
+				} else {
+					toString = param.toString();
+					if(toString.startsWith(param.getClass().getName().concat("@"))) {
+						toString = param.getClass().getName();
+					}
+				}
+				
+				sb.append(toString).append(i + 1 == params.length ? "" : ", ");
+			}
+			String parameters = sb.toString();
+			System.err.print(String.format("Listener \"%s\" threw an exception while executing method %s(%s): ", name, method, parameters));
+			ex.printStackTrace(System.err);
+			System.err.flush();
+		}
+		return handled;
+	}
+	
 	public final boolean isRendererRegistered(Renderer renderer) {
 		if(renderer instanceof Game) {
 			while(this.renderers.remove(renderer)) {
@@ -1426,7 +1621,21 @@ public class Window {
 			return this.registerGame((Game) renderer);
 		}
 		if(renderer != null && !this.isRendererRegistered(renderer)) {
-			return this.renderers.add(renderer);
+			final String name;
+			try {
+				name = renderer.getName();
+			} catch(Throwable ex) {
+				GLThread.handleRendererException(renderer, ex, "getName");
+				return false;
+			}
+			
+			boolean success = this.renderers.add(renderer);
+			if(success && this.display != null && !this.display.isDisposed()) {
+				this.display.asyncExec(() -> {
+					this.addRendererToCascadeMenu(renderer, name);
+				});
+			}
+			return success;
 		}
 		return false;
 	}
@@ -1439,6 +1648,11 @@ public class Window {
 		}
 		if(renderer != null && this.isRendererRegistered(renderer)) {
 			while(this.renderers.remove(renderer)) {
+			}
+			if(this.display != null && !this.display.isDisposed()) {
+				this.display.asyncExec(() -> {
+					this.removeRendererFromCascadeMenu(renderer);
+				});
 			}
 			return true;
 		}
@@ -1480,17 +1694,77 @@ public class Window {
 		return false;
 	}
 	
+	/** Attempts to have the {@link MenuProvider provider} handle the exception
+	 * it threw, or handles it and returns false if the provider failed to do
+	 * even that.
+	 * 
+	 * @param provider The provider that threw an exception
+	 * @param method The provider's method that threw the exception
+	 * @param params The parameters that were passed to the provider's method
+	 * @param ex The exception that was thrown
+	 * @return Whether or not the provider was able to handle the exception */
+	public static final boolean handleMenuProviderException(MenuProvider provider, Throwable ex, String method, Object... params) {
+		String name = provider.getClass().getName();
+		boolean handled = false;
+		try {
+			name = provider.getMenuName();
+			handled = provider.handleException(ex, method, params);
+		} catch(Throwable ex1) {
+			ex.addSuppressed(ex1);
+			handled = false;
+		}
+		if(!handled) {
+			StringBuilder sb = new StringBuilder();
+			for(int i = 0; i < params.length; i++) {
+				Object param = params[i];
+				String toString;
+				if(param == null || param.getClass().isPrimitive()) {
+					toString = Objects.toString(param);
+				} else {
+					toString = param.toString();
+					if(toString.startsWith(param.getClass().getName().concat("@"))) {
+						toString = param.getClass().getName();
+					}
+				}
+				
+				sb.append(toString).append(i + 1 == params.length ? "" : ", ");
+			}
+			String parameters = sb.toString();
+			System.err.print(String.format("MenuProvider \"%s\" threw an exception while executing method %s(%s): ", name, method, parameters));
+			ex.printStackTrace(System.err);
+			System.err.flush();
+			return true;
+		}
+		return handled;
+	}
+	
 	/** Sets the renderer that this {@link Window}'s {@link GLThread} will
 	 * attempt to use to display graphics.<br>
-	 * This method is thread safe.
+	 * <br>
+	 * This method is thread safe; however it may block if this Window is
+	 * currently running as it must wait for the GLThread to change the active
+	 * renderer.<br>
+	 * {@link Display#readAndDispatch()} will be called while this method blocks
+	 * if the calling thread has an active {@link Display}.
 	 * 
 	 * @param renderer The {@link Renderer renderer} that the GLThread will
 	 *            attempt to use to display graphics
 	 * @return Whether or not the {@link GLThread} was able to begin using the
 	 *         specified renderer */
 	public final boolean setActiveRenderer(Renderer renderer) {
+		if(this.display.isDisposed()) {
+			throw new IllegalStateException("Display is disposed!");
+		}
 		if(this.glThread.setRenderer(renderer)) {
-			return this.registerRenderer(renderer);
+			if(renderer instanceof MenuProvider) {
+				this.display.asyncExec(() -> {
+					if(this.shell.getMenuBar() != null) {
+						this.destroyMenus();
+						this.createMenus();
+					}
+				});
+			}
+			return renderer == null ? true : this.registerRenderer(renderer);
 		}
 		return false;
 	}
@@ -1514,7 +1788,7 @@ public class Window {
 		List<Renderer> list = new ArrayList<>();
 		list.addAll(this.renderers);
 		Renderer activeRenderer = this.getActiveRenderer();
-		if(!list.contains(activeRenderer)) {
+		if(activeRenderer != null && !list.contains(activeRenderer)) {
 			list.add(activeRenderer);
 		}
 		for(Game game : this.games) {
