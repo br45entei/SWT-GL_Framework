@@ -24,6 +24,7 @@ import com.gmail.br45entei.game.ui.Window;
 import java.security.SecureRandom;
 import java.util.Objects;
 
+import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Menu;
 import org.lwjgl.opengl.GL11;
 
@@ -48,6 +49,12 @@ public interface Renderer {
 	/** Called by the {@link GLThread} when this {@link Renderer} has been
 	 * selected for rendering. */
 	public void onSelected();
+	
+	/** Called by the {@link GLThread} when the {@link Window}'s viewport has changed.
+	 * 
+	 * @param oldViewport The old viewport
+	 * @param newViewport The new viewport */
+	public void onViewportChanged(Rectangle oldViewport, Rectangle newViewport);
 	
 	/** Called by the {@link GLThread}'s render loop once per frame.
 	 * 
@@ -131,12 +138,17 @@ public interface Renderer {
 		}
 		
 		@Override
+		public void onViewportChanged(Rectangle oldViewport, Rectangle newViewport) {
+			GL11.glViewport(newViewport.x, newViewport.y, newViewport.width, newViewport.height);// Set the viewport to match the glCanvas' size (and optional offset)
+		}
+		
+		@Override
 		public void render(double deltaTime) {
 			/*if((System.currentTimeMillis() % 1000) <= 16) {
 				Window.getWindow().getGLThread().fpsLog.addLast(String.format("deltaTime: %s", CodeUtil.limitDecimalNoRounding(deltaTime, 9, true)));
 			}*/
 			
-			GL11.glViewport(0, 0, Window.getWindow().getWidth(), Window.getWindow().getHeight());// Set the viewport to match the glCanvas' size (and optional offset)
+			//GL11.glViewport(0, 0, Window.getWindow().getWidth(), Window.getWindow().getHeight());// Set the viewport to match the glCanvas' size (and optional offset)
 			GL11.glClearColor(this.r, this.g, this.b, 1);// Set the clear color to a random color that changes a bit every frame
 			GL11.glClear(GL11.GL_COLOR_BUFFER_BIT/* | GL11.GL_DEPTH_BUFFER_BIT*/);// Clear the color buffer, setting it to the clear color above
 			
