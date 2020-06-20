@@ -307,6 +307,7 @@ public class Keyboard {
 		public static final int VK_CONTROL = 17;
 		/** Either one of the ALT(alternate) modifier keys */
 		public static final int VK_MENU = 18;
+		public static final int VK_ALT = VK_MENU;
 		public static final int VK_PAUSE_BREAK = 19;
 		public static final int VK_CAPITALS_LOCK = 20;
 		public static final int VK_KANA = 21;//						IME Kana mode
@@ -456,7 +457,9 @@ public class Keyboard {
 		public static final int VK_LCONTROL = 162;
 		public static final int VK_RCONTROL = 163;
 		public static final int VK_LMENU = 164;
+		public static final int VK_LALT = VK_LMENU;
 		public static final int VK_RMENU = 165;
+		public static final int VK_RALT = VK_RMENU;
 		public static final int VK_BROWSER_BACK = 166;//			Browser Back key
 		public static final int VK_BROWSER_FORWARD = 167;//			Browser Forward key
 		public static final int VK_BROWSER_REFRESH = 168;//			Browser Refresh key
@@ -567,6 +570,7 @@ public class Keyboard {
 				if(!field.getName().startsWith("VK_") || field.getType() != int.class) {
 					continue;
 				}
+				@SuppressWarnings("deprecation")
 				final boolean wasAccessible = field.isAccessible();
 				field.setAccessible(true);
 				try {
