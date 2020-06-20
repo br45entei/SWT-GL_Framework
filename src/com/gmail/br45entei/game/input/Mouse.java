@@ -19,6 +19,7 @@
 package com.gmail.br45entei.game.input;
 
 import com.gmail.br45entei.game.ui.Window;
+import com.gmail.br45entei.util.CodeUtil;
 import com.stackoverflow.DeviceConfig;
 
 import java.awt.AWTException;
@@ -28,11 +29,14 @@ import java.awt.MouseInfo;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.Robot;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.EventListener;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.function.Function;
 
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.SWTException;
@@ -88,7 +92,7 @@ public class Mouse {
 			lastFreeY;
 	protected static volatile Canvas cursorCanvas;
 	protected static final org.eclipse.swt.graphics.Rectangle cursorCanvasBounds = new org.eclipse.swt.graphics.Rectangle(0, 0, 800, 600);
-	protected static volatile Cursor invisibleCursor;
+	protected static volatile Cursor currentCursor, invisibleCursor;
 	
 	private static volatile long captureTime = -1L, releaseTime = 0L;
 	
@@ -416,6 +420,7 @@ public class Mouse {
 			return;
 		}
 		canvas.setCursor(captured ? getInvisibleCursor() : canvas.getDisplay().getSystemCursor(SWT.CURSOR_ARROW));
+		currentCursor = canvas.getCursor();
 		
 		if(captured && modal) {
 			modal = false;
@@ -503,6 +508,7 @@ public class Mouse {
 		}
 		cursorCanvas = canvas;
 		if(canvas != null) {
+			currentCursor = canvas.getCursor();
 			getInvisibleCursor();
 			List<EventListener> list = new ArrayList<>();
 			MouseListener mouseListener = new MouseAdapter() {
@@ -619,7 +625,7 @@ public class Mouse {
 	
 	/** @return The bounds of the cursor canvas in SWT display-relative
 	 *         coordinates
-	 * @see com.gmail.br45entei.game.ui.Window#getBounds() Window.getSize() */
+	 * @see com.gmail.br45entei.game.ui.Window#getViewport() */
 	public static final Rectangle getCursorCanvasBounds() {
 		return new Rectangle(cursorCanvasBounds.x, cursorCanvasBounds.y, cursorCanvasBounds.width, cursorCanvasBounds.height);
 	}
@@ -697,6 +703,128 @@ public class Mouse {
 	 * @param location The location to set the cursor to */
 	public static final void setLocation(org.eclipse.swt.graphics.Point location) {
 		setLocation(location.x, location.y);
+	}
+	
+	/** Returns the cursor that the system cursor currently appears as when it
+	 * is over the {@link #getCursorCanvas() cursor-canvas}.<br>
+	 * This method is thread safe; however the returned {@link Cursor} object
+	 * should only be used by the display thread which created it.
+	 * 
+	 * @return The cursor that the system cursor currently appears as when it is
+	 *         over the {@link #getCursorCanvas() cursor-canvas} */
+	public static final Cursor getCursor() {
+		return currentCursor;
+	}
+	
+	/** Sets the cursor that the system cursor will appear as when it is over
+	 * the {@link #getCursorCanvas() cursor-canvas}.<br>
+	 * This method is thread safe.
+	 * 
+	 * @param cursor The cursor that the system cursor will appear as when it is
+	 *            over the {@link #getCursorCanvas() cursor-canvas} */
+	public static final void setCursor(Cursor cursor) {
+		final Canvas canvas = cursorCanvas;
+		if(canvas == null) {
+			SWT.error(SWT.ERROR_NULL_ARGUMENT);
+			return;//this just makes eclipse happy
+		}
+		if(Thread.currentThread() != canvas.getDisplay().getThread()) {
+			canvas.getDisplay().asyncExec(() -> {
+				setCursor(cursor);
+			});
+			return;
+		}
+		canvas.setCursor(cursor);
+		currentCursor = canvas.getCursor();
+	}
+	
+	/** Loads a cursor image from the specified {@link InputStream input stream}
+	 * and sets the system cursor to it.<br>
+	 * This method is thread safe; however it will block if it is not called
+	 * from the cursor-canvas' display thread.
+	 * 
+	 * @param in The input stream to read the cursor image data from
+	 * @param hotspotX The x coordinate of the cursor's hotspot
+	 * @param hotspotY The y coordinate of the cursor's hotspot
+	 * @return Whether or not the cursor was successfully loaded and set */
+	public static final boolean setCursor(final InputStream in, final int hotspotX, final int hotspotY) {
+		final ImageData data;
+		try {
+			data = new ImageData(in);
+		} catch(IllegalArgumentException | SWTException ex) {
+			ex.printStackTrace();
+			return false;
+		} finally {
+			try {
+				in.close();
+			} catch(IOException ignored) {
+			}
+		}
+		
+		final Canvas canvas = cursorCanvas;
+		if(canvas == null) {
+			SWT.error(SWT.ERROR_NULL_ARGUMENT);
+			return false;//this just makes eclipse happy
+		}
+		
+		final Function<Void, Boolean> setCursor = (v) -> {
+			Display display = canvas.getDisplay();
+			Cursor cursor = new Cursor(display, data, hotspotX, hotspotY);
+			canvas.setCursor(cursor);
+			return Boolean.valueOf(cursor.equals(canvas.getCursor()));
+		};
+		if(Thread.currentThread() != canvas.getDisplay().getThread()) {
+			final Boolean[] rtrn = {null};
+			canvas.getDisplay().asyncExec(() -> {
+				rtrn[0] = setCursor.apply(null);
+			});
+			Display display;
+			while(rtrn[0] == null) {
+				display = Display.getCurrent();
+				if(display != null && !display.isDisposed()) {
+					if(!display.readAndDispatch()) {
+						CodeUtil.sleep(10L);
+					}
+				} else {
+					CodeUtil.sleep(10L);
+				}
+			}
+			return rtrn[0].booleanValue();
+		}
+		
+		return setCursor.apply(null).booleanValue();
+	}
+	
+	/** Loads a cursor image from the specified resource path and sets the
+	 * system cursor to it.<br>
+	 * This method is thread safe; however it will block if it is not called
+	 * from the cursor-canvas' display thread.
+	 * 
+	 * @param clazz The class whose resource loader will attempt to load the
+	 *            cursor's image data
+	 * @param resourcePath The path to the cursor's image data
+	 * @param hotspotX The x coordinate of the cursor's hotspot
+	 * @param hotspotY The y coordinate of the cursor's hotspot
+	 * @return Whether or not the cursor was successfully loaded and set */
+	public static final boolean setCursor(Class<?> clazz, String resourcePath, int hotspotX, int hotspotY) {
+		try(InputStream in = clazz.getResourceAsStream(resourcePath)) {
+			return setCursor(in, hotspotX, hotspotY);
+		} catch(IOException ex) {
+			return false;
+		}
+	}
+	
+	/** Loads a cursor image from the specified resource path and sets the
+	 * system cursor to it.<br>
+	 * This method is thread safe; however it will block if it is not called
+	 * from the cursor-canvas' display thread.
+	 * 
+	 * @param resourcePath The path to the cursor's image data
+	 * @param hotspotX The x coordinate of the cursor's hotspot
+	 * @param hotspotY The y coordinate of the cursor's hotspot
+	 * @return Whether or not the cursor was successfully loaded and set */
+	public static final boolean setCursor(String resourcePath, int hotspotX, int hotspotY) {
+		return setCursor(Mouse.class, resourcePath, hotspotX, hotspotY);
 	}
 	
 }
