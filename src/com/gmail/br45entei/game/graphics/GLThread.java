@@ -25,6 +25,7 @@ import com.gmail.br45entei.thread.VideoHelper;
 import com.gmail.br45entei.util.CodeUtil;
 import com.gmail.br45entei.util.FrequencyTimer;
 import com.gmail.br45entei.util.FrequencyTimer.TimerCallback;
+import com.gmail.br45entei.util.StringUtil;
 
 import java.io.PrintStream;
 import java.math.BigDecimal;
@@ -129,8 +130,24 @@ public final class GLThread extends Thread {
 	public final void stopRunning(boolean waitFor) {
 		this.shouldBeRunning = false;
 		if(waitFor && Thread.currentThread() != this) {
+			Display display;
 			while(this.state[0]) {
-				CodeUtil.sleep(10L);
+				display = Display.getCurrent();
+				if(display != null && !display.isDisposed()) {
+					if(!display.readAndDispatch()) {
+						CodeUtil.sleep(10L);
+					}
+				} else {
+					CodeUtil.sleep(10L);
+				}
+				if(this.getState() == Thread.State.BLOCKED) {
+					System.err.println("The GLThread is blocked! Stack trace:");
+					System.err.println(StringUtil.stackTraceElementsToStr(this.getStackTrace()));
+					System.err.flush();
+					System.err.println();
+					System.err.println("Unable to wait for the GLThread to terminate...");
+					break;
+				}
 			}
 		}
 	}
