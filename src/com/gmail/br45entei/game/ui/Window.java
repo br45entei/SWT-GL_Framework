@@ -655,238 +655,237 @@ public class Window {
 	}
 	
 	@SuppressWarnings("unused")
-	protected void createMenus() {
-		synchronized(this.glThread) {
-			//==[Main MenuBar]=============================================
-			
-			Menu menu = new Menu(this.shell, SWT.BAR);
-			this.shell.setMenuBar(menu);
-			
-			MenuItem mntmfile = new MenuItem(menu, SWT.CASCADE);
-			mntmfile.setText("&File");
-			
-			Menu menu_1 = new Menu(mntmfile);
-			mntmfile.setMenu(menu_1);
-			
-			new MenuItem(menu_1, SWT.SEPARATOR);
-			
-			MenuItem mntmExit = new MenuItem(menu_1, SWT.NONE);
-			mntmExit.addSelectionListener(new SelectionAdapter() {
-				@Override
-				public void widgetSelected(SelectionEvent e) {
-					Window.this.close();
+	protected synchronized void createMenus() {
+		
+		//==[Main MenuBar]=============================================
+		
+		Menu menu = new Menu(this.shell, SWT.BAR);
+		this.shell.setMenuBar(menu);
+		
+		MenuItem mntmfile = new MenuItem(menu, SWT.CASCADE);
+		mntmfile.setText("&File");
+		
+		Menu menu_1 = new Menu(mntmfile);
+		mntmfile.setMenu(menu_1);
+		
+		new MenuItem(menu_1, SWT.SEPARATOR);
+		
+		MenuItem mntmExit = new MenuItem(menu_1, SWT.NONE);
+		mntmExit.addSelectionListener(new SelectionAdapter() {
+			@Override
+			public void widgetSelected(SelectionEvent e) {
+				Window.this.close();
+			}
+		});
+		mntmExit.setText("E&xit\tAlt+F4");
+		
+		MenuItem mntmwindow = new MenuItem(menu, SWT.CASCADE);
+		mntmwindow.setText("&Window");
+		
+		Menu menu_2 = new Menu(mntmwindow);
+		mntmwindow.setMenu(menu_2);
+		
+		MenuItem mntmTakeScreenshot = new MenuItem(menu_2, SWT.NONE);
+		mntmTakeScreenshot.addSelectionListener(new SelectionAdapter() {
+			@Override
+			public void widgetSelected(SelectionEvent e) {
+				Window.this.glThread.takeScreenshot();
+			}
+		});
+		mntmTakeScreenshot.setText("Take Screenshot\tF2");
+		
+		final MenuItem mntmStartRecording = new MenuItem(menu_2, SWT.CHECK);
+		mntmStartRecording.addSelectionListener(new SelectionAdapter() {
+			@Override
+			public void widgetSelected(SelectionEvent e) {
+				try {
+					if(Window.this.glThread.isRecording() || Window.this.glThread.isRecordingFinishingUp()) {
+						mntmStartRecording.setEnabled(false);
+						mntmStartRecording.setText("Recording finishing up...");
+						Window.this.glThread.stopRecording((v) -> Boolean.valueOf(Window.this.swtLoop()));
+					} else {
+						Window.this.glThread.startRecording(Window.this.getViewport());
+						while(Window.this.glThread.isRecordingStartingUp() && Window.this.swtLoop() && !mntmStartRecording.isDisposed()) {
+							SWTUtil.setEnabled(mntmStartRecording, !Window.this.glThread.isRecordingStartingUp());
+							SWTUtil.setText(mntmStartRecording, mntmStartRecording.getEnabled() ? "Stop Recording\tShift+F2" : "Recording starting up...");
+						}
+					}
+				} finally {
+					if(!Window.this.shell.isDisposed() && !mntmStartRecording.isDisposed()) {
+						mntmStartRecording.setEnabled(!Window.this.glThread.isRecordingStartingUp() && !Window.this.glThread.isRecordingFinishingUp());
+						mntmStartRecording.setSelection(Window.this.glThread.isRecording());
+						mntmStartRecording.setText(mntmStartRecording.getSelection() ? "Stop Recording\tShift+F2" : (Window.this.glThread.isRecordingStartingUp() ? "Recording starting up..." : "Start Recording\tShift+F2"));
+					}
 				}
-			});
-			mntmExit.setText("E&xit\tAlt+F4");
+			}
+		});
+		mntmStartRecording.setText("Start Recording\tShift+F2");
+		
+		new MenuItem(menu_2, SWT.SEPARATOR);
+		
+		this.mntmVerticalSync = new MenuItem(menu_2, SWT.CHECK);
+		this.mntmVerticalSync.setText("Vertical Sync\tV");
+		this.mntmVerticalSync.setSelection(this.getGLThread().getRefreshRate() == Window.getDefaultRefreshRate());
+		this.mntmVerticalSync.addSelectionListener(new SelectionAdapter() {
 			
-			MenuItem mntmwindow = new MenuItem(menu, SWT.CASCADE);
-			mntmwindow.setText("&Window");
-			
-			Menu menu_2 = new Menu(mntmwindow);
-			mntmwindow.setMenu(menu_2);
-			
-			MenuItem mntmTakeScreenshot = new MenuItem(menu_2, SWT.NONE);
-			mntmTakeScreenshot.addSelectionListener(new SelectionAdapter() {
-				@Override
-				public void widgetSelected(SelectionEvent e) {
-					Window.this.glThread.takeScreenshot();
-				}
-			});
-			mntmTakeScreenshot.setText("Take Screenshot\tF2");
-			
-			final MenuItem mntmStartRecording = new MenuItem(menu_2, SWT.CHECK);
-			mntmStartRecording.addSelectionListener(new SelectionAdapter() {
-				@Override
-				public void widgetSelected(SelectionEvent e) {
-					try {
-						if(Window.this.glThread.isRecording() || Window.this.glThread.isRecordingFinishingUp()) {
+			@Override
+			public void widgetSelected(SelectionEvent e) {
+				Window.this.toggleVsyncEnabled();
+				//Window.this.getGLThread().setVsyncEnabled(Window.this.mntmVerticalSync.getSelection());
+			}
+		});
+		
+		final MenuItem mntmFullscreen = new MenuItem(menu_2, SWT.CHECK);
+		mntmFullscreen.addSelectionListener(new SelectionAdapter() {
+			@Override
+			public void widgetSelected(SelectionEvent e) {
+				Window.this.toggleFullscreen();
+			}
+		});
+		mntmFullscreen.setText("Fullscreen\tF11");
+		
+		new MenuItem(menu_2, SWT.SEPARATOR);
+		
+		this.mntmRenderers = new MenuItem(menu_2, SWT.CASCADE);
+		this.mntmRenderers.setText("Applications\t(Alt+Left | Alt+Right)");
+		
+		mntmwindow.addArmListener(new ArmListener() {
+			@Override
+			public void widgetArmed(ArmEvent e) {
+				if(!Window.this.shell.isDisposed()) {
+					if(!mntmStartRecording.isDisposed()) {
+						if(Window.this.glThread.isRecordingFinishingUp()) {
 							mntmStartRecording.setEnabled(false);
 							mntmStartRecording.setText("Recording finishing up...");
 							Window.this.glThread.stopRecording((v) -> Boolean.valueOf(Window.this.swtLoop()));
-						} else {
-							Window.this.glThread.startRecording(Window.this.getViewport());
-							while(Window.this.glThread.isRecordingStartingUp() && Window.this.swtLoop() && !mntmStartRecording.isDisposed()) {
-								SWTUtil.setEnabled(mntmStartRecording, !Window.this.glThread.isRecordingStartingUp());
-								SWTUtil.setText(mntmStartRecording, mntmStartRecording.getEnabled() ? "Stop Recording\tShift+F2" : "Recording starting up...");
-							}
 						}
-					} finally {
-						if(!Window.this.shell.isDisposed() && !mntmStartRecording.isDisposed()) {
-							mntmStartRecording.setEnabled(!Window.this.glThread.isRecordingStartingUp() && !Window.this.glThread.isRecordingFinishingUp());
-							mntmStartRecording.setSelection(Window.this.glThread.isRecording());
-							mntmStartRecording.setText(mntmStartRecording.getSelection() ? "Stop Recording\tShift+F2" : (Window.this.glThread.isRecordingStartingUp() ? "Recording starting up..." : "Start Recording\tShift+F2"));
-						}
+						mntmStartRecording.setEnabled(!Window.this.glThread.isRecordingStartingUp() && !Window.this.glThread.isRecordingFinishingUp());
+						mntmStartRecording.setSelection(Window.this.glThread.isRecording());
+						mntmStartRecording.setText(mntmStartRecording.getSelection() ? "Stop Recording\tShift+F2" : (Window.this.glThread.isRecordingStartingUp() ? "Recording starting up..." : "Start Recording\tShift+F2"));
 					}
-				}
-			});
-			mntmStartRecording.setText("Start Recording\tShift+F2");
-			
-			new MenuItem(menu_2, SWT.SEPARATOR);
-			
-			this.mntmVerticalSync = new MenuItem(menu_2, SWT.CHECK);
-			this.mntmVerticalSync.setText("Vertical Sync\tV");
-			this.mntmVerticalSync.setSelection(this.getGLThread().getRefreshRate() == Window.getDefaultRefreshRate());
-			this.mntmVerticalSync.addSelectionListener(new SelectionAdapter() {
-				
-				@Override
-				public void widgetSelected(SelectionEvent e) {
-					Window.this.toggleVsyncEnabled();
-					//Window.this.getGLThread().setVsyncEnabled(Window.this.mntmVerticalSync.getSelection());
-				}
-			});
-			
-			final MenuItem mntmFullscreen = new MenuItem(menu_2, SWT.CHECK);
-			mntmFullscreen.addSelectionListener(new SelectionAdapter() {
-				@Override
-				public void widgetSelected(SelectionEvent e) {
-					Window.this.toggleFullscreen();
-				}
-			});
-			mntmFullscreen.setText("Fullscreen\tF11");
-			
-			new MenuItem(menu_2, SWT.SEPARATOR);
-			
-			this.mntmRenderers = new MenuItem(menu_2, SWT.CASCADE);
-			this.mntmRenderers.setText("Applications\t(Alt+Left | Alt+Right)");
-			
-			mntmwindow.addArmListener(new ArmListener() {
-				@Override
-				public void widgetArmed(ArmEvent e) {
-					if(!Window.this.shell.isDisposed()) {
-						if(!mntmStartRecording.isDisposed()) {
-							if(Window.this.glThread.isRecordingFinishingUp()) {
-								mntmStartRecording.setEnabled(false);
-								mntmStartRecording.setText("Recording finishing up...");
-								Window.this.glThread.stopRecording((v) -> Boolean.valueOf(Window.this.swtLoop()));
-							}
-							mntmStartRecording.setEnabled(!Window.this.glThread.isRecordingStartingUp() && !Window.this.glThread.isRecordingFinishingUp());
-							mntmStartRecording.setSelection(Window.this.glThread.isRecording());
-							mntmStartRecording.setText(mntmStartRecording.getSelection() ? "Stop Recording\tShift+F2" : (Window.this.glThread.isRecordingStartingUp() ? "Recording starting up..." : "Start Recording\tShift+F2"));
-						}
-						if(!Window.this.mntmVerticalSync.isDisposed()) {
-							Window.this.mntmVerticalSync.setSelection(Window.this.getGLThread().getRefreshRate() == Window.getDefaultRefreshRate());
-						}
-						if(!mntmFullscreen.isDisposed()) {
-							mntmFullscreen.setSelection(Window.this.isFullscreen());// This will probably always return false, but just in case ...
-						}
-						
+					if(!Window.this.mntmVerticalSync.isDisposed()) {
+						Window.this.mntmVerticalSync.setSelection(Window.this.getGLThread().getRefreshRate() == Window.getDefaultRefreshRate());
 					}
-				}
-			});
-			
-			Menu menu_3 = new Menu(this.mntmRenderers);
-			this.mntmRenderers.setMenu(menu_3);
-			
-			for(Renderer renderer : this.getAvailableRenderers()) {
-				String name;
-				try {
-					name = renderer.getName();
-				} catch(Throwable ex) {
-					GLThread.handleRendererException(renderer, ex, "getName");
-					continue;
-				}
-				this.addRendererToCascadeMenu(renderer, name);
-			}
-			
-			new MenuItem(menu, SWT.SEPARATOR);
-			
-			this.mntmRendererOptions = new MenuItem(menu, SWT.CASCADE);
-			this.mntmRendererOptions.setText("Renderer Options");
-			
-			final MenuItem mntmSeparator = new MenuItem(menu, SWT.SEPARATOR);
-			
-			final Menu rendererMenu = new Menu(this.mntmRendererOptions);
-			this.mntmRendererOptions.setMenu(rendererMenu);
-			
-			//==[Popup Menu]=============================================
-			
-			final Menu popupMenu;
-			final boolean justCreatedPopupMenu;
-			{
-				Menu check = this.glCanvas.getMenu();
-				if(check != null) {
-					popupMenu = check;
-					justCreatedPopupMenu = false;
-				} else {
-					popupMenu = new Menu(this.glCanvas);
-					this.glCanvas.setMenu(popupMenu);
-					justCreatedPopupMenu = true;
+					if(!mntmFullscreen.isDisposed()) {
+						mntmFullscreen.setSelection(Window.this.isFullscreen());// This will probably always return false, but just in case ...
+					}
+					
 				}
 			}
+		});
+		
+		Menu menu_3 = new Menu(this.mntmRenderers);
+		this.mntmRenderers.setMenu(menu_3);
+		
+		for(Renderer renderer : this.getAvailableRenderers()) {
+			String name;
+			try {
+				name = renderer.getName();
+			} catch(Throwable ex) {
+				GLThread.handleRendererException(renderer, ex, "getName");
+				continue;
+			}
+			this.addRendererToCascadeMenu(renderer, name);
+		}
+		
+		new MenuItem(menu, SWT.SEPARATOR);
+		
+		this.mntmRendererOptions = new MenuItem(menu, SWT.CASCADE);
+		this.mntmRendererOptions.setText("Renderer Options");
+		
+		final MenuItem mntmSeparator = new MenuItem(menu, SWT.SEPARATOR);
+		
+		final Menu rendererMenu = new Menu(this.mntmRendererOptions);
+		this.mntmRendererOptions.setMenu(rendererMenu);
+		
+		//==[Popup Menu]=============================================
+		
+		final Menu popupMenu;
+		final boolean justCreatedPopupMenu;
+		{
+			Menu check = this.glCanvas.getMenu();
+			if(check != null) {
+				popupMenu = check;
+				justCreatedPopupMenu = false;
+			} else {
+				popupMenu = new Menu(this.glCanvas);
+				this.glCanvas.setMenu(popupMenu);
+				justCreatedPopupMenu = true;
+			}
+		}
+		
+		//==[MenuProvider Implementation]=============================================
+		
+		Renderer renderer = this.glThread.getRenderer();
+		if(renderer instanceof MenuProvider) {
+			MenuProvider provider = (MenuProvider) renderer;
 			
-			//==[MenuProvider Implementation]=============================================
-			
-			Renderer renderer = this.glThread.getRenderer();
-			if(renderer instanceof MenuProvider) {
-				MenuProvider provider = (MenuProvider) renderer;
-				
+			try {
+				String name = provider.getMenuName();
 				try {
-					String name = provider.getMenuName();
-					try {
-						provider.onMenuBarCreation(rendererMenu);
-						if(name != null && !name.trim().isEmpty()) {
-							this.mntmRendererOptions.setText(name.replace("&", "&&"));
-						}
-						
-						if(justCreatedPopupMenu) {
-							try {
-								provider.onPopupMenuCreation(popupMenu);
-							} catch(Throwable ex) {
-								if(!Window.handleMenuProviderException(provider, ex, "onPopupMenuCreation", popupMenu)) {
-									this.glThread.setRenderer(null);
-									mntmSeparator.dispose();
-									this.mntmRendererOptions.dispose();
-									this.mntmRendererOptions = null;
-								}
+					provider.onMenuBarCreation(rendererMenu);
+					if(name != null && !name.trim().isEmpty()) {
+						this.mntmRendererOptions.setText(name.replace("&", "&&"));
+					}
+					
+					if(justCreatedPopupMenu) {
+						try {
+							provider.onPopupMenuCreation(popupMenu);
+						} catch(Throwable ex) {
+							if(!Window.handleMenuProviderException(provider, ex, "onPopupMenuCreation", popupMenu)) {
+								this.glThread.setRenderer(null);
+								mntmSeparator.dispose();
+								this.mntmRendererOptions.dispose();
+								this.mntmRendererOptions = null;
 							}
-						}
-					} catch(Throwable ex) {
-						if(!Window.handleMenuProviderException(provider, ex, "onMenuBarCreation", rendererMenu)) {
-							this.glThread.setRenderer(null);
-							mntmSeparator.dispose();
-							this.mntmRendererOptions.dispose();
-							this.mntmRendererOptions = null;
 						}
 					}
 				} catch(Throwable ex) {
-					if(!Window.handleMenuProviderException(provider, ex, "getMenuName")) {
+					if(!Window.handleMenuProviderException(provider, ex, "onMenuBarCreation", rendererMenu)) {
 						this.glThread.setRenderer(null);
 						mntmSeparator.dispose();
 						this.mntmRendererOptions.dispose();
 						this.mntmRendererOptions = null;
 					}
 				}
-			} else {
-				mntmSeparator.dispose();
-				this.mntmRendererOptions.dispose();
-				this.mntmRendererOptions = null;
-			}
-			
-			final MenuDetectListener menuDetectListener = (e) -> {
-				this.lastMenuInteraction = System.currentTimeMillis();
-			};
-			this.shell.addMenuDetectListener(menuDetectListener);
-			this.glCanvas.addMenuDetectListener(menuDetectListener);
-			
-			final ArmListener armListener = (e) -> {
-				this.lastMenuInteraction = System.currentTimeMillis();
-			};
-			@SuppressWarnings("unchecked")
-			final Function<Menu, Void>[] addArmListener = new Function[1];
-			addArmListener[0] = (m) -> {
-				if(m != null) {
-					for(MenuItem item : m.getItems()) {
-						item.addArmListener(armListener);
-						addArmListener[0].apply(item.getMenu());
-					}
+			} catch(Throwable ex) {
+				if(!Window.handleMenuProviderException(provider, ex, "getMenuName")) {
+					this.glThread.setRenderer(null);
+					mntmSeparator.dispose();
+					this.mntmRendererOptions.dispose();
+					this.mntmRendererOptions = null;
 				}
-				return null;
-			};
-			
-			addArmListener[0].apply(menu);
-			addArmListener[0].apply(popupMenu);
-			
+			}
+		} else {
+			mntmSeparator.dispose();
+			this.mntmRendererOptions.dispose();
+			this.mntmRendererOptions = null;
 		}
+		
+		final MenuDetectListener menuDetectListener = (e) -> {
+			this.lastMenuInteraction = System.currentTimeMillis();
+		};
+		this.shell.addMenuDetectListener(menuDetectListener);
+		this.glCanvas.addMenuDetectListener(menuDetectListener);
+		
+		final ArmListener armListener = (e) -> {
+			this.lastMenuInteraction = System.currentTimeMillis();
+		};
+		@SuppressWarnings("unchecked")
+		final Function<Menu, Void>[] addArmListener = new Function[1];
+		addArmListener[0] = (m) -> {
+			if(m != null) {
+				for(MenuItem item : m.getItems()) {
+					item.addArmListener(armListener);
+					addArmListener[0].apply(item.getMenu());
+				}
+			}
+			return null;
+		};
+		
+		addArmListener[0].apply(menu);
+		addArmListener[0].apply(popupMenu);
+		
 	}
 	
 	protected boolean addRendererToCascadeMenu(Renderer renderer, String name) {
