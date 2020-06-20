@@ -18,6 +18,7 @@
  *******************************************************************************/
 package com.gmail.br45entei.game.ui;
 
+import com.gmail.br45entei.game.graphics.Renderer;
 import com.gmail.br45entei.game.input.InputCallback;
 import com.gmail.br45entei.game.input.Keyboard;
 import com.gmail.br45entei.game.input.Keyboard.Keys;
@@ -116,6 +117,25 @@ public class UICallback implements InputCallback {
 				//TODO add dialog for adjusting frequency from the LWJGL_SWT_Demo
 			} else {
 				this.window.toggleVsyncEnabled();
+			}
+		}
+		
+		if(key == Keys.VK_BROWSER_BACK || (key == Keys.VK_LEFT_ARROW && Keyboard.isKeyDown(Keys.VK_ALT))) {
+			Renderer activeRenderer = this.window.getActiveRenderer();
+			if(activeRenderer != null) {
+				Renderer previousRenderer = this.window.getPreviousRenderer(true);
+				if(previousRenderer != activeRenderer) {
+					this.window.setActiveRenderer(previousRenderer);
+				}
+			}
+		}
+		if(key == Keys.VK_BROWSER_FORWARD || (key == Keys.VK_RIGHT_ARROW && Keyboard.isKeyDown(Keys.VK_ALT))) {
+			Renderer activeRenderer = this.window.getActiveRenderer();
+			if(activeRenderer != null) {
+				Renderer nextRenderer = this.window.getNextRenderer(true);
+				if(nextRenderer != activeRenderer) {
+					this.window.setActiveRenderer(nextRenderer);
+				}
 			}
 		}
 	}
