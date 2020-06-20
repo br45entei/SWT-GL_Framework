@@ -48,7 +48,7 @@ public final class GLThread extends Thread {
 	
 	protected final GLCanvas glCanvas;
 	protected volatile GLCapabilities glCaps;
-	protected volatile boolean[] state = {false};
+	protected final boolean[] state = {false};
 	protected volatile boolean shouldBeRunning = false;
 	protected volatile boolean vsync = false, lastVsync = false;
 	protected volatile int lastSwap = 0;
@@ -126,7 +126,7 @@ public final class GLThread extends Thread {
 	 * @param waitFor Whether or not this method should cause the currently
 	 *            running thread to sleep until this GLThread has stopped
 	 *            running */
-	public final synchronized void stopRunning(boolean waitFor) {
+	public final void stopRunning(boolean waitFor) {
 		this.shouldBeRunning = false;
 		if(waitFor && Thread.currentThread() != this) {
 			while(this.state[0]) {
@@ -605,7 +605,9 @@ public final class GLThread extends Thread {
 			handleRendererException(oldRenderer, ex, "onSelected");
 			return false;
 		}
-		this.glCanvas.swapBuffers();
+		synchronized(this) {
+			this.glCanvas.swapBuffers();
+		}
 		this.renderer = renderer;
 		this.nanoTime = nanoTime;
 		this.lastFrameTime = lastFrameTime;
@@ -810,7 +812,9 @@ public final class GLThread extends Thread {
 			}
 		}
 		
-		this.glCanvas.swapBuffers();
+		synchronized(this) {
+			this.glCanvas.swapBuffers();
+		}
 		if(!this.isVsyncAvailable || !this.vsync) {
 			this.timer.frequencySleep();
 		}
