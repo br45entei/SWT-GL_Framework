@@ -37,6 +37,7 @@ import java.util.function.Function;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Display;
 import org.lwjgl.opengl.GL;
+import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GLCapabilities;
 import org.lwjgl.opengl.swt.GLCanvas;
 import org.lwjgl.opengl.swt.GLData;
@@ -581,63 +582,103 @@ public final class GLThread extends Thread {
 			}
 			return rtrn[0].booleanValue();
 		}
+		// (Run Tasks) We're technically in a running task right now (see above code logic),
+		// but we'll go ahead and update the deltaTime and then start another 'new frame' here:
 		
-		final Renderer oldRenderer = this.renderer;
-		boolean initialized;
+		// (Update) Update the deltaTime
+		long nanoTime = System.nanoTime();
+		long lastFrameTime = nanoTime;
+		double deltaTime = (((nanoTime = System.nanoTime()) - lastFrameTime) + 0.0D) / 1000000000.0D;
+		
 		try {
-			initialized = renderer.isInitialized();
-		} catch(Throwable ex) {
-			handleRendererException(oldRenderer, ex, "isInitialized");
-			return false;
-		}
-		if(!initialized) {
-			try {
-				renderer.initialize();
+			// (Display) Clear any previous renderer's back buffer
+			GL11.glClearColor(0, 0, 0, 1);
+			GL11.glClear(GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT);
+			
+			// (Swap) Swap the front and back buffers
+			synchronized(this) {
+				this.glCanvas.swapBuffers();
+			}
+			
+			// (Run Tasks) Attempt to set the new renderer
+			final Renderer oldRenderer = this.renderer;
+			if(renderer != null) {
+				boolean initialized;
 				try {
 					initialized = renderer.isInitialized();
 				} catch(Throwable ex) {
 					handleRendererException(oldRenderer, ex, "isInitialized");
 					return false;
 				}
-			} catch(Throwable ex) {
-				handleRendererException(oldRenderer, ex, "initialize");
-				return false;
+				if(!initialized) {
+					try {
+						renderer.initialize();
+						try {
+							initialized = renderer.isInitialized();
+						} catch(Throwable ex) {
+							handleRendererException(oldRenderer, ex, "isInitialized");
+							return false;
+						}
+					} catch(Throwable ex) {
+						handleRendererException(oldRenderer, ex, "initialize");
+						return false;
+					}
+				}
+				if(!initialized) {
+					return false;
+				}
+				try {
+					renderer.onSelected();
+				} catch(Throwable ex) {
+					handleRendererException(oldRenderer, ex, "onSelected");
+					return false;
+				}
 			}
-		}
-		if(!initialized) {
-			return false;
-		}
-		try {
-			renderer.onSelected();
-		} catch(Throwable ex) {
-			handleRendererException(oldRenderer, ex, "onSelected");
-			return false;
-		}
-		long nanoTime = System.nanoTime();
-		long lastFrameTime = nanoTime;
-		double deltaTime = (((nanoTime = System.nanoTime()) - lastFrameTime) + 0.0D) / 1000000000.0D;
-		try {
-			renderer.render(deltaTime);
-		} catch(Throwable ex) {
-			handleRendererException(oldRenderer, ex, "onSelected");
-			return false;
-		}
-		synchronized(this) {
-			this.glCanvas.swapBuffers();
-		}
-		this.renderer = renderer;
-		this.nanoTime = nanoTime;
-		this.lastFrameTime = lastFrameTime;
-		this.deltaTime = deltaTime;
-		
-		if(oldRenderer != null) {
-			try {
-				oldRenderer.onDeselected();
-			} catch(Throwable ex) {
-				handleRendererException(oldRenderer, ex, "onDeselected");
+			
+			// (Update) Update the deltaTime
+			nanoTime = System.nanoTime();
+			lastFrameTime = nanoTime;
+			deltaTime = (((nanoTime = System.nanoTime()) - lastFrameTime) + 0.0D) / 1000000000.0D;
+			
+			// Advance to the 'next frame'
+			
+			// (Display) Clear any previous renderer's front (now the back) buffer
+			GL11.glClearColor(0, 0, 0, 1);
+			GL11.glClear(GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT);
+			
+			// (Display) ... and then render if applicable:
+			if(renderer != null) {
+				try {
+					renderer.render(deltaTime);
+				} catch(Throwable ex) {
+					handleRendererException(oldRenderer, ex, "render", Double.valueOf(deltaTime));
+					return false;
+				}
 			}
+			
+			// (Swap) Swap the front and back buffers
+			synchronized(this) {
+				this.glCanvas.swapBuffers();
+			}
+			
+			// (Run Tasks) Set the new renderer since it has worked thus far, and then unselect the old renderer:
+			this.renderer = renderer;
+			
+			if(oldRenderer != null) {
+				try {
+					oldRenderer.onDeselected();
+				} catch(Throwable ex) {
+					handleRendererException(oldRenderer, ex, "onDeselected");
+				}
+			}
+			return true;
+		} finally {
+			// (Update) The deltaTime will be updated soon since we're technically in a running task right now
+			
+			this.nanoTime = nanoTime;
+			this.lastFrameTime = lastFrameTime;
+			this.deltaTime = deltaTime;
 		}
-		return true;
 	}
 	
 	/** Returns the delta time of the current frame from the last.<br>
@@ -794,7 +835,7 @@ public final class GLThread extends Thread {
 	protected final void _swapBuffers() {
 		boolean isRecording = this.isRecordingStartingUp() || this.isRecording();
 		if(this.timer.getTargetFrequency() != this.lastSetFrequency || this.timer.getTargetPeriodInMilliseconds() != this.lastSetPeriod) {
-			if(!isRecording) {
+			if(!isRecording && (!this.isVsyncAvailable || !this.vsync)) {
 				this.timer.setFrequency(this.lastSetFrequency, this.lastSetPeriod);
 			}
 		}
