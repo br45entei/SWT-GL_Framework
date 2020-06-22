@@ -18,7 +18,6 @@
  *******************************************************************************/
 package com.gmail.br45entei.game.graphics;
 
-import com.gmail.br45entei.game.input.InputCallback;
 import com.gmail.br45entei.game.ui.Window;
 import com.gmail.br45entei.thread.ScreenshotHelper;
 import com.gmail.br45entei.thread.VideoHelper;
@@ -686,7 +685,7 @@ public final class GLThread extends Thread {
 	 * <tt>0.01666670</tt>.
 	 * 
 	 * @return The delta time of the current frame from the last
-	 * @see InputCallback#input(double) */
+	 * @see Renderer#render(double) */
 	public final double getDeltaTime() {
 		return this.deltaTime;
 	}
