@@ -172,7 +172,7 @@ public interface InputCallback {
 	 * the input it receives to a user-provided {@link PrintStream}.
 	 *
 	 * @author Brian_Entei */
-	public static final class InputLogger implements InputCallback {
+	public static class InputLogger implements InputCallback {
 		
 		private volatile boolean initialized, printDeltaTime;
 		private final PrintStream pr;
