@@ -102,6 +102,7 @@ public class Mouse {
 	
 	protected static volatile long[] mouseButtonDownTimes = new long[mouseDownStates.length];
 	protected static volatile long[] mouseButtonHoldTimes = new long[mouseDownStates.length];
+	protected static volatile long[] mouseButtonUpTimes = new long[mouseDownStates.length];
 	
 	protected static final ConcurrentLinkedDeque<InputCallback> listeners = new ConcurrentLinkedDeque<>();
 	
@@ -188,7 +189,15 @@ public class Mouse {
 	}
 	
 	/** Polls the mouse buttons, and then polls the system cursor for its
-	 * location. */
+	 * location.<br>
+	 * After polling, this function calls the functions listed below (when
+	 * appropriate) for all of the {@link InputCallback}s registered via
+	 * {@link #registerInputCallback(InputCallback)}.
+	 * 
+	 * @see InputCallback#onMouseButtonDown(int)
+	 * @see InputCallback#onMouseButtonHeld(int)
+	 * @see InputCallback#onMouseButtonUp(int)
+	 * @see InputCallback#onMouseMoved(int, int, int, int, int, int) */
 	public static final void poll() {
 		//Copy from mouse down states to last down states
 		System.arraycopy(mouseDownStates, 0, lastMouseDownStates, 0, lastMouseDownStates.length);
@@ -259,6 +268,11 @@ public class Mouse {
 				
 				if(lastMouseDownStates[i] && !mouseDownStates[i]) {// XXX onMouseButtonUp
 					mouseButtonHoldTimes[i] = 0;
+					boolean doubleClick = false;
+					if(mouseButtonUpTimes[i] > 0 && now - mouseButtonUpTimes[i] <= 320L) {
+						doubleClick = true;
+					}
+					mouseButtonUpTimes[i] = now;
 					
 					for(InputCallback listener : listeners) {
 						try {
@@ -269,6 +283,21 @@ public class Mouse {
 							}
 						}
 					}
+					
+					if(doubleClick) {
+						mouseButtonUpTimes[i] = 0;
+						
+						for(InputCallback listener : listeners) {
+							try {
+								listener.onMouseDoubleClick(button);
+							} catch(Throwable ex) {
+								if(!handleListenerException(listener, ex, "onMouseDoubleClick", b)) {
+									continue;
+								}
+							}
+						}
+					}
+					
 				}
 				
 			}
