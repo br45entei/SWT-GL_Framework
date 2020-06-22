@@ -42,6 +42,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 
 import org.eclipse.swt.SWT;
@@ -157,22 +158,27 @@ public class Window {
 	protected volatile int glHeight = this.glTargetHeight;
 	protected volatile double framerate = 60.0D;
 	
+	protected volatile long nanoTime = System.nanoTime();
+	protected volatile long lastFrameTime = this.nanoTime;
+	protected volatile double deltaTime = (((this.nanoTime = System.nanoTime()) - this.lastFrameTime) + 0.0D) / 1000000000.0D;
+	
 	protected volatile boolean running = false, shellActive = false;
+	protected volatile boolean shellVisible = false;
 	protected volatile boolean isFullscreen = false;
 	
 	protected volatile long lastMenuInteraction = 0L;
 	
-	protected Display display;
-	protected Shell shell;
-	protected long shellHandle;
+	protected volatile Display display;
+	protected volatile Shell shell;
+	protected volatile long shellHandle;
 	
-	protected GLData data;
-	protected GLCanvas glCanvas;
-	protected GLThread glThread;
+	protected volatile GLData data;
+	protected volatile GLCanvas glCanvas;
+	protected volatile GLThread glThread;
 	
-	protected MenuItem mntmVerticalSync, mntmRenderers, mntmRendererOptions;
+	protected volatile MenuItem mntmVerticalSync, mntmRenderers, mntmRendererOptions;
 	
-	protected InputCallback uiCallback;
+	protected volatile InputCallback uiCallback;
 	
 	protected final ConcurrentLinkedDeque<Game> games = new ConcurrentLinkedDeque<>();
 	protected final ConcurrentLinkedDeque<Renderer> renderers = new ConcurrentLinkedDeque<>();
@@ -306,6 +312,25 @@ public class Window {
 		this(title, width, height, framerate, Window.createDefaultGLData());
 	}
 	
+	/** Creates a new Window with the specified {@link GLData}, the specified
+	 * viewport size, and the framerate is set to
+	 * {@link #getDefaultRefreshRate()}.<br>
+	 * <br>
+	 * <b>Note:</b>&nbsp;The thread that creates this Window needs to be the
+	 * thread that {@link #open()}s it, as it will become the main display
+	 * thread.
+	 * 
+	 * @param title The title that this Window will display
+	 * @param width The width of the viewport (this will be the
+	 *            {@link GLCanvas}' width)
+	 * @param height The width of the viewport (this will be the
+	 *            {@link GLCanvas}' height)
+	 * @param data The {@link GLData} that the {@link GLThread} will use when
+	 *            creating the OpenGL context */
+	public Window(String title, int width, int height, GLData data) {
+		this(title, width, height, Window.getDefaultRefreshRate(), data);
+	}
+	
 	/** Creates a new Window with the specified viewport size and framerate.<br>
 	 * A default {@link GLData} is created and used via
 	 * {@link #createDefaultGLData()}.<br>
@@ -369,7 +394,7 @@ public class Window {
 	 * @param data The {@link GLData} that the {@link GLThread} will use when
 	 *            creating the OpenGL context */
 	public Window(int width, int height, GLData data) {
-		this(null, width, height, Window.getDefaultRefreshRate(), data);
+		this(null, width, height, data);
 	}
 	
 	/** Creates a new Window with the specified viewport size, and the framerate
@@ -432,9 +457,9 @@ public class Window {
 			@Override
 			public void controlResized(ControlEvent e) {
 				if(Window.this.glThread == null || !Window.this.glThread.isRecording()) {
-					synchronized(Window.this.glThread) {
-						Window.this.glCanvas.setBounds(Window.this.shell.getClientArea());
-					}
+					//synchronized(Window.this.glThread) {
+					Window.this.glCanvas.setBounds(Window.this.shell.getClientArea());
+					//}
 				}
 				
 				this.controlMoved(e);
@@ -463,12 +488,13 @@ public class Window {
 		if(GL.getFunctionProvider() == null) {
 			GL.create();
 		}
+		int style = SWT.DOUBLE_BUFFERED | /* SWT.NO_BACKGROUND | SWT.TRANSPARENT |*/ SWT.NO_REDRAW_RESIZE;
 		try {
-			this.glCanvas = new GLCanvas(this.shell, SWT.DOUBLE_BUFFERED, this.data);
+			this.glCanvas = new GLCanvas(this.shell, style, this.data);
 		} catch(SWTException ex) {
 			if(ex.getMessage() != null && ex.getMessage().startsWith("Swap interval requested but ") && ex.getMessage().endsWith(" is unavailable")) {
 				this.data.swapInterval = null;
-				this.glCanvas = new GLCanvas(this.shell, SWT.DOUBLE_BUFFERED, this.data);
+				this.glCanvas = new GLCanvas(this.shell, style, this.data);
 			} else {
 				throw ex;
 			}
@@ -537,7 +563,7 @@ public class Window {
 	 * @return This Window */
 	public Window setFullscreen(boolean fullScreen) {
 		if(Thread.currentThread() != this.getWindowThread()) {
-			if(!this.display.isDisposed()) {
+			if(this.display != null && !this.display.isDisposed()) {
 				this.display.asyncExec(() -> {
 					this.setFullscreen(fullScreen);
 				});
@@ -571,7 +597,7 @@ public class Window {
 	public boolean toggleFullscreen(boolean blockIfAsync) {
 		if(Thread.currentThread() != this.getWindowThread()) {
 			if(!blockIfAsync) {
-				if(!this.display.isDisposed()) {
+				if(this.display != null && !this.display.isDisposed()) {
 					this.display.asyncExec(() -> {
 						this.toggleFullscreen(false);
 					});
@@ -579,7 +605,7 @@ public class Window {
 				return this.isFullscreen;
 			}
 			final Boolean[] rtrn = {null};
-			if(!this.display.isDisposed()) {
+			if(this.display != null && !this.display.isDisposed()) {
 				this.display.asyncExec(() -> {
 					rtrn[0] = Boolean.valueOf(this.toggleFullscreen(false));
 				});
@@ -643,7 +669,7 @@ public class Window {
 			code.run();
 			return this;
 		}
-		if(this.display.isDisposed()) {
+		if(this.display == null || this.display.isDisposed()) {
 			throw new RejectedExecutionException("Display is disposed!");
 		}
 		this.display.asyncExec(code);
@@ -743,6 +769,26 @@ public class Window {
 			}
 		});
 		mntmFullscreen.setText("Fullscreen\tF11");
+		
+		new MenuItem(menu_2, SWT.SEPARATOR);
+		
+		MenuItem mntmAlwaysOnTop = new MenuItem(menu_2, SWT.CASCADE);
+		mntmAlwaysOnTop.setText("Always On Top");
+		
+		Menu menu_4 = new Menu(mntmAlwaysOnTop);
+		mntmAlwaysOnTop.setMenu(menu_4);
+		
+		MenuItem mntmDisabled = new MenuItem(menu_4, SWT.RADIO);
+		mntmDisabled.setText("Disabled");
+		
+		MenuItem mntmEnabledfullscreen = new MenuItem(menu_4, SWT.RADIO);
+		mntmEnabledfullscreen.setText("Enabled (Fullscreen Only)");
+		
+		MenuItem mntmEnabledwindowedOnly = new MenuItem(menu_4, SWT.RADIO);
+		mntmEnabledwindowedOnly.setText("Enabled (Windowed Only)");
+		
+		MenuItem mntmEnabledalways = new MenuItem(menu_4, SWT.RADIO);
+		mntmEnabledalways.setText("Enabled (Always)");
 		
 		new MenuItem(menu_2, SWT.SEPARATOR);
 		
@@ -1024,86 +1070,145 @@ public class Window {
 		this.destroyGLCanvasPopupMenu();
 	}
 	
+	private final void updateFrameTime() {
+		this.lastFrameTime = this.nanoTime;
+		this.nanoTime = System.nanoTime();
+		this.deltaTime = ((this.nanoTime - this.lastFrameTime) + 0.0D) / 1000000000.0D;
+	}
+	
+	/** Returns the delta time of the current frame from the last.<br>
+	 * For a framerate of <tt>60.0</tt>, values are typically around
+	 * <tt>0.01666670</tt>.
+	 * 
+	 * @return The delta time of the current frame from the last
+	 * @see InputCallback#input(double) */
+	public final double getDeltaTime() {
+		return this.deltaTime;
+	}
+	
+	/** Polls the {@link Mouse#poll() Mouse} and {@link Keyboard#poll()
+	 * Keyboard}, and then calls {@link InputCallback#input(double)
+	 * input(deltaTime)} and {@link InputCallback#update(double)
+	 * update(deltaTime)} for all of this {@link Window}'s registered
+	 * {@link InputCallback}s.<br>
+	 * <br>
+	 * <b>Note:</b>&nbsp;This method should only be called by this Window's
+	 * display thread. It is marked <tt>public</tt> so that developers may use
+	 * it to poll the mouse and keyboard again before the next frame as
+	 * necessary.
+	 * 
+	 * @return Whether or not this Window {@link #shouldContinueRunning() should
+	 *         continue running} */
+	public boolean pollKeyboardAndMouse() {
+		this.shellActive = Window.isShellActive(this.shell);
+		if(!this.shouldContinueRunning()) {
+			return false;
+		}
+		Mouse.poll();
+		this.shellActive = Window.isShellActive(this.shell);
+		if(!this.shouldContinueRunning()) {
+			return false;
+		}
+		Keyboard.poll();
+		if(!this.shouldContinueRunning()) {
+			return false;
+		}
+		this.glThread.printFPSLog();// TODO make this run in a small dedicated thread
+		if(!this.shouldContinueRunning()) {
+			return false;
+		}
+		
+		final double deltaTime = this.deltaTime;
+		final Double dt = Double.valueOf(deltaTime);
+		long startTime = System.currentTimeMillis();
+		for(InputCallback listener : this.inputListeners) {
+			try {
+				listener.input(deltaTime);
+			} catch(Throwable ex) {
+				if(!handleListenerException(listener, ex, "input", dt)) {
+					this.unregisterInputCallback(listener);
+				}
+			}
+			
+			if(System.currentTimeMillis() - startTime >= 4L) {
+				while(this.display.readAndDispatch()) {
+				}
+				CodeUtil.sleep(1L);
+				startTime = System.currentTimeMillis();
+				if(this.shell.isDisposed()) {
+					break;
+				}
+			}
+		}
+		startTime = System.currentTimeMillis();
+		for(InputCallback listener : this.inputListeners) {
+			try {
+				listener.update(deltaTime);
+			} catch(Throwable ex) {
+				if(!handleListenerException(listener, ex, "update", dt)) {
+					this.unregisterInputCallback(listener);
+				}
+			}
+			
+			if(System.currentTimeMillis() - startTime >= 4L) {
+				while(this.display.readAndDispatch()) {
+				}
+				CodeUtil.sleep(1L);
+				startTime = System.currentTimeMillis();
+				if(this.shell.isDisposed()) {
+					break;
+				}
+			}
+		}
+		
+		// XXX Fix for when the cursor is captured and the user right clicks, causing the
+		// cursor to suddenly become visible for a split second in an attempt to bring up the popup menu
+		if(this.isFullscreen() || (Mouse.isCaptured() && !Mouse.isModal())) {
+			this.destroyGLCanvasPopupMenu();
+		} else {
+			this.createGLCanvasPopupMenu();
+		}
+		return this.shouldContinueRunning();
+	}
+	
+	protected void updateUI() {
+		this.shellActive = Window.isShellActive(this.shell);
+		this.shellVisible = this.shell.isVisible();
+		
+	}
+	
+	/** Returns whether or not this {@link Window} should continue to run.
+	 * 
+	 * @return Whether or not this Window should continue running */
+	public final boolean shouldContinueRunning() {
+		return this.running && !this.shell.isDisposed();
+	}
+	
+	/** Returns whether or not this Window is currently running.<br>
+	 * This has nothing to do with whether or not this window is
+	 * {@link Window#isVisible() currently visible}.<br>
+	 * This method is thread-safe.
+	 * 
+	 * @return Whether or not this Window is currently running (open or not) */
+	public final boolean isRunning() {
+		return this.running && this.display != null && !this.display.isDisposed() && this.display.getThread().isAlive();
+	}
+	
 	/** Maintains the application window, polls the mouse and keyboard, and
 	 * performs various other upkeep tasks.<br>
 	 * <b>Note:</b>&nbsp;This method should only be called by the main display
 	 * thread.
 	 * 
-	 * @return Whether or not this window should continue running */
+	 * @return Whether or not this {@link Window} should continue running */
 	public boolean swtLoop() {
 		while(this.display.readAndDispatch()) {
 		}
 		CodeUtil.sleep(2L);
-		if(!this.shell.isDisposed()) {
-			this.shellActive = Window.isShellActive(this.shell);
-			if(this.shell.isDisposed()) {
-				return false;
-			}
-			Mouse.poll();
-			if(this.shell.isDisposed()) {
-				return false;
-			}
-			Keyboard.poll();
-			if(this.shell.isDisposed()) {
-				return false;
-			}
-			this.glThread.printFPSLog();
-			if(this.shell.isDisposed()) {
-				return false;
-			}
-			
-			final double deltaTime = this.glThread.getDeltaTime();
-			final Double dt = Double.valueOf(deltaTime);
-			long startTime = System.currentTimeMillis();
-			for(InputCallback listener : this.inputListeners) {
-				try {
-					listener.input(deltaTime);
-				} catch(Throwable ex) {
-					if(!handleListenerException(listener, ex, "input", dt)) {
-						this.unregisterInputCallback(listener);
-					}
-				}
-				
-				if(System.currentTimeMillis() - startTime >= 4L) {
-					while(this.display.readAndDispatch()) {
-					}
-					CodeUtil.sleep(1L);
-					startTime = System.currentTimeMillis();
-					if(this.shell.isDisposed()) {
-						break;
-					}
-				}
-			}
-			startTime = System.currentTimeMillis();
-			for(InputCallback listener : this.inputListeners) {
-				try {
-					listener.update(deltaTime);
-				} catch(Throwable ex) {
-					if(!handleListenerException(listener, ex, "update", dt)) {
-						this.unregisterInputCallback(listener);
-					}
-				}
-				
-				if(System.currentTimeMillis() - startTime >= 4L) {
-					while(this.display.readAndDispatch()) {
-					}
-					CodeUtil.sleep(1L);
-					startTime = System.currentTimeMillis();
-					if(this.shell.isDisposed()) {
-						break;
-					}
-				}
-			}
-			
-			// XXX Fix for when the cursor is captured and the user right clicks, causing the
-			// cursor to suddenly become visible for a split second in an attempt to bring up the popup menu
-			if(this.isFullscreen() || (Mouse.isCaptured() && !Mouse.isModal())) {
-				this.destroyGLCanvasPopupMenu();
-			} else {
-				this.createGLCanvasPopupMenu();
-			}
+		if(this.shouldContinueRunning()) {
+			this.updateUI();
 		}
-		return this.running && !this.shell.isDisposed();
+		this.updateFrameTime();
+		return this.pollKeyboardAndMouse();
 	}
 	
 	/** Has the main display thread execute the given runnable at the nearest
@@ -1114,7 +1219,7 @@ public class Window {
 	 * @throws RejectedExecutionException Thrown if the main display has been
 	 *             disposed */
 	public Window swtExec(Runnable runnable) throws RejectedExecutionException {
-		if(this.display.isDisposed()) {
+		if(this.display == null || this.display.isDisposed()) {
 			throw new RejectedExecutionException("Display is disposed!");
 		}
 		this.display.asyncExec(runnable);
@@ -1123,7 +1228,7 @@ public class Window {
 	
 	/** @return The main display thread */
 	public final Thread getWindowThread() {
-		return this.display.isDisposed() ? null : this.display.getThread();
+		return this.display == null || this.display.isDisposed() ? null : this.display.getThread();
 	}
 	
 	/** Returns the {@link GLThread} that this {@link Window} is using.<br>
@@ -1326,6 +1431,16 @@ public class Window {
 		return this.shellActive;
 	}
 	
+	/** Returns whether or not this {@link Window} is currently visible to the
+	 * end-user.<br>
+	 * This method is thread-safe.
+	 * 
+	 * @return Whether or not this Window is currently visible to the
+	 *         end-user */
+	public final boolean isVisible() {
+		return !this.shell.isDisposed() && this.shellVisible;
+	}
+	
 	/** Opens this window.<br>
 	 * This method blocks until the window has been closed. */
 	public void open() {
@@ -1380,6 +1495,7 @@ public class Window {
 				}*/
 			}
 			
+			this.glThread.setRenderer(null);
 			this.glThread.stopRunning(true);
 			return;
 		} finally {
@@ -1387,6 +1503,22 @@ public class Window {
 			this.shell.dispose();
 			SWTResourceManager.dispose();
 			this.display.dispose();
+			
+			for(Game game : this.games) {
+				this.unregisterGame(game);
+			}
+			for(Renderer renderer : this.renderers) {
+				this.unregisterRenderer(renderer);
+			}
+			for(InputCallback listener : this.inputListeners) {
+				if(listener == this.uiCallback) {
+					continue;
+				}
+				this.unregisterInputCallback(listener);
+			}
+			for(MenuProvider provider : this.menuProviders) {
+				this.unregisterMenuProvider(provider);
+			}
 		}
 	}
 	
@@ -1400,7 +1532,7 @@ public class Window {
 	 *             been closed. */
 	public Window show() throws RejectedExecutionException {
 		if(Thread.currentThread() != this.getWindowThread()) {
-			if(this.display.isDisposed()) {
+			if(this.display == null || this.display.isDisposed()) {
 				throw new RejectedExecutionException("Display is disposed!");
 			}
 			this.display.asyncExec(() -> {
@@ -1412,6 +1544,7 @@ public class Window {
 		this.shell.layout();
 		this.shell.forceActive();
 		this.glCanvas.forceFocus();
+		this.updateUI();
 		return this;
 	}
 	
@@ -1425,7 +1558,7 @@ public class Window {
 	 *             been closed. */
 	public Window hide() throws RejectedExecutionException {
 		if(Thread.currentThread() != this.getWindowThread()) {
-			if(this.display.isDisposed()) {
+			if(this.display == null || this.display.isDisposed()) {
 				throw new RejectedExecutionException("Display is disposed!");
 			}
 			this.display.asyncExec(() -> {
@@ -1434,13 +1567,72 @@ public class Window {
 			return this;
 		}
 		this.shell.setVisible(false);
+		this.updateUI();
 		return this;
 	}
 	
-	/** Closes this {@link Window}, disposing of it.<br>
-	 * This method is thread-safe. */
+	/** Closes this {@link Window}, disposing of any system resources it was
+	 * using.<br>
+	 * This method is thread-safe.<br>
+	 * <br>
+	 * This Window may be re-opened after closing by simply calling
+	 * {@link #open()} again. */
 	public void close() {
 		this.running = false;
+	}
+	
+	/** Tells this {@link Window} that it needs to close, and waits either until
+	 * the window has finished closing, or until the specified amount of time
+	 * has elapsed.<br>
+	 * This method is thread-safe; however it will block if <tt>waitFor</tt> is
+	 * <tt>true</tt> and this method was called outside of this Window's display
+	 * thread.
+	 * 
+	 * @param waitFor Whether or not this method should block until this Window
+	 *            has finished closing
+	 * @param timeoutMillis The amount of time, in milliseconds, that this
+	 *            method should block for before throwing a
+	 *            {@link TimeoutException}.<br>
+	 *            You may specify a number less than one for no timeout.
+	 * @throws TimeoutException Thrown if this Window took longer than the
+	 *             specified <tt>timeoutMillis</tt> to finish closing */
+	public void close(boolean waitFor, long timeoutMillis) throws TimeoutException {
+		final Display display = this.display;
+		final String title = this.title;
+		this.close();
+		if(waitFor && display != null && display.getThread() != Thread.currentThread()) {
+			long startTime = System.currentTimeMillis();
+			Display curDisplay;
+			while(!display.isDisposed()) {
+				curDisplay = Display.getCurrent();
+				if(curDisplay != null && !curDisplay.isDisposed()) {
+					if(!curDisplay.readAndDispatch()) {
+						CodeUtil.sleep(10L);
+					}
+				} else {
+					CodeUtil.sleep(10L);
+				}
+				if(timeoutMillis > 0 && System.currentTimeMillis() - startTime >= timeoutMillis) {
+					throw new TimeoutException(String.format("Timeout of %s ms reached while waiting for window \"%s\" to close!", Long.toString(timeoutMillis), title));
+				}
+			}
+		}
+	}
+	
+	/** Tells this {@link Window} that it needs to close, and waits either until
+	 * the window has finished closing, or until the specified amount of time
+	 * has elapsed.<br>
+	 * This method is thread-safe; however it will block if <tt>waitFor</tt> is
+	 * <tt>true</tt>.
+	 * 
+	 * @param waitFor Whether or not this method should block until this Window
+	 *            has finished closing */
+	public void close(boolean waitFor) {
+		try {
+			this.close(waitFor, -1L);
+		} catch(TimeoutException ex) {
+			throw new RuntimeException("This should not have been able to happen!", ex);
+		}
 	}
 	
 	//======================================================================================================================================
@@ -1660,23 +1852,31 @@ public class Window {
 		return false;
 	}
 	
-	public final boolean unregisterRenderer(Renderer renderer) {
-		if(renderer instanceof Game) {
-			while(this.renderers.remove(renderer)) {
+	public final boolean unregisterRenderer(final Renderer renderer) {
+		final boolean wasRendererRegistered = this.isRendererRegistered(renderer);
+		final boolean wasActiveRenderer = this.getActiveRenderer() == renderer;
+		try {
+			if(renderer instanceof Game) {
+				while(this.renderers.remove(renderer)) {
+				}
+				return this.unregisterGame((Game) renderer);
 			}
-			return this.unregisterGame((Game) renderer);
+			if(renderer != null && wasRendererRegistered) {
+				while(this.renderers.remove(renderer)) {
+				}
+				if(this.display != null && !this.display.isDisposed()) {
+					this.display.asyncExec(() -> {
+						this.removeRendererFromCascadeMenu(renderer);
+					});
+				}
+				return true;
+			}
+			return false;
+		} finally {// If the renderer is the active renderer when this method is called, and it was registered beforehand, but it isn't now, then we need to un-set it as the active renderer since it is now in an inconsistent state with this Window
+			if(wasActiveRenderer && wasRendererRegistered && !this.isRendererRegistered(renderer)) {
+				this.setActiveRenderer(null);
+			}
 		}
-		if(renderer != null && this.isRendererRegistered(renderer)) {
-			while(this.renderers.remove(renderer)) {
-			}
-			if(this.display != null && !this.display.isDisposed()) {
-				this.display.asyncExec(() -> {
-					this.removeRendererFromCascadeMenu(renderer);
-				});
-			}
-			return true;
-		}
-		return false;
 	}
 	
 	public final boolean isMenuProviderRegistered(MenuProvider provider) {
@@ -1775,7 +1975,7 @@ public class Window {
 	 *         addition to not being set as the active renderer, the specified
 	 *         renderer is not registered. */
 	public final boolean setActiveRenderer(Renderer renderer) {
-		if(this.display.isDisposed()) {
+		if((this.display == null || this.display.isDisposed()) && renderer != null) {
 			throw new IllegalStateException("Display is disposed!");
 		}
 		if(this.glThread.setRenderer(renderer)) {
