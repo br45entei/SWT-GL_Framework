@@ -401,7 +401,7 @@ public class CodeUtil {
 	 * @return The newly created writable {@link Entry} which maps the given key
 	 *         and value */
 	public static final <K, V> Entry<K, V> createWritableEntry(final K key, final V value, boolean allowNullValues) {
-		Entry<K, V> entry = new Entry<K, V>() {
+		Entry<K, V> entry = new Entry<>() {
 			volatile V value = null;
 			
 			@Override
@@ -453,7 +453,7 @@ public class CodeUtil {
 	 * @return The newly created read-only {@link Entry} which maps the given
 	 *         key and value */
 	public static final <K, V> Entry<K, V> createReadOnlyEntry(final K key, final V value, final boolean throwUnsupportedOperationException) {
-		return new Entry<K, V>() {
+		return new Entry<>() {
 			@Override
 			public K getKey() {
 				return key;
