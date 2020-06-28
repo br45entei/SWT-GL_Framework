@@ -101,7 +101,7 @@ public class FontRender {
 		return new ArrayList<>(GLFont.instances);
 	}
 	
-	/** @author Brian_Entei */
+	/** @author jezek2, Brian_Entei */
 	public static class GLFont {
 		
 		protected static final ConcurrentLinkedDeque<GLFont> instances = new ConcurrentLinkedDeque<>();
