@@ -18,6 +18,7 @@
  *******************************************************************************/
 package com.gmail.br45entei.game.ui;
 
+import com.badlogic.gdx.controllers.Controller;
 import com.gmail.br45entei.game.graphics.Renderer;
 import com.gmail.br45entei.game.input.InputCallback;
 import com.gmail.br45entei.game.input.Keyboard;
@@ -30,6 +31,7 @@ import java.util.Objects;
  * to the {@link Window} so that it may listen to input events (such as key
  * combos etc.).
  * 
+ * @since 1.0
  * @author Brian_Entei */
 public class UICallback implements InputCallback {
 	
@@ -45,23 +47,58 @@ public class UICallback implements InputCallback {
 	}
 	
 	@Override
+	public boolean isInitialized() {
+		return this.initialized;
+	}
+	
+	@Override
+	public void initialize() {
+		this.initialized = true;
+	}
+	
+	@Override
+	public boolean isModal() {
+		return !Mouse.isCaptured();
+	}
+	
+	@Override
 	public void input(double deltaTime) {
+		if(this.window.isClosed()) {
+			return;
+		}
+		
 	}
 	
 	@Override
 	public void update(double deltaTime) {
+		if(this.window.isClosed()) {
+			return;
+		}
+		
 	}
 	
 	@Override
 	public void onMouseScroll(boolean vertical, int count) {
+		if(this.window.isClosed()) {
+			return;
+		}
+		
 	}
 	
 	@Override
 	public void onMouseMoved(int deltaX, int deltaY, int oldX, int oldY, int newX, int newY) {
+		if(this.window.isClosed()) {
+			return;
+		}
+		
 	}
 	
 	@Override
 	public void onMouseButtonDown(int button) {
+		if(this.window.isClosed()) {
+			return;
+		}
+		
 		if(button == Mouse.BUTTON_LEFT) {
 			if(System.currentTimeMillis() - this.window.lastMenuInteraction > 480L) {
 				if(!Mouse.isCaptured() && !Mouse.isModal()) {
@@ -73,18 +110,33 @@ public class UICallback implements InputCallback {
 	
 	@Override
 	public void onMouseButtonHeld(int button) {
+		if(this.window.isClosed()) {
+			return;
+		}
+		
 	}
 	
 	@Override
 	public void onMouseButtonUp(int button) {
+		if(this.window.isClosed()) {
+			return;
+		}
+		
 	}
 	
 	@Override
 	public void onMouseDoubleClick(int button) {
+		if(this.window.isClosed()) {
+			return;
+		}
+		
 	}
 	
 	@Override
 	public void onKeyDown(int key) {
+		if(this.window.isClosed()) {
+			return;
+		}
 		if(key == Keys.VK_ESCAPE) {
 			if(Mouse.isCaptured()) {
 				Mouse.setCaptured(false);
@@ -122,40 +174,50 @@ public class UICallback implements InputCallback {
 		
 		if(key == Keys.VK_BROWSER_BACK || (key == Keys.VK_LEFT_ARROW && Keyboard.isKeyDown(Keys.VK_ALT))) {
 			Renderer activeRenderer = this.window.getActiveRenderer();
-			if(activeRenderer != null) {
-				Renderer previousRenderer = this.window.getPreviousRenderer(true);
-				if(previousRenderer != activeRenderer) {
-					this.window.setActiveRenderer(previousRenderer);
-				}
+			Renderer previousRenderer = this.window.getPreviousRenderer();
+			if(previousRenderer != activeRenderer) {
+				this.window.setActiveRenderer(previousRenderer);
 			}
 		}
 		if(key == Keys.VK_BROWSER_FORWARD || (key == Keys.VK_RIGHT_ARROW && Keyboard.isKeyDown(Keys.VK_ALT))) {
 			Renderer activeRenderer = this.window.getActiveRenderer();
-			if(activeRenderer != null) {
-				Renderer nextRenderer = this.window.getNextRenderer(true);
-				if(nextRenderer != activeRenderer) {
-					this.window.setActiveRenderer(nextRenderer);
-				}
+			Renderer nextRenderer = this.window.getNextRenderer();
+			if(nextRenderer != activeRenderer) {
+				this.window.setActiveRenderer(nextRenderer);
 			}
 		}
 	}
 	
 	@Override
 	public void onKeyHeld(int key) {
+		if(this.window.isClosed()) {
+			return;
+		}
+		
 	}
 	
 	@Override
 	public void onKeyUp(int key) {
+		if(this.window.isClosed()) {
+			return;
+		}
+		
 	}
 	
 	@Override
-	public boolean isInitialized() {
-		return this.initialized;
+	public void onControllerConnected(Controller controller) {
+		if(this.window.isClosed()) {
+			return;
+		}
+		
 	}
 	
 	@Override
-	public void initialize() {
-		this.initialized = true;
+	public void onControllerDisconnected(Controller controller) {
+		if(this.window.isClosed()) {
+			return;
+		}
+		
 	}
 	
 	@Override
@@ -166,7 +228,7 @@ public class UICallback implements InputCallback {
 			sb.append(Objects.toString(param)).append(i + 1 == params.length ? "" : ", ");
 		}
 		String parameters = sb.toString();
-		System.err.print(String.format("The Window's built-in InputCallback threw an exception while executing method %s(%s): ", method, parameters));
+		System.err.println(String.format("The Window's built-in InputCallback threw an exception while executing method %s(%s): ", method, parameters));
 		ex.printStackTrace(System.err);
 		System.err.flush();
 		return true;

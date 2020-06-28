@@ -43,6 +43,7 @@ import org.lwjgl.opengl.GL11;
 /** Screenshot helper class designed to make it quick and easy to save a
  * screenshot while also taking some of the load off of the OpenGL thread.
  * 
+ * @since 1.0
  * @author Brian_Entei */
 public class ScreenshotHelper extends Thread {
 	

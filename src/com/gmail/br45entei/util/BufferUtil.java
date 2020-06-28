@@ -37,6 +37,7 @@ import sun.misc.Unsafe;
 /** Utility class which provides helper functions for creating, using, and
  * destroying {@link Buffer}s.
  *
+ * @since 1.0
  * @author Brian_Entei */
 public class BufferUtil {
 	

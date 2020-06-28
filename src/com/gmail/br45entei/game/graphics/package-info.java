@@ -16,5 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  * 
  *******************************************************************************/
-/** @author Brian_Entei */
+/** @since 1.0
+ * @author Brian_Entei */
 package com.gmail.br45entei.game.graphics;

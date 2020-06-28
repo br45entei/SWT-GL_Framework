@@ -28,8 +28,8 @@ import org.lwjgl.opengl.swt.GLCanvas;
  * {@link Window}, and 'PopupMenu' menus appear in the right-click context
  * menu of the main Window's {@link GLCanvas}.
  * 
- * @author Brian_Entei
- * @since 1.0 */
+ * @since 1.0
+ * @author Brian_Entei */
 public interface MenuProvider {
 	
 	/** Called to retrieve the name of the {@link MenuItem} within the
@@ -77,6 +77,10 @@ public interface MenuProvider {
 	 * @param menu The {@link Menu PopupMenu} that is about to be
 	 *            disposed */
 	public void onPopupMenuDeletion(Menu menu);
+	
+	/** Called by the {@link Window}'s display thread once per 'tick' to allow
+	 * {@link MenuProvider}s to update their menu items when necessary. */
+	public void updateMenuItems();
 	
 	/** Gives this provider a chance to handle any exceptions that it might
 	 * throw.<br>

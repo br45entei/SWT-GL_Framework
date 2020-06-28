@@ -31,7 +31,8 @@ import java.util.UUID;
 
 import org.apache.commons.text.similarity.LevenshteinDistance;
 
-/** @author Brian_Entei */
+/** @since 1.0
+ * @author Brian_Entei */
 public class CodeUtil {
 	
 	/** Retrieves the specified system property with the proper authority.

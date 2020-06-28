@@ -18,9 +18,11 @@
  *******************************************************************************/
 package com.gmail.br45entei.game.ui;
 
+import com.badlogic.gdx.controllers.Controller;
 import com.gmail.br45entei.game.Game;
 import com.gmail.br45entei.game.graphics.GLThread;
 import com.gmail.br45entei.game.graphics.Renderer;
+import com.gmail.br45entei.game.input.ControllerManager;
 import com.gmail.br45entei.game.input.InputCallback;
 import com.gmail.br45entei.game.input.InputCallback.InputLogger;
 import com.gmail.br45entei.game.input.Keyboard;
@@ -35,6 +37,8 @@ import com.gmail.br45entei.util.SWTUtil;
 import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
 import java.beans.Beans;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
@@ -57,6 +61,7 @@ import org.eclipse.swt.events.SelectionAdapter;
 import org.eclipse.swt.events.SelectionEvent;
 import org.eclipse.swt.events.ShellAdapter;
 import org.eclipse.swt.events.ShellEvent;
+import org.eclipse.swt.graphics.Image;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Display;
@@ -71,9 +76,9 @@ import org.lwjgl.opengl.swt.GLData;
 /** The main Window class which manages background tasks such as maintaining the
  * application window.
  *
- * @author Brian_Entei
- * @since 1.0 */
-public class Window {
+ * @since 1.0
+ * @author Brian_Entei */
+public class Window {// TODO Implement InputCallback.isModal() within the Mouse class
 	
 	static {
 		String[] extraNativesToLoad;
@@ -121,19 +126,26 @@ public class Window {
 	 * for the specified shell's display.
 	 * 
 	 * @param shell The shell to check
-	 * @return Whether or not the specified shell is active */
+	 * @return Whether or not the specified shell is active
+	 * @throws SWTException
+	 *             <ul>
+	 *             <li>ERROR_THREAD_INVALID_ACCESS - if not called from the
+	 *             thread that created the receiver</li>
+	 *             <li>ERROR_DEVICE_DISPOSED - if the receiver has been
+	 *             disposed</li>
+	 *             </ul>
+	 */
 	public static final boolean isShellActive(Shell shell) {
-		boolean shellActive;
+		boolean shellActive = shell.getDisplay().getActiveShell() == shell && shell.isVisible();
 		long shellHandle = SWTUtil.getHandle(shell);
 		switch(Platform.get()) {
 		case WINDOWS:
-			shellActive = org.eclipse.swt.internal.win32.OS.GetForegroundWindow() == shellHandle;
+			shellActive &= org.eclipse.swt.internal.win32.OS.GetForegroundWindow() == shellHandle;
 			break;
 		case LINUX:
 		case MACOSX:
 		case UNKNOWN:
 		default:
-			shellActive = shell.getDisplay().getActiveShell() == shell && shell.isVisible();
 			break;
 		}
 		return shellActive;
@@ -172,13 +184,21 @@ public class Window {
 	protected volatile Shell shell;
 	protected volatile long shellHandle;
 	
+	protected volatile String[] lastSetIconImages = null;
+	
 	protected volatile GLData data;
 	protected volatile GLCanvas glCanvas;
 	protected volatile GLThread glThread;
+	protected volatile Thread fpsLogThread;
+	protected volatile ControllerManager controllerManager;
 	
-	protected volatile MenuItem mntmVerticalSync, mntmRenderers, mntmRendererOptions;
+	protected volatile MenuItem mntmVerticalSync;
+	protected volatile MenuItem mntmRenderers;
+	protected volatile MenuItem mntmNoRenderer;
+	protected volatile MenuItem mntmRendererOptions;
 	
 	protected volatile InputCallback uiCallback;
+	protected volatile Renderer activeRendererToSetOnStartup = null;
 	
 	protected final ConcurrentLinkedDeque<Game> games = new ConcurrentLinkedDeque<>();
 	protected final ConcurrentLinkedDeque<Renderer> renderers = new ConcurrentLinkedDeque<>();
@@ -204,6 +224,8 @@ public class Window {
 		//this.data = null;
 		this.glCanvas = null;
 		this.glThread = null;
+		this.fpsLogThread = null;
+		this.controllerManager = null;
 		
 		this.mntmVerticalSync = this.mntmRenderers = this.mntmRendererOptions = null;
 		
@@ -268,7 +290,7 @@ public class Window {
 		this.framerate = framerate != framerate || Double.isInfinite(framerate) ? Window.getDefaultRefreshRate() : framerate;
 		this.data = data == null ? Window.createDefaultGLData() : data;
 		
-		this.registerInputCallback(this.uiCallback = new UICallback(this));
+		this.uiCallback = new UICallback(this);
 		
 		this.createContents();
 		
@@ -438,14 +460,70 @@ public class Window {
 		this(800, 600);
 	}
 	
+	/** Sets this {@link Window}'s icon to the specified {@link Image}(s).<br>
+	 * This method is thread-safe.
+	 * 
+	 * @param images The Image(s) to set
+	 * @return This Window */
+	public Window setIconImages(Image... images) {
+		if(Thread.currentThread() != this.getWindowThread()) {
+			if(this.display == null || this.display.isDisposed()) {
+				throw new RejectedExecutionException("Display is disposed!");
+			}
+			this.display.asyncExec(() -> {
+				this.setIconImages(images);
+			});
+			return this;
+		}
+		this.shell.setImages(images);
+		return this;
+	}
+	
+	/** Sets this {@link Window}'s icon to the specified {@link Image}(s).<br>
+	 * This method is thread-safe.
+	 * 
+	 * @param resourcePaths The path(s) to the Image(s) to set
+	 *            (<b>Note:</b>&nbsp;each path must lead with a
+	 *            forward-slash['/']!)
+	 * @return This Window */
+	public Window setIconImages(String... resourcePaths) {
+		if(Thread.currentThread() != this.getWindowThread()) {
+			if(this.display == null || this.display.isDisposed()) {
+				throw new RejectedExecutionException("Display is disposed!");
+			}
+			this.display.asyncExec(() -> {
+				this.setIconImages(resourcePaths);
+			});
+			return this;
+		}
+		this.lastSetIconImages = resourcePaths;
+		List<Image> list = new ArrayList<>();
+		for(String resourcePath : resourcePaths) {
+			boolean validPath = false;
+			try(InputStream in = Window.class.getResourceAsStream(resourcePath)) {
+				validPath = in != null;
+			} catch(IOException | NullPointerException ex) {
+				validPath = false;
+				ex.printStackTrace();
+			}
+			list.add(validPath ? SWTResourceManager.getImage(Window.class, resourcePath) : SWTResourceManager.getMissingImage());
+		}
+		return this.setIconImages(list.toArray(new Image[list.size()]));
+	}
+	
 	private void createContents() {
 		this.display = Display.getDefault();
 		if(this.display.getThread() != Thread.currentThread()) {
 			this.display = new Display();
 		}
-		this.shell = new Shell(this.display, SWT.SHELL_TRIM);
+		this.shell = new Shell(this.display, SWT.SHELL_TRIM | SWT.DOUBLE_BUFFERED);// (DOUBLE_BUFFERED is used here for when the shell is in fullscreen mode)
 		this.shell.setText(this.title);
-		this.shell.setImages(SWTUtil.getTitleImages());
+		String[] images = this.lastSetIconImages;
+		if(images == null) {
+			this.shell.setImages(SWTUtil.getTitleImages());
+		} else {
+			this.setIconImages(images);
+		}
 		this.shell.addShellListener(new ShellAdapter() {
 			@Override
 			public void shellClosed(ShellEvent e) {
@@ -530,12 +608,23 @@ public class Window {
 		}
 		
 		this.glThread = new GLThread(this.glCanvas);
+		this.fpsLogThread = new Thread(() -> {
+			final GLThread glThread = this.glThread;
+			while(glThread != null && glThread.isAlive()) {
+				glThread.printFPSLog();
+				CodeUtil.sleep(40L);
+			}
+		}, "FPS Log Printer Thread");
+		this.fpsLogThread.setDaemon(true);
+		this.controllerManager = new ControllerManager();
 		
 		this.createMenus();
 		
 		if(instance == null || instance.shell == null || instance.shell.isDisposed()) {
 			instance = this;
 		}
+		
+		this.registerInputCallback(this.uiCallback);
 	}
 	
 	/** Returns this {@link Window}'s current target FPS (frames per
@@ -545,6 +634,15 @@ public class Window {
 	 * @return The current target FPS */
 	public int getRefreshRate() {
 		return this.glThread.isVsyncEnabled() ? Window.getDefaultRefreshRate() : Long.valueOf(Math.round(Math.ceil(this.glThread.getTargetFPS()))).intValue();
+	}
+	
+	/** Returns the {@link Shell} that this {@link Window} is maintaining.<br>
+	 * While this method is thread-safe, the returned shell should only be used
+	 * by this Window's display thread.
+	 * 
+	 * @return The Shell that this Window is maintaining */
+	public Shell getShell() {
+		return this.shell;
 	}
 	
 	/** @return Whether or not this {@link Window} is in fullscreen mode */
@@ -641,12 +739,22 @@ public class Window {
 		return this.toggleFullscreen(true);
 	}
 	
+	/** Returns whether or not vsync (vertical sync) is enabled for this
+	 * {@link Window}.<br>
+	 * This method is thread-safe.
+	 * 
+	 * @return Whether or not vsync is enabled for this Window */
 	public boolean isVsyncEnabled() {
 		return this.getGLThread().getRefreshRate() == Window.getDefaultRefreshRate();
 	}
 	
 	private volatile double lastNonDefaultFramerate = 0;
 	
+	/** Enables or disabled vsync (vertical sync) for this {@link Window}.<br>
+	 * This method is thread-safe.
+	 * 
+	 * @param vsync Whether or not vsync will be enabled
+	 * @return This Window */
 	public Window setVSyncEnabled(boolean vsync) {
 		if(this.glThread.isRecordingStartingUp() || this.glThread.isRecording()) {
 			return this;
@@ -676,6 +784,10 @@ public class Window {
 		return this;
 	}
 	
+	/** Toggles the vsync (vertical sync) state for this {@link Window}.<br>
+	 * This method is thread-safe.
+	 * 
+	 * @return This Window */
 	public Window toggleVsyncEnabled() {
 		return this.setVSyncEnabled(!this.isVsyncEnabled());
 	}
@@ -823,6 +935,19 @@ public class Window {
 		Menu menu_3 = new Menu(this.mntmRenderers);
 		this.mntmRenderers.setMenu(menu_3);
 		
+		this.mntmNoRenderer = new MenuItem(menu_3, SWT.RADIO);
+		this.mntmNoRenderer.setText("<None>");
+		this.mntmNoRenderer.addSelectionListener(new SelectionAdapter() {
+			@Override
+			public void widgetSelected(SelectionEvent e) {
+				MenuItem item = Window.this.mntmNoRenderer;
+				boolean selection = Window.this.setActiveRenderer(null);
+				if(item != null && !item.isDisposed()) {
+					item.setSelection(selection);
+				}
+			}
+		});
+		
 		for(Renderer renderer : this.getAvailableRenderers()) {
 			String name;
 			try {
@@ -948,17 +1073,32 @@ public class Window {
 					}
 				}
 				final RendererMenuItem item = new RendererMenuItem(menu, renderer, SWT.RADIO);
+				renderer = null;
 				item.setText(name);
+				item.setSelection(Window.this.getActiveRenderer() == item.getRenderer());
+				final String _name = name;
 				item.addSelectionListener(new SelectionAdapter() {
 					@Override
 					public void widgetSelected(SelectionEvent e) {
-						boolean selection = Window.this.setActiveRenderer(item.getRenderer());
-						if(!item.isDisposed()) {
-							item.setSelection(selection);
+						// SWT dispatches a widgetSelected event for widgets in a radio group differently than
+						// it does for check-boxes and buttons; when one is enabled, its event is fired first,
+						// then the previously enabled one's event is fired!
+						// For us, this means that the new renderer is set active, and then the old renderer is
+						// set active again! To prevent this, we just check to see if the item is currently
+						// enabled before continuing.
+						if(!item.getSelection()) {
+							return;
+						}
+						boolean success = Window.this.setActiveRenderer(item.getRenderer());
+						if(!success) {
+							System.err.println(String.format("Failed to set the active renderer to \"%s\"!", _name));
+						} else if(Window.this.getActiveRenderer() != item.getRenderer()) {
+							new Throwable(String.format("The method setActiveRenderer reported success, but the active renderer is not \"%s\"!", _name)).printStackTrace();
+						} else {
+							System.out.println(String.format("Successfully set the active renderer to \"%s\".", _name));
 						}
 					}
 				});
-				item.setSelection(Window.this.getActiveRenderer() == renderer);
 				return true;
 			}
 		}
@@ -1042,15 +1182,25 @@ public class Window {
 		}
 	}
 	
-	protected void destroyMenus() {
+	private void _destroyMenuBar() {
+		Menu menu = this.shell.getMenuBar();
+		if(menu != null) {
+			this.shell.setMenuBar(null);
+			menu.dispose();
+			this.mntmVerticalSync = this.mntmRenderers = this.mntmNoRenderer = this.mntmRendererOptions = null;
+		}
+	}
+	
+	protected boolean onMenuBarDeletion() {
+		if(this.shell.getMenuBar() == null) {
+			return false;
+		}
 		synchronized(this.glThread) {
 			final Renderer renderer = this.glThread.getRenderer();
 			MenuProvider provider = renderer instanceof MenuProvider ? (MenuProvider) renderer : null;
 			
 			Menu menu = this.shell.getMenuBar();
 			if(menu != null) {
-				this.shell.setMenuBar(null);
-				
 				if(provider != null) {
 					try {
 						provider.onMenuBarDeletion(menu);
@@ -1061,12 +1211,17 @@ public class Window {
 						}
 					}
 				}
-				
-				menu.dispose();
 			}
-			this.mntmVerticalSync = this.mntmRenderers = this.mntmRendererOptions = null;
 		}
-		
+		return true;
+	}
+	
+	protected void destroyMenus() {
+		if(this.onMenuBarDeletion()) {
+			synchronized(this.glThread) {
+				this._destroyMenuBar();
+			}
+		}
 		this.destroyGLCanvasPopupMenu();
 	}
 	
@@ -1113,15 +1268,17 @@ public class Window {
 		if(!this.shouldContinueRunning()) {
 			return false;
 		}
-		this.glThread.printFPSLog();// TODO make this run in a small dedicated thread
-		if(!this.shouldContinueRunning()) {
-			return false;
-		}
+		Renderer activeRenderer = this.getActiveRenderer();
 		
 		final double deltaTime = this.deltaTime;
 		final Double dt = Double.valueOf(deltaTime);
 		long startTime = System.currentTimeMillis();
-		for(InputCallback listener : this.inputListeners) {
+		List<InputCallback> inputListeners = this.getAvailableInputCallbacks();
+		
+		for(InputCallback listener : inputListeners) {
+			if(listener instanceof Renderer && listener != activeRenderer) {
+				continue;
+			}
 			try {
 				listener.input(deltaTime);
 			} catch(Throwable ex) {
@@ -1141,7 +1298,10 @@ public class Window {
 			}
 		}
 		startTime = System.currentTimeMillis();
-		for(InputCallback listener : this.inputListeners) {
+		for(InputCallback listener : inputListeners) {
+			if(listener instanceof Renderer && listener != activeRenderer) {
+				continue;
+			}
 			try {
 				listener.update(deltaTime);
 			} catch(Throwable ex) {
@@ -1171,10 +1331,68 @@ public class Window {
 		return this.shouldContinueRunning();
 	}
 	
+	/** Inspects the current controller configuration and polls the connected
+	 * controllers for input data.
+	 * 
+	 * @return Whether or not polling the controllers was successful */
+	public boolean pollControllers() {
+		final ControllerManager manager = this.controllerManager;
+		if(manager != null && !manager.isDisposed()) {
+			return manager.pollControllers();
+		}
+		return false;
+	}
+	
+	/** Returns a copy of the list of all of the controllers currently connected
+	 * to the system.<br>
+	 * This method is thread-safe.<br>
+	 * The internal list is updated whenever {@link #pollControllers()} is
+	 * called.
+	 * 
+	 * @return A list of all of the controllers currently connected to the
+	 *         system */
+	public List<Controller> getControllers() {
+		final ControllerManager manager = this.controllerManager;
+		if(manager != null && !manager.isDisposed()) {
+			return manager.getControllers();
+		}
+		return new ArrayList<>();
+	}
+	
 	protected void updateUI() {
 		this.shellActive = Window.isShellActive(this.shell);
 		this.shellVisible = this.shell.isVisible();
 		
+		Menu rendererMenu = this.mntmRenderers == null || this.mntmRenderers.isDisposed() ? null : this.mntmRenderers.getMenu();
+		if(rendererMenu != null && !rendererMenu.isDisposed()) {
+			final Renderer activeRenderer = this.getActiveRenderer();
+			for(MenuItem item : rendererMenu.getItems()) {
+				if(item instanceof RendererMenuItem) {
+					RendererMenuItem rItem = (RendererMenuItem) item;
+					Renderer renderer = rItem.getRenderer();
+					if(renderer == null || !this.isRendererRegistered(renderer)) {
+						rItem.dispose();
+						continue;
+					}
+					SWTUtil.setSelection(item, renderer == activeRenderer);
+				}
+			}
+			MenuItem noRenderer = this.mntmNoRenderer;
+			if(noRenderer != null && !noRenderer.isDisposed()) {
+				SWTUtil.setSelection(noRenderer, activeRenderer == null);
+			}
+		}
+		
+		for(MenuProvider provider : this.getAvailableMenuProviders()) {
+			try {
+				provider.updateMenuItems();
+			} catch(Throwable ex) {
+				if(!handleMenuProviderException(provider, ex, "updateMenuItems")) {
+					this.unregisterMenuProvider(provider);
+					continue;
+				}
+			}
+		}
 	}
 	
 	/** Returns whether or not this {@link Window} should continue to run.
@@ -1462,9 +1680,15 @@ public class Window {
 			this.shellHandle = SWTUtil.getHandle(this.shell);
 			this.setGLCanvasSize(this.glTargetWidth, this.glTargetHeight);
 			
+			if(this.activeRendererToSetOnStartup != null) {
+				this.setActiveRenderer(this.activeRendererToSetOnStartup);
+				this.activeRendererToSetOnStartup = null;
+			}
+			
 			this.glThread.start();
 			while(this.swtLoop() && this.glThread.getState() == Thread.State.NEW) {
 			}
+			this.fpsLogThread.start();
 			
 			while(this.swtLoop()) {
 				/*if(Mouse.getButtonDown(1)) {
@@ -1504,21 +1728,19 @@ public class Window {
 			SWTResourceManager.dispose();
 			this.display.dispose();
 			
-			for(Game game : this.games) {
+			/*for(Game game : this.games) {
 				this.unregisterGame(game);
 			}
 			for(Renderer renderer : this.renderers) {
 				this.unregisterRenderer(renderer);
 			}
 			for(InputCallback listener : this.inputListeners) {
-				if(listener == this.uiCallback) {
-					continue;
-				}
 				this.unregisterInputCallback(listener);
 			}
 			for(MenuProvider provider : this.menuProviders) {
 				this.unregisterMenuProvider(provider);
-			}
+			}*/
+			this.unregisterInputCallback(this.uiCallback);
 		}
 	}
 	
@@ -1635,6 +1857,15 @@ public class Window {
 		}
 	}
 	
+	/** Returns whether or not this {@link Window} has been
+	 * {@link Window#close() closed}.
+	 * 
+	 * @return Whether or not this Window has been {@link Window#close()
+	 *         closed} */
+	public boolean isClosed() {
+		return this.display == null || this.display.isDisposed() || this.shell == null || this.shell.isDisposed();
+	}
+	
 	//======================================================================================================================================
 	
 	/** Checks if the specified game is registered with this {@link Window}.<br>
@@ -1722,6 +1953,15 @@ public class Window {
 		return false;
 	}
 	
+	/** Checks and returns whether or not the specified {@link InputCallback} is
+	 * registered with this {@link Window}.<br>
+	 * This method is thread-safe.
+	 * 
+	 * @param inputCallback The InputCallback to check
+	 * @return Whether or not the InputCallback is registered with this
+	 *         Window
+	 * @see #registerInputCallback(InputCallback)
+	 * @see #unregisterInputCallback(InputCallback) */
 	public final boolean isInputCallbackRegistered(InputCallback inputCallback) {
 		if(inputCallback instanceof Game) {
 			while(this.inputListeners.remove(inputCallback)) {
@@ -1734,6 +1974,15 @@ public class Window {
 		return false;
 	}
 	
+	/** Registers the specified {@link InputCallback} with this {@link Window}
+	 * if it wasn't already.<br>
+	 * This method is thread-safe.
+	 * 
+	 * @param inputCallback The InputCallback to register
+	 * @return <tt>true</tt> if the InputCallback was just registered;
+	 *         <tt>false</tt> otherwise
+	 * @see #isInputCallbackRegistered(InputCallback)
+	 * @see #unregisterInputCallback(InputCallback) */
 	public final boolean registerInputCallback(InputCallback inputCallback) {
 		if(inputCallback instanceof Game) {
 			while(this.inputListeners.remove(inputCallback)) {
@@ -1752,6 +2001,15 @@ public class Window {
 		return false;
 	}
 	
+	/** Unregisters the specified {@link InputCallback} from this {@link Window}
+	 * if it was previously registered.<br>
+	 * This method is thread-safe.
+	 * 
+	 * @param inputCallback The InputCallback to unregister
+	 * @return <tt>true</tt> if the InputCallback was just unregistered;
+	 *         <tt>false</tt> otherwise
+	 * @see #isInputCallbackRegistered(InputCallback)
+	 * @see #registerInputCallback(InputCallback) */
 	public final boolean unregisterInputCallback(InputCallback inputCallback) {
 		if(inputCallback instanceof Game) {
 			while(this.inputListeners.remove(inputCallback)) {
@@ -1978,15 +2236,39 @@ public class Window {
 		if((this.display == null || this.display.isDisposed()) && renderer != null) {
 			throw new IllegalStateException("Display is disposed!");
 		}
-		if(this.glThread.setRenderer(renderer)) {
-			//if(renderer instanceof MenuProvider) {
+		if(!this.isRunning()) {
+			this.activeRendererToSetOnStartup = renderer;
+			return true;
+		}
+		if(Thread.currentThread() != this.getWindowThread()) {
+			final Boolean[] rtrn = {null};
 			this.display.asyncExec(() -> {
-				if(this.shell.getMenuBar() != null) {
-					this.destroyMenus();
-					this.createMenus();
-				}
+				rtrn[0] = Boolean.valueOf(this.setActiveRenderer(renderer));
 			});
-			//}
+			Display display;
+			while(rtrn[0] == null) {
+				display = Display.getCurrent();
+				if(display != null && !display.isDisposed()) {
+					if(!display.readAndDispatch()) {
+						CodeUtil.sleep(10L);
+					}
+				} else {
+					CodeUtil.sleep(10L);
+				}
+			}
+			return rtrn[0].booleanValue();
+		}
+		if(this.getActiveRenderer() == renderer) {
+			new Throwable().printStackTrace();
+			return true;
+		}
+		boolean createMenuBar = this.shell.getMenuBar() != null;
+		this.destroyMenus();
+		
+		if(this.glThread.setRenderer(renderer, false)) {
+			if(createMenuBar) {
+				this.createMenus();
+			}
 			if(renderer != null) {
 				this.registerRenderer(renderer);
 			}
@@ -1997,7 +2279,7 @@ public class Window {
 	
 	/** Returns the renderer that this {@link Window}'s {@link GLThread} is
 	 * currently using to display graphics.<br>
-	 * This method is thread safe.
+	 * This method is thread-safe.
 	 * 
 	 * @return The {@link Renderer renderer} that this Window's GLThread is
 	 *         currently using to display graphics */
@@ -2051,17 +2333,18 @@ public class Window {
 	 * returned by {@link Window#getAvailableRenderers()}.<br>
 	 * This method is thread-safe.
 	 * 
-	 * @param wrapAround Whether or not the first renderer in the list should be
-	 *            returned if the currently active renderer happens to be the
-	 *            last one in the list
 	 * @return The renderer after the currently active renderer in the list
 	 *         returned by {@link Window#getAvailableRenderers()} */
-	public final Renderer getNextRenderer(boolean wrapAround) {
+	public final Renderer getNextRenderer() {
 		final Renderer activeRenderer = this.getActiveRenderer();
+		List<Renderer> list = this.getAvailableRenderers();
 		if(activeRenderer != null) {
+			if(!list.isEmpty() && list.get(list.size() - 1) == activeRenderer) {
+				return null;
+			}
 			boolean thisOne = false;
 			Renderer firstRenderer = null;
-			for(Renderer renderer : this.getAvailableRenderers()) {
+			for(Renderer renderer : list) {
 				if(firstRenderer == null) {
 					firstRenderer = renderer;
 				}
@@ -2073,36 +2356,26 @@ public class Window {
 					continue;
 				}
 			}
-			if(thisOne && wrapAround) {
+			if(thisOne) {
 				return firstRenderer;
 			}
 		}
-		return null;
-	}
-	
-	/** Returns the renderer after the currently active renderer in the list
-	 * returned by {@link Window#getAvailableRenderers()}.<br>
-	 * This method is thread-safe.
-	 * 
-	 * @return The renderer after the currently active renderer in the list
-	 *         returned by {@link Window#getAvailableRenderers()} */
-	public final Renderer getNextRenderer() {
-		return this.getNextRenderer(true);
+		return !list.isEmpty() ? list.get(0) : null;
 	}
 	
 	/** Returns the renderer before the currently active renderer in the list
 	 * returned by {@link Window#getAvailableRenderers()}.<br>
 	 * This method is thread-safe.
 	 * 
-	 * @param wrapAround Whether or not the last renderer in the list should be
-	 *            returned if the currently active renderer happens to be the
-	 *            first one in the list
 	 * @return The renderer before the currently active renderer in the list
 	 *         returned by {@link Window#getAvailableRenderers()} */
-	public final Renderer getPreviousRenderer(boolean wrapAround) {
+	public final Renderer getPreviousRenderer() {
 		final Renderer activeRenderer = this.getActiveRenderer();
+		List<Renderer> list = this.getAvailableRenderers();
 		if(activeRenderer != null) {
-			List<Renderer> list = this.getAvailableRenderers();
+			if(!list.isEmpty() && list.get(0) == activeRenderer) {
+				return null;
+			}
 			boolean thisOne = false;
 			Renderer lastRenderer = null;
 			for(int i = list.size() - 1; i >= 0; i--) {
@@ -2118,21 +2391,87 @@ public class Window {
 					continue;
 				}
 			}
-			if(thisOne && wrapAround) {
+			if(thisOne) {
 				return lastRenderer;
 			}
 		}
-		return null;
+		return !list.isEmpty() ? list.get(list.size() - 1) : null;
 	}
 	
-	/** Returns the renderer before the currently active renderer in the list
-	 * returned by {@link Window#getAvailableRenderers()}.<br>
+	/** Returns a list of all of this {@link Window}'s available
+	 * {@link InputCallback input callbacks}, some of which may or may not be
+	 * instances of {@link Game} or {@link Renderer}.<br>
 	 * This method is thread-safe.
 	 * 
-	 * @return The renderer before the currently active renderer in the list
-	 *         returned by {@link Window#getAvailableRenderers()} */
-	public final Renderer getPreviousRenderer() {
-		return this.getPreviousRenderer(true);
+	 * @return A list of all of this Window's available input callbacks */
+	public final List<InputCallback> getAvailableInputCallbacks() {
+		List<InputCallback> list = new ArrayList<>();
+		list.addAll(this.inputListeners);
+		for(Game game : this.games) {
+			if(!list.contains(game)) {
+				list.add(game);
+			}
+		}
+		for(Renderer renderer : this.renderers) {
+			if(renderer instanceof InputCallback) {
+				InputCallback listener = (InputCallback) renderer;
+				if(!list.contains(listener)) {
+					list.add(listener);
+				}
+			}
+		}
+		Renderer activeRenderer = this.getActiveRenderer();
+		if(activeRenderer instanceof InputCallback) {
+			InputCallback listener = (InputCallback) activeRenderer;
+			if(!list.contains(listener)) {
+				list.add(listener);
+			}
+		}
+		return list;
+	}
+	
+	/** Returns a list of all of this {@link Window}'s available
+	 * {@link MenuProvider menu providers}, some of which may or may not be
+	 * instances of {@link Game}, {@link Renderer}, or
+	 * {@link InputCallback}.<br>
+	 * This method is thread-safe.
+	 * 
+	 * @return A list of all of this Window's available menu providers */
+	public final List<MenuProvider> getAvailableMenuProviders() {
+		List<MenuProvider> list = new ArrayList<>();
+		list.addAll(this.menuProviders);
+		for(Game game : this.games) {
+			if(game instanceof MenuProvider) {
+				MenuProvider provider = (MenuProvider) game;
+				if(!list.contains(provider)) {
+					list.add(provider);
+				}
+			}
+		}
+		for(Renderer renderer : this.renderers) {
+			if(renderer instanceof MenuProvider) {
+				MenuProvider provider = (MenuProvider) renderer;
+				if(!list.contains(provider)) {
+					list.add(provider);
+				}
+			}
+		}
+		for(InputCallback listener : this.inputListeners) {
+			if(listener instanceof MenuProvider) {
+				MenuProvider provider = (MenuProvider) listener;
+				if(!list.contains(provider)) {
+					list.add(provider);
+				}
+			}
+		}
+		Renderer activeRenderer = this.getActiveRenderer();
+		if(activeRenderer instanceof MenuProvider) {
+			MenuProvider provider = (MenuProvider) activeRenderer;
+			if(!list.contains(provider)) {
+				list.add(provider);
+			}
+		}
+		return list;
 	}
 	
 }

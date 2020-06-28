@@ -19,6 +19,7 @@
 package com.gmail.br45entei.thread;
 
 import com.gmail.br45entei.util.BufferUtil;
+import com.gmail.br45entei.util.BufferUtil.DirectBuffer;
 import com.gmail.br45entei.util.CodeUtil;
 
 import java.awt.image.BufferedImage;
@@ -26,8 +27,6 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.BufferUnderflowException;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.util.HashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
@@ -37,6 +36,7 @@ import org.jcodec.api.SequenceEncoder;
 import org.jcodec.common.Codec;
 import org.jcodec.common.Format;
 import org.jcodec.common.io.NIOUtils;
+import org.jcodec.common.io.SeekableByteChannel;
 import org.jcodec.common.model.ColorSpace;
 import org.jcodec.common.model.Picture;
 import org.jcodec.common.model.Rational;
@@ -45,6 +45,7 @@ import org.lwjgl.opengl.GL11;
 /** Helper thread used to capture a frame of graphics data from OpenGL and
  * encode it into a frame of video.
  * 
+ * @since 1.0
  * @author Brian_Entei
  * @see VideoRecordingCallback
  * @see #registerCallback(VideoRecordingCallback)
@@ -210,15 +211,16 @@ public class VideoHelper extends Thread {
 		
 	}
 	
-	private final HashMap<Integer, ByteBuffer> bufferMap = new HashMap<>();
+	private final HashMap<Integer, DirectBuffer<FloatBuffer>> bufferMap = new HashMap<>();
 	private final HashMap<Integer, float[]> arrayMap = new HashMap<>();
 	
-	private final FloatBuffer getFloatBuffer(int size) {
+	@SuppressWarnings("resource")
+	private final DirectBuffer<FloatBuffer> getFloatBuffer(int size) {
 		Integer key = Integer.valueOf(size);
-		ByteBuffer buffer = this.bufferMap.get(key);
+		DirectBuffer<FloatBuffer> buffer = this.bufferMap.get(key);
 		if(buffer == null) {
 			try {
-				buffer = ByteBuffer.allocateDirect((size * Float.SIZE) / Byte.SIZE).order(ByteOrder.nativeOrder());
+				buffer = new DirectBuffer<>(size, FloatBuffer.class);
 			} catch(OutOfMemoryError ex) {
 				this.ex = ex;
 				System.err.println("Failed to record video frame: ".concat(ex.getClass().getName()).concat(": ").concat(ex.getMessage() == null ? "null" : ex.getMessage()));
@@ -229,7 +231,7 @@ public class VideoHelper extends Thread {
 		} else {
 			buffer.rewind();
 		}
-		return buffer.asFloatBuffer();
+		return buffer;
 	}
 	
 	private final float[] getFloatArray(int size) {
@@ -278,7 +280,7 @@ public class VideoHelper extends Thread {
 	 * @param viewport The area of graphics data to capture
 	 * @return Whether or not the frame was captured and enqueued for
 	 *         encoding */
-	@SuppressWarnings("unused")
+	@SuppressWarnings({"unused", "resource"})
 	public final boolean recordFrame(Rectangle viewport) {
 		if(this.stopEncoding) {
 			return false;
@@ -294,10 +296,19 @@ public class VideoHelper extends Thread {
 		return true;*/
 		try {
 			int size = viewport.width * viewport.height * 3;
-			FloatBuffer imageData = this.getFloatBuffer(size);
+			DirectBuffer<FloatBuffer> imageData = this.getFloatBuffer(size);
+			if(imageData == null) {
+				return false;
+			}
 			float[] data = this.getFloatArray(size);
-			GL11.glReadPixels(viewport.x, viewport.y, viewport.width, viewport.height, GL11.GL_RGB, GL11.GL_FLOAT, imageData);
-			new VideoFrameTask(this, BufferUtil.getData(imageData, data), viewport);
+			if(data == null) {
+				this.bufferMap.remove(Integer.valueOf(size));
+				imageData.close();
+				imageData = null;
+				return false;
+			}
+			GL11.glReadPixels(viewport.x, viewport.y, viewport.width, viewport.height, GL11.GL_RGB, GL11.GL_FLOAT, imageData.getBufferView());
+			new VideoFrameTask(this, BufferUtil.getData(imageData.getBufferView(), data), viewport);
 			return true;
 		} catch(OutOfMemoryError ex) {
 			ex.printStackTrace();
@@ -380,14 +391,16 @@ public class VideoHelper extends Thread {
 		return contained;
 	}
 	
-	/** Tells this VideoHelperThread to start recording.
+	/** Tells this VideoHelper to start recording.
 	 * 
 	 * @param fps The fps to record at.
 	 * @param width The width of the screen to record at.
 	 * @param height The height of the screen to record at.
 	 * @throws IllegalArgumentException Thrown if any of the arguments are below
-	 *             <code>1</code>. */
-	public final void startRecording(int fps, int width, int height) throws IllegalArgumentException {
+	 *             <code>1</code>.
+	 * @throws IllegalStateException Thrown if an {@link OutOfMemoryError}
+	 *             occurred while initializing internal video buffers */
+	public final void startRecording(int fps, int width, int height) throws IllegalArgumentException, IllegalStateException {
 		if(fps <= 0) {
 			throw new IllegalArgumentException("FPS must be greater than zero! FPS given: ".concat(Integer.toString(fps)));
 		}
@@ -404,9 +417,22 @@ public class VideoHelper extends Thread {
 		this.width = width;
 		this.height = height;
 		this.stopEncoding = this.stopAcceptingNewFrames = false;
+		int size = width * height * 3;
+		@SuppressWarnings("resource")
+		DirectBuffer<FloatBuffer> db = this.getFloatBuffer(size);
+		if(db == null) {
+			throw new IllegalStateException("Out of memory!");
+		}
+		if(this.getFloatArray(size) == null) {
+			@SuppressWarnings("resource")
+			DirectBuffer<FloatBuffer> shutUpEclipseThisISThe_db = this.bufferMap.remove(Integer.valueOf(size));
+			db.close();
+			shutUpEclipseThisISThe_db.close();
+			throw new IllegalStateException("Out of memory!");
+		}
 	}
 	
-	/** Tells this VideoHelperThread to stop recording if it is doing so. */
+	/** Tells this VideoHelper to stop recording if it is doing so. */
 	public final void stopEncoding() {
 		this.stopEncoding = this.stopAcceptingNewFrames = true;
 	}
@@ -418,15 +444,22 @@ public class VideoHelper extends Thread {
 		return this.encoder != null && this.outputStream != null;// && this.videoFile != null;
 	}
 	
-	/** Tells this VideoHelperThread to stop accepting new frames. */
+	/** Tells this VideoHelper to stop accepting new frames from the various
+	 * {@link #recordFrame(Rectangle) recordFrame(...)} methods. */
 	public final void stopAcceptingNewFrames() {
 		this.stopAcceptingNewFrames = true;
 	}
 	
+	/** Returns Whether or not this VideoHelper is accepting new frames from the
+	 * various {@link #recordFrame(Rectangle) recordFrame(...)} methods.
+	 * 
+	 * @return Whether or not this VideoHelper is accepting new frames */
 	public final boolean isAcceptingNewFrames() {
 		return !this.stopEncoding && !this.stopAcceptingNewFrames && this.isRecording();
 	}
 	
+	/** Tells this VideoHelper to start accepting new frames from the various
+	 * {@link #recordFrame(Rectangle) recordFrame(...)} methods. */
 	public final void startAcceptingNewFrames() {
 		if(this.stopEncoding) {
 			return;
@@ -516,17 +549,29 @@ public class VideoHelper extends Thread {
 					}
 				}
 			}
+			
+			for(Integer key : this.bufferMap.keySet()) {
+				@SuppressWarnings("resource")
+				DirectBuffer<?> db = this.bufferMap.get(key);
+				if(db != null) {
+					db.close();
+					continue;
+				}
+			}
+			this.bufferMap.clear();
 		}
 	}
 	
-	@SuppressWarnings("resource")
 	private final void openNextFile(String fileName) throws IOException {
 		this.closeCurrentFile();
 		this.stopEncoding = this.stopAcceptingNewFrames = false;
 		this.videoFile = getNextVideoFile(fileName);
 		this.outputStream = new FileOutputStream(this.videoFile);
 		// for Android use: AndroidSequenceEncoder
-		this.encoder = new SequenceEncoder(NIOUtils.writableChannel(this.videoFile), Rational.R(this.fps, 1), Format.MOV, Codec.H264, null);
+		@SuppressWarnings("resource")
+		SeekableByteChannel channel = NIOUtils.writableChannel(this.videoFile);
+		this.encoder = new SequenceEncoder(channel, Rational.R(this.fps, 1), Format.MOV, Codec.H264, null);
+		channel = null;// Shut up Eclipse, it gets closed later! >:(
 		//this.encoder = AWTSequenceEncoder.createSequenceEncoder(this.videoFile, this.fps);
 		this.blankPicture = blankPicture(this.width, this.height);
 		

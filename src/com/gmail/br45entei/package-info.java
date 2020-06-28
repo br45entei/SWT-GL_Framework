@@ -18,4 +18,4 @@
  *******************************************************************************/
 /** @since 1.0
  * @author Brian_Entei */
-package com.gmail.br45entei.game.input;
+package com.gmail.br45entei;

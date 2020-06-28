@@ -170,16 +170,19 @@ public class SWTResourceManager {
 		}
 		return image;
 	}
-	private static final int MISSING_IMAGE_SIZE = 10;
+	private static final int MISSING_IMAGE_SIZE = 16;
 	/**
 	 * @return the small {@link Image} that can be used as placeholder for missing image.
 	 */
-	private static Image getMissingImage() {
+	public static Image getMissingImage() {
 		Image image = new Image(Display.getCurrent(), MISSING_IMAGE_SIZE, MISSING_IMAGE_SIZE);
 		//
 		GC gc = new GC(image);
-		gc.setBackground(getColor(SWT.COLOR_RED));
+		gc.setBackground(getColor(SWT.COLOR_BLACK));
 		gc.fillRectangle(0, 0, MISSING_IMAGE_SIZE, MISSING_IMAGE_SIZE);
+		gc.setBackground(getColor(SWT.COLOR_DARK_MAGENTA));
+		gc.fillRectangle(0, 0, MISSING_IMAGE_SIZE / 2, MISSING_IMAGE_SIZE / 2);
+		gc.fillRectangle(MISSING_IMAGE_SIZE / 2, MISSING_IMAGE_SIZE / 2, MISSING_IMAGE_SIZE / 2, MISSING_IMAGE_SIZE / 2);
 		gc.dispose();
 		//
 		return image;

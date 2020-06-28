@@ -32,6 +32,7 @@ import static org.lwjgl.system.Checks.checkFunctions;
 
 /** Utility class containing common graphics library functions.
  *
+ * @since 1.0
  * @author Brian_Entei */
 public class GLUtil {
 	
@@ -202,19 +203,228 @@ public class GLUtil {
 		return new double[] {x / magnitude, y / magnitude, z / magnitude, w / magnitude};
 	}
 	
-	/** @param v The vector to normalize
-	 * @return A new array containing the normalized coordinates */
-	public static final strictfp double[] normalize(double[] v) {
-		double[] result = new double[v.length];
+	public static final strictfp float magnitude(float[] v) {
+		float magnitude = 0x0.0p0f;
+		for(int i = 0; i < v.length; i++) {
+			magnitude += v[i] * v[i];
+		}
+		return (float) Math.sqrt(magnitude);
+	}
+	
+	public static final strictfp double magnitude(double[] v) {
 		double magnitude = 0x0.0p0;
 		for(int i = 0; i < v.length; i++) {
 			magnitude += v[i] * v[i];
 		}
-		magnitude = Math.sqrt(magnitude);
+		return Math.sqrt(magnitude);
+	}
+	
+	/** @param v The vector to normalize
+	 * @return A new array containing the normalized coordinates */
+	public static final strictfp float[] normalize(float[] v) {
+		float[] result = new float[v.length];
+		float magnitude = magnitude(v);
 		for(int i = 0; i < v.length; i++) {
 			result[i] = v[i] / magnitude;
 		}
 		return result;
+	}
+	
+	/** @param v The vector to normalize
+	 * @return A new array containing the normalized coordinates */
+	public static final strictfp double[] normalize(double[] v) {
+		double[] result = new double[v.length];
+		double magnitude = magnitude(v);
+		for(int i = 0; i < v.length; i++) {
+			result[i] = v[i] / magnitude;
+		}
+		return result;
+	}
+	
+	public static final strictfp float[] add(float[] v1, float[] v2) {
+		int length = Math.min(v1.length, v2.length);
+		float[] sum = new float[length];
+		for(int i = 0; i < sum.length; i++) {
+			sum[i] = v1[i] + v2[i];
+		}
+		return sum;
+	}
+	
+	public static final strictfp float[] add(float[] v, float value) {
+		float[] sum = new float[v.length];
+		for(int i = 0; i < sum.length; i++) {
+			sum[i] = v[i] + value;
+		}
+		return sum;
+	}
+	
+	public static final strictfp double[] add(double[] v1, double[] v2) {
+		int length = Math.min(v1.length, v2.length);
+		double[] sum = new double[length];
+		for(int i = 0; i < sum.length; i++) {
+			sum[i] = v1[i] + v2[i];
+		}
+		return sum;
+	}
+	
+	public static final strictfp double[] add(double[] v, double value) {
+		double[] sum = new double[v.length];
+		for(int i = 0; i < sum.length; i++) {
+			sum[i] = v[i] + value;
+		}
+		return sum;
+	}
+	
+	public static final strictfp float[] subtract(float[] v1, float[] v2) {
+		int length = Math.min(v1.length, v2.length);
+		float[] difference = new float[length];
+		for(int i = 0; i < difference.length; i++) {
+			difference[i] = v1[i] - v2[i];
+		}
+		return difference;
+	}
+	
+	public static final strictfp float[] subtract(float[] v, float value) {
+		float[] difference = new float[v.length];
+		for(int i = 0; i < difference.length; i++) {
+			difference[i] = v[i] - value;
+		}
+		return difference;
+	}
+	
+	public static final strictfp double[] subtract(double[] v1, double[] v2) {
+		int length = Math.min(v1.length, v2.length);
+		double[] difference = new double[length];
+		for(int i = 0; i < difference.length; i++) {
+			difference[i] = v1[i] - v2[i];
+		}
+		return difference;
+	}
+	
+	public static final strictfp double[] subtract(double[] v, double value) {
+		double[] difference = new double[v.length];
+		for(int i = 0; i < difference.length; i++) {
+			difference[i] = v[i] - value;
+		}
+		return difference;
+	}
+	
+	public static final strictfp float[] multiply(float[] v1, float[] v2) {
+		int length = Math.min(v1.length, v2.length);
+		float[] product = new float[length];
+		for(int i = 0; i < product.length; i++) {
+			product[i] = v1[i] * v2[i];
+		}
+		return product;
+	}
+	
+	public static final strictfp float[] multiply(float[] v, float value) {
+		float[] product = new float[v.length];
+		for(int i = 0; i < product.length; i++) {
+			product[i] = v[i] * value;
+		}
+		return product;
+	}
+	
+	public static final strictfp double[] multiply(double[] v1, double[] v2) {
+		int length = Math.min(v1.length, v2.length);
+		double[] product = new double[length];
+		for(int i = 0; i < product.length; i++) {
+			product[i] = v1[i] * v2[i];
+		}
+		return product;
+	}
+	
+	public static final strictfp double[] multiply(double[] v, double value) {
+		double[] product = new double[v.length];
+		for(int i = 0; i < product.length; i++) {
+			product[i] = v[i] * value;
+		}
+		return product;
+	}
+	
+	public static final strictfp float[] divide(float[] v1, float[] v2) {
+		int length = Math.min(v1.length, v2.length);
+		float[] quotient = new float[length];
+		for(int i = 0; i < quotient.length; i++) {
+			quotient[i] = v1[i] / v2[i];
+		}
+		return quotient;
+	}
+	
+	public static final strictfp float[] divide(float divisor, float[] v) {
+		float[] quotient = new float[v.length];
+		for(int i = 0; i < quotient.length; i++) {
+			quotient[i] = divisor / v[i];
+		}
+		return quotient;
+	}
+	
+	public static final strictfp float[] divide(float[] v, float dividend) {
+		float[] quotient = new float[v.length];
+		for(int i = 0; i < quotient.length; i++) {
+			quotient[i] = v[i] / dividend;
+		}
+		return quotient;
+	}
+	
+	public static final strictfp double[] divide(double[] v1, double[] v2) {
+		int length = Math.min(v1.length, v2.length);
+		double[] quotient = new double[length];
+		for(int i = 0; i < quotient.length; i++) {
+			quotient[i] = v1[i] / v2[i];
+		}
+		return quotient;
+	}
+	
+	public static final strictfp double[] divide(double divisor, double[] v) {
+		double[] quotient = new double[v.length];
+		for(int i = 0; i < quotient.length; i++) {
+			quotient[i] = divisor / v[i];
+		}
+		return quotient;
+	}
+	
+	public static final strictfp double[] divide(double[] v, double dividend) {
+		double[] quotient = new double[v.length];
+		for(int i = 0; i < quotient.length; i++) {
+			quotient[i] = v[i] / dividend;
+		}
+		return quotient;
+	}
+	
+	public static final strictfp float[] cross(float[] u, float[] v) {
+		float uvi, uvj, uvk;
+		uvi = u[1] * v[2] - v[1] * u[2];
+		uvj = v[0] * u[2] - u[0] * v[2];
+		uvk = u[0] * v[1] - v[0] * u[1];
+		return new float[] {uvi, uvj, uvk};
+	}
+	
+	public static final strictfp double[] cross(double[] u, double[] v) {
+		double uvi, uvj, uvk;
+		uvi = u[1] * v[2] - v[1] * u[2];
+		uvj = v[0] * u[2] - u[0] * v[2];
+		uvk = u[0] * v[1] - v[0] * u[1];
+		return new double[] {uvi, uvj, uvk};
+	}
+	
+	public static final strictfp float dot(float[] v1, float[] v2) {
+		int length = Math.min(v1.length, v2.length);
+		float sum = 0x0.0p0f;
+		for(int i = 0; i < length; i++) {
+			sum += v1[i] * v2[i];
+		}
+		return sum;
+	}
+	
+	public static final strictfp double dot(double[] v1, double[] v2) {
+		int length = Math.min(v1.length, v2.length);
+		double sum = 0x0.0p0;
+		for(int i = 0; i < length; i++) {
+			sum += v1[i] * v2[i];
+		}
+		return sum;
 	}
 	
 	public static final strictfp float[] getIdentityf() {
@@ -678,31 +888,34 @@ public class GLUtil {
 			double a = roll * toRadiansMultiplier;
 			double cos = Math.cos(a);
 			double sin = Math.sin(a);
-			matrix = multMatrix4x4d(matrix, new double[] {cos, -sin, 0.0, 0.0,//
-					sin, cos, 0.0, 0.0,//
-					0.0, 0.0, 1.0, 0.0,//
-					0.0, 0.0, 0.0, 1.0//
-			});
+			matrix = multMatrix4x4d(matrix, new double[] {//@formatter:off
+					cos, -sin, 0.0, 0.0,
+					sin, cos, 0.0, 0.0,
+					0.0, 0.0, 1.0, 0.0,
+					0.0, 0.0, 0.0, 1.0
+			});//@formatter:on
 		}
 		if(p != posZero && p != negZero) {
 			double a = pitch * toRadiansMultiplier;
 			double cos = Math.cos(a);
 			double sin = Math.sin(a);
-			matrix = multMatrix4x4d(matrix, new double[] {1.0, 0.0, 0.0, 0.0,//
-					0.0, cos, -sin, 0.0,//
-					0.0, sin, cos, 0.0,//
-					0.0, 0.0, 0.0, 1.0//
-			});
+			matrix = multMatrix4x4d(matrix, new double[] {//@formatter:off
+					1.0, 0.0, 0.0, 0.0,
+					0.0, cos, -sin, 0.0,
+					0.0, sin, cos, 0.0,
+					0.0, 0.0, 0.0, 1.0
+			});//@formatter:on
 		}
 		if(y != posZero && y != negZero) {
 			double a = yaw * toRadiansMultiplier;
 			double cos = Math.cos(a);
 			double sin = Math.sin(a);
-			matrix = multMatrix4x4d(matrix, new double[] {cos, 0.0, sin, 0.0,//
-					0.0, 1.0, 0.0, 0.0,//
-					-sin, 0.0, cos, 0.0,//
-					0.0, 0.0, 0.0, 1.0//
-			});
+			matrix = multMatrix4x4d(matrix, new double[] {//@formatter:off
+					cos, 0.0, sin, 0.0,
+					0.0, 1.0, 0.0, 0.0,
+					-sin, 0.0, cos, 0.0,
+					0.0, 0.0, 0.0, 1.0
+			});//@formatter:on
 		}
 		return matrix;
 	}
@@ -861,8 +1074,39 @@ public class GLUtil {
 		return matrix;
 	}
 	
+	public static final strictfp double[] lookAtd(double[] eye, double[] target, double[] y) {
+		double[] fwd = normalize(subtract(target, eye));
+		double[] side = normalize(cross(fwd, y));
+		double[] up = normalize(cross(side, fwd));
+		fwd = multiply(fwd, -1.0);
+		eye = multiply(eye, -1.0);
+		
+		return new double[] {//@formatter:off
+				side[0],			up[0],			fwd[0],			0.0,
+				side[1],			up[1],			fwd[1],			0.0,
+				side[2],			up[2],			fwd[2],			0.0,
+				dot(side, eye),		dot(up, eye),	dot(fwd, eye),	1.0
+		};//@formatter:on
+	}
+	
+	public static final strictfp float[] lookAtf(float[] eye, float[] target, float[] y) {
+		float[] fwd = normalize(subtract(target, eye));
+		float[] side = normalize(cross(fwd, y));
+		float[] up = normalize(cross(side, fwd));
+		
+		eye = multiply(eye, -1.0f);
+		fwd = multiply(fwd, -1.0f);
+		
+		return new float[] {//@formatter:off
+				side[0],			up[0],			fwd[0],			0.0f,
+				side[1],			up[1],			fwd[1],			0.0f,
+				side[2],			up[2],			fwd[2],			0.0f,
+				dot(side, eye),		dot(up, eye),	dot(fwd, eye),	1.0f
+		};//@formatter:on
+	}
+	
 	public static final String matrix4x4ToStringf(float[] matrix, int numOfPlaces, boolean pad) {
-		StringBuilder sb = new StringBuilder(CodeUtil.lineOf('=', ((numOfPlaces + 5) * 4) - 1)).append("\r\n");
+		/*StringBuilder sb = new StringBuilder(CodeUtil.lineOf('=', ((numOfPlaces + 5) * 4) - 1)).append("\r\n");
 		
 		for(int i = 0; i < 4; i++) {
 			float d0 = matrix[0 + (4 * i)];
@@ -872,14 +1116,53 @@ public class GLUtil {
 			sb.append(d0 < 0.0 || Float.floatToIntBits(d0) == negZerof ? "" : " ").append(CodeUtil.limitDecimalNoRounding(d0, numOfPlaces, pad)).append(", ");
 			sb.append(d1 < 0.0 || Float.floatToIntBits(d1) == negZerof ? "" : " ").append(CodeUtil.limitDecimalNoRounding(d1, numOfPlaces, pad)).append(", ");
 			sb.append(d2 < 0.0 || Float.floatToIntBits(d2) == negZerof ? "" : " ").append(CodeUtil.limitDecimalNoRounding(d2, numOfPlaces, pad)).append(", ");
-			sb.append(d3 < 0.0 || Float.floatToIntBits(d3) == negZerof ? "" : " ").append(CodeUtil.limitDecimalNoRounding(d3, numOfPlaces, pad)).append(i == 3 ? "" : ",\r\n");
+			sb.append(d3 < 0.0 || Float.floatToIntBits(d3) == negZerof ? "" : " ").append(CodeUtil.limitDecimalNoRounding(d3, numOfPlaces, pad)).append(i == 3 ? ";" : ",\r\n");
+		}
+		
+		return sb.toString();*/
+		int largestWholePortionOfDecimal = 0;
+		for(int i = 0; i < 4; i++) {
+			float d0 = matrix[0 + (4 * i)];
+			float d1 = matrix[1 + (4 * i)];
+			float d2 = matrix[2 + (4 * i)];
+			float d3 = matrix[3 + (4 * i)];
+			String s0 = CodeUtil.limitDecimalNoRounding(d0, numOfPlaces, pad);
+			String s1 = CodeUtil.limitDecimalNoRounding(d1, numOfPlaces, pad);
+			String s2 = CodeUtil.limitDecimalNoRounding(d2, numOfPlaces, pad);
+			String s3 = CodeUtil.limitDecimalNoRounding(d3, numOfPlaces, pad);
+			int i0 = s0.contains(".") ? s0.substring(0, s0.indexOf(".")).length() - (s0.startsWith("-") ? 1 : 0) : 1;
+			int i1 = s1.contains(".") ? s1.substring(0, s1.indexOf(".")).length() - (s1.startsWith("-") ? 1 : 0) : 1;
+			int i2 = s2.contains(".") ? s2.substring(0, s2.indexOf(".")).length() - (s2.startsWith("-") ? 1 : 0) : 1;
+			int i3 = s3.contains(".") ? s3.substring(0, s3.indexOf(".")).length() - (s3.startsWith("-") ? 1 : 0) : 1;
+			largestWholePortionOfDecimal = Math.max(i0, Math.max(i1, Math.max(i2, Math.max(i3, largestWholePortionOfDecimal))));
+		}
+		StringBuilder sb = new StringBuilder(CodeUtil.lineOf('=', ((numOfPlaces + 5) * 4) + (largestWholePortionOfDecimal > 1 ? largestWholePortionOfDecimal + 1 : -1))).append("\r\n");
+		largestWholePortionOfDecimal += 1;
+		for(int i = 0; i < 4; i++) {
+			float d0 = matrix[0 + (4 * i)];
+			float d1 = matrix[1 + (4 * i)];
+			float d2 = matrix[2 + (4 * i)];
+			float d3 = matrix[3 + (4 * i)];
+			String s0 = CodeUtil.limitDecimalNoRounding(d0, numOfPlaces, pad);
+			String s1 = CodeUtil.limitDecimalNoRounding(d1, numOfPlaces, pad);
+			String s2 = CodeUtil.limitDecimalNoRounding(d2, numOfPlaces, pad);
+			String s3 = CodeUtil.limitDecimalNoRounding(d3, numOfPlaces, pad);
+			int i0 = s0.contains(".") ? s0.substring(0, s0.indexOf(".")).length() : 1;
+			int i1 = s1.contains(".") ? s1.substring(0, s1.indexOf(".")).length() : 1;
+			int i2 = s2.contains(".") ? s2.substring(0, s2.indexOf(".")).length() : 1;
+			int i3 = s3.contains(".") ? s3.substring(0, s3.indexOf(".")).length() : 1;
+			
+			sb.append(CodeUtil.lineOf(' ', Math.max(0, largestWholePortionOfDecimal - i0))).append(s0).append(", ");
+			sb.append(CodeUtil.lineOf(' ', Math.max(0, largestWholePortionOfDecimal - i1))).append(s1).append(", ");
+			sb.append(CodeUtil.lineOf(' ', Math.max(0, largestWholePortionOfDecimal - i2))).append(s2).append(", ");
+			sb.append(CodeUtil.lineOf(' ', Math.max(0, largestWholePortionOfDecimal - i3))).append(s3).append(i == 3 ? ";" : ",\r\n");
 		}
 		
 		return sb.toString();
 	}
 	
 	public static final String matrix4x4ToStringd(double[] matrix, int numOfPlaces, boolean pad) {
-		StringBuilder sb = new StringBuilder(CodeUtil.lineOf('=', ((numOfPlaces + 5) * 4) - 1)).append("\r\n");
+		/*StringBuilder sb = new StringBuilder(CodeUtil.lineOf('=', ((numOfPlaces + 5) * 4) - 1)).append("\r\n");
 		
 		for(int i = 0; i < 4; i++) {
 			double d0 = matrix[0 + (4 * i)];
@@ -889,7 +1172,47 @@ public class GLUtil {
 			sb.append(d0 < 0.0 || Double.doubleToLongBits(d0) == negZero ? "" : " ").append(CodeUtil.limitDecimalNoRounding(d0, numOfPlaces, pad)).append(", ");
 			sb.append(d1 < 0.0 || Double.doubleToLongBits(d1) == negZero ? "" : " ").append(CodeUtil.limitDecimalNoRounding(d1, numOfPlaces, pad)).append(", ");
 			sb.append(d2 < 0.0 || Double.doubleToLongBits(d2) == negZero ? "" : " ").append(CodeUtil.limitDecimalNoRounding(d2, numOfPlaces, pad)).append(", ");
-			sb.append(d3 < 0.0 || Double.doubleToLongBits(d3) == negZero ? "" : " ").append(CodeUtil.limitDecimalNoRounding(d3, numOfPlaces, pad)).append(i == 3 ? "" : ",\r\n");
+			sb.append(d3 < 0.0 || Double.doubleToLongBits(d3) == negZero ? "" : " ").append(CodeUtil.limitDecimalNoRounding(d3, numOfPlaces, pad)).append(i == 3 ? ";" : ",\r\n");
+		}
+		
+		return sb.toString();*/
+		
+		int largestWholePortionOfDecimal = 0;
+		for(int i = 0; i < 4; i++) {
+			double d0 = matrix[0 + (4 * i)];
+			double d1 = matrix[1 + (4 * i)];
+			double d2 = matrix[2 + (4 * i)];
+			double d3 = matrix[3 + (4 * i)];
+			String s0 = CodeUtil.limitDecimalNoRounding(d0, numOfPlaces, pad);
+			String s1 = CodeUtil.limitDecimalNoRounding(d1, numOfPlaces, pad);
+			String s2 = CodeUtil.limitDecimalNoRounding(d2, numOfPlaces, pad);
+			String s3 = CodeUtil.limitDecimalNoRounding(d3, numOfPlaces, pad);
+			int i0 = s0.contains(".") ? s0.substring(0, s0.indexOf(".")).length() - (s0.startsWith("-") ? 1 : 0) : 1;
+			int i1 = s1.contains(".") ? s1.substring(0, s1.indexOf(".")).length() - (s1.startsWith("-") ? 1 : 0) : 1;
+			int i2 = s2.contains(".") ? s2.substring(0, s2.indexOf(".")).length() - (s2.startsWith("-") ? 1 : 0) : 1;
+			int i3 = s3.contains(".") ? s3.substring(0, s3.indexOf(".")).length() - (s3.startsWith("-") ? 1 : 0) : 1;
+			largestWholePortionOfDecimal = Math.max(i0, Math.max(i1, Math.max(i2, Math.max(i3, largestWholePortionOfDecimal))));
+		}
+		StringBuilder sb = new StringBuilder(CodeUtil.lineOf('=', ((numOfPlaces + 5) * 4) + (largestWholePortionOfDecimal > 1 ? largestWholePortionOfDecimal + 1 : -1))).append("\r\n");
+		largestWholePortionOfDecimal += 1;
+		for(int i = 0; i < 4; i++) {
+			double d0 = matrix[0 + (4 * i)];
+			double d1 = matrix[1 + (4 * i)];
+			double d2 = matrix[2 + (4 * i)];
+			double d3 = matrix[3 + (4 * i)];
+			String s0 = CodeUtil.limitDecimalNoRounding(d0, numOfPlaces, pad);
+			String s1 = CodeUtil.limitDecimalNoRounding(d1, numOfPlaces, pad);
+			String s2 = CodeUtil.limitDecimalNoRounding(d2, numOfPlaces, pad);
+			String s3 = CodeUtil.limitDecimalNoRounding(d3, numOfPlaces, pad);
+			int i0 = s0.contains(".") ? s0.substring(0, s0.indexOf(".")).length() : 1;
+			int i1 = s1.contains(".") ? s1.substring(0, s1.indexOf(".")).length() : 1;
+			int i2 = s2.contains(".") ? s2.substring(0, s2.indexOf(".")).length() : 1;
+			int i3 = s3.contains(".") ? s3.substring(0, s3.indexOf(".")).length() : 1;
+			
+			sb.append(CodeUtil.lineOf(' ', Math.max(0, largestWholePortionOfDecimal - i0))).append(s0).append(", ");
+			sb.append(CodeUtil.lineOf(' ', Math.max(0, largestWholePortionOfDecimal - i1))).append(s1).append(", ");
+			sb.append(CodeUtil.lineOf(' ', Math.max(0, largestWholePortionOfDecimal - i2))).append(s2).append(", ");
+			sb.append(CodeUtil.lineOf(' ', Math.max(0, largestWholePortionOfDecimal - i3))).append(s3).append(i == 3 ? ";" : ",\r\n");
 		}
 		
 		return sb.toString();

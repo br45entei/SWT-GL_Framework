@@ -39,6 +39,7 @@ import org.eclipse.swt.widgets.Widget;
  * may be specified.
  * </p>
  *
+ * @since 1.0
  * @author Brian_Entei */
 public class RendererMenuItem extends MenuItem {
 	

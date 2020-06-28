@@ -59,8 +59,8 @@ import org.eclipse.swt.widgets.TypedListener;
 /** This class provides a simple way to retrieve input from and manage the
  * mouse and system cursor.
  *
- * @author Brian_Entei
- * @since 1.0 */
+ * @since 1.0
+ * @author Brian_Entei */
 public class Mouse {
 	
 	/** The left mouse button */
@@ -215,12 +215,12 @@ public class Mouse {
 			if(captured && !modal && !movingCursor) {
 				if(shellActive) {
 					setLocation(center);
-					deltaX = mLoc.x - center.x;
-					deltaY = mLoc.y - center.y;
+					deltaX += mLoc.x - center.x;
+					deltaY += mLoc.y - center.y;
 				}
 			} else if(!captured || modal) {
-				deltaX = mLoc.x - lastFreeX;
-				deltaY = mLoc.y - lastFreeY;
+				deltaX += mLoc.x - lastFreeX;
+				deltaY += mLoc.y - lastFreeY;
 				lastFreeX = mLoc.x;
 				lastFreeY = mLoc.y;
 			}
@@ -425,7 +425,10 @@ public class Mouse {
 		return captured;
 	}
 	
-	/** Sets the capture state of the cursor within the cursor canvas.
+	/** Sets the capture state of the cursor within the cursor canvas.<br>
+	 * While the cursor is captured, it is kept in the center of the cursor
+	 * canvas, and movement away from the center is recorded as
+	 * {@link Mouse#getDXYSWT() deltaX and deltaY}.
 	 * 
 	 * @param captured Whether or not the cursor should be captured within the
 	 *            cursor canvas

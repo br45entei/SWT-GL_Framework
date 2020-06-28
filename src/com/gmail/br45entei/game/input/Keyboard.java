@@ -31,8 +31,8 @@ import org.eclipse.swt.widgets.Display;
 
 /** This class provides a simple way to retrieve input from the keyboard.
  *
- * @author Brian_Entei
- * @since 1.0 */
+ * @since 1.0
+ * @author Brian_Entei */
 public class Keyboard {
 	
 	protected static volatile boolean[] lastKeyboardButtonStates = new boolean[256];
@@ -126,7 +126,9 @@ public class Keyboard {
 		return handled;
 	}
 	
-	/** Sets the keyboard poll mode.
+	/** Sets the keyboard poll mode.<br>
+	 * <b>Note:</b>&nbsp;This feature may only be available on Windows
+	 * platforms.
 	 * 
 	 * @param asynchronous Whether or not the keyboard can be polled even when
 	 *            the {@link Mouse#getCursorCanvas() cursor canvas}' window is
@@ -159,10 +161,10 @@ public class Keyboard {
 				}
 				break;
 			case LINUX:
-				//TODO
+				// TODO Find a way to dynamically poll the keyboard as is done above for Windows platforms
 				break;
 			case MACOSX:
-				//TODO
+				// TODO Find a way to dynamically poll the keyboard as is done above for Windows platforms
 				break;
 			case UNKNOWN:
 			default:

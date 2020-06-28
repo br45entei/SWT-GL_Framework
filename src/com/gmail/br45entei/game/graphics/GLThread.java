@@ -37,16 +37,18 @@ import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Display;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL30;
 import org.lwjgl.opengl.GLCapabilities;
 import org.lwjgl.opengl.swt.GLCanvas;
 import org.lwjgl.opengl.swt.GLData;
 
 /** This class is the main OpenGL thread.
  *
- * @author Brian_Entei
- * @since 1.0 */
+ * @since 1.0
+ * @author Brian_Entei */
 public final class GLThread extends Thread {
 	
+	protected final Window window;
 	protected final GLCanvas glCanvas;
 	protected volatile GLCapabilities glCaps;
 	protected final boolean[] state = {false};
@@ -74,13 +76,18 @@ public final class GLThread extends Thread {
 	private volatile boolean recordingWaitingOnRemainingFrames = false;
 	private final Rectangle recordingViewport = new Rectangle(0, 0, 800, 600);
 	
-	/** Creates a new GLThread that will use the given GLCanvas.
+	/** Creates a new GLThread that will use the given {@link Window} and
+	 * {@link GLCanvas}.
 	 * 
+	 * @param window The Window that this thread will use (may be
+	 *            <tt><b>null</b></tt>)
 	 * @param glCanvas The GLCanvas that this thread will use */
-	public GLThread(GLCanvas glCanvas) {
+	public GLThread(Window window, GLCanvas glCanvas) {
 		super("GLThread");
 		this.setDaemon(true);
 		this.setPriority(Thread.MAX_PRIORITY);
+		
+		this.window = window;
 		this.glCanvas = glCanvas;
 		this.screenshotHelper.start();
 		this.videoHelper.start();
@@ -98,6 +105,13 @@ public final class GLThread extends Thread {
 				}
 			}
 		});
+	}
+	
+	/** Creates a new GLThread that will use the given {@link GLCanvas}.
+	 * 
+	 * @param glCanvas The GLCanvas that this thread will use */
+	public GLThread(GLCanvas glCanvas) {
+		this(null, glCanvas);
 	}
 	
 	/** {@inheritDoc} */
@@ -532,7 +546,6 @@ public final class GLThread extends Thread {
 			System.err.print(String.format("Renderer \"%s\" threw an exception while executing method %s(%s): ", name, method, parameters));
 			ex.printStackTrace(System.err);
 			System.err.flush();
-			return true;
 		}
 		return handled;
 	}
@@ -553,9 +566,16 @@ public final class GLThread extends Thread {
 	 * 
 	 * @param renderer The {@link Renderer renderer} that this GLThread will
 	 *            attempt to use to display graphics
+	 * @param readAndDispatch Whether or not {@link Display#readAndDispatch()}
+	 *            should be called if the thread invoking this method is not
+	 *            this GLThread, and a display is found for it
 	 * @return Whether or not this {@link GLThread} was able to begin using the
 	 *         specified renderer */
-	public final boolean setRenderer(final Renderer renderer) {
+	public final boolean setRenderer(final Renderer renderer, final boolean readAndDispatch) {
+		if(this.renderer == renderer) {
+			return true;
+		}
+		
 		if(!this.isAlive()) {
 			if(this.getState() == Thread.State.TERMINATED) {
 				return false;
@@ -565,12 +585,24 @@ public final class GLThread extends Thread {
 		}
 		if(Thread.currentThread() != this) {
 			final Boolean[] rtrn = {null};
-			this.tasksToRun.add(() -> {
-				rtrn[0] = Boolean.valueOf(this.setRenderer(renderer));
-			});
+			Runnable task = () -> {
+				rtrn[0] = Boolean.valueOf(this.setRenderer(renderer, false));
+			};
+			this.tasksToRun.add(task);
 			Display display;
-			while(rtrn[0] == null) {
-				display = Display.getCurrent();
+			long now, taskRemovalTime = 0L;
+			while(this.isRunning() && rtrn[0] == null) {
+				if(!this.tasksToRun.contains(task)) {
+					now = System.currentTimeMillis();
+					if(taskRemovalTime == 0L) {
+						taskRemovalTime = now;
+					} else {
+						if(now - taskRemovalTime >= 500L) {
+							return false;
+						}
+					}
+				}
+				display = readAndDispatch ? Display.getCurrent() : null;
 				if(display != null) {
 					if(!display.readAndDispatch()) {
 						CodeUtil.sleep(10L);
@@ -581,6 +613,8 @@ public final class GLThread extends Thread {
 			}
 			return rtrn[0].booleanValue();
 		}
+		//System.out.println(String.format("GLThread.setRenderer(%s, %s);", (renderer == null ? "null" : renderer.getName()), Boolean.toString(readAndDispatch)));
+		
 		// (Run Tasks) We're technically in a running task right now (see above code logic),
 		// but we'll go ahead and update the deltaTime and then start another 'new frame' here:
 		
@@ -612,14 +646,14 @@ public final class GLThread extends Thread {
 				if(!initialized) {
 					try {
 						renderer.initialize();
-						try {
-							initialized = renderer.isInitialized();
-						} catch(Throwable ex) {
-							handleRendererException(oldRenderer, ex, "isInitialized");
-							return false;
-						}
 					} catch(Throwable ex) {
 						handleRendererException(oldRenderer, ex, "initialize");
+						return false;
+					}
+					try {
+						initialized = renderer.isInitialized();
+					} catch(Throwable ex) {
+						handleRendererException(oldRenderer, ex, "isInitialized");
 						return false;
 					}
 				}
@@ -630,6 +664,15 @@ public final class GLThread extends Thread {
 					renderer.onSelected();
 				} catch(Throwable ex) {
 					handleRendererException(oldRenderer, ex, "onSelected");
+					return false;
+				}
+				
+				Rectangle oldViewport = new Rectangle(0, 0, 0, 0);
+				Rectangle newViewport = new Rectangle(0, 0, this.lastWidth, this.lastHeight);
+				try {
+					renderer.onViewportChanged(oldViewport, newViewport);
+				} catch(Throwable ex) {
+					handleRendererException(oldRenderer, ex, "onViewportChanged", oldViewport, newViewport);
 					return false;
 				}
 			}
@@ -678,6 +721,18 @@ public final class GLThread extends Thread {
 			this.lastFrameTime = lastFrameTime;
 			this.deltaTime = deltaTime;
 		}
+	}
+	
+	/** Sets the renderer that this {@link GLThread} will attempt to use to
+	 * display graphics.<br>
+	 * This method is thread safe.
+	 * 
+	 * @param renderer The {@link Renderer renderer} that this GLThread will
+	 *            attempt to use to display graphics
+	 * @return Whether or not this {@link GLThread} was able to begin using the
+	 *         specified renderer */
+	public final boolean setRenderer(final Renderer renderer) {
+		return this.setRenderer(renderer, true);
 	}
 	
 	/** Returns the delta time of the current frame from the last.<br>
@@ -924,15 +979,7 @@ public final class GLThread extends Thread {
 			try {
 				initialized = renderer.isInitialized();
 			} catch(Throwable ex) {
-				boolean handled = false;
-				try {
-					handled = renderer.handleException(ex, "isInitialized");
-				} catch(Throwable ex1) {
-					ex.addSuppressed(ex1);
-					handled = false;
-				}
-				if(!handled) {
-					ex.printStackTrace();
+				if(!handleRendererException(renderer, ex, "isInitialized")) {
 					this.renderer = null;
 					return;
 				}
@@ -1041,6 +1088,44 @@ public final class GLThread extends Thread {
 			
 			this.lastVsync = this.lastSwap == 1;
 			
+			System.out.println(GL11.glGetString(GL11.GL_VENDOR));
+			System.out.println(GL11.glGetString(GL11.GL_RENDERER));
+			System.out.println(GL11.glGetString(GL11.GL_VERSION));
+			String lineSeparator = CodeUtil.getProperty("line.separator").concat("\t");
+			
+			// Thanks to Cornix over at the LWJGL forums for this if/else block: http://forum.lwjgl.org/index.php?topic=5400.msg28616#msg28616
+			String extensions;
+			if(this.getGLData().majorVersion >= 3) {
+				extensions = "";
+				int numExtensions = GL11.glGetInteger(GL30.GL_NUM_EXTENSIONS);
+				for(int i = 0; i < numExtensions; i++) {
+					extensions = extensions.concat(GL30.glGetStringi(GL11.GL_EXTENSIONS, i)).concat(lineSeparator);
+				}
+			} else {
+				String list = GL11.glGetString(GL11.GL_EXTENSIONS);
+				extensions = (list == null ? "" : list).trim().replace(" ", lineSeparator);
+			}
+			System.out.println("Extensions:".concat(lineSeparator).concat(extensions.trim()));
+			System.out.println("GL 1.1.0: ".concat(Boolean.toString(GLUtil.isGL11Available())));
+			System.out.println("\tGL11.GL_NV_vertex_buffer_unified_memory: ".concat(Boolean.toString(GLUtil.isGL11Available(this.glCaps, true))));//GL_NV_vertex_buffer_unified_memory
+			System.out.println("GL 1.2.0: ".concat(Boolean.toString(GLUtil.isGL12Available())));
+			System.out.println("GL 1.3.0: ".concat(Boolean.toString(GLUtil.isGL13Available())));
+			System.out.println("GL 1.4.0: ".concat(Boolean.toString(GLUtil.isGL14Available())));
+			System.out.println("GL 1.5.0: ".concat(Boolean.toString(GLUtil.isGL15Available())));
+			System.out.println("GL 2.0.0: ".concat(Boolean.toString(GLUtil.isGL20Available())));
+			System.out.println("GL 2.1.0: ".concat(Boolean.toString(GLUtil.isGL21Available())));
+			System.out.println("GL 3.0.0: ".concat(Boolean.toString(GLUtil.isGL30Available())));
+			System.out.println("GL 3.1.0: ".concat(Boolean.toString(GLUtil.isGL31Available())));
+			System.out.println("GL 3.2.0: ".concat(Boolean.toString(GLUtil.isGL32Available())));
+			System.out.println("GL 3.3.0: ".concat(Boolean.toString(GLUtil.isGL33Available())));
+			System.out.println("GL 4.0.0: ".concat(Boolean.toString(GLUtil.isGL40Available())));
+			System.out.println("GL 4.1.0: ".concat(Boolean.toString(GLUtil.isGL41Available())));
+			System.out.println("GL 4.2.0: ".concat(Boolean.toString(GLUtil.isGL42Available())));
+			System.out.println("GL 4.3.0: ".concat(Boolean.toString(GLUtil.isGL43Available())));
+			System.out.println("GL 4.4.0: ".concat(Boolean.toString(GLUtil.isGL44Available())));
+			System.out.println("GL 4.5.0: ".concat(Boolean.toString(GLUtil.isGL45Available())));
+			System.out.println("GL 4.6.0: ".concat(Boolean.toString(GLUtil.isGL46Available())));
+			
 			this.nanoTime = System.nanoTime();
 			this.updateFrameTime();
 			
@@ -1053,6 +1138,19 @@ public final class GLThread extends Thread {
 			
 		} finally {
 			this.state[0] = false;
+			
+			if(this.window != null) {
+				for(Renderer renderer : this.window.getAvailableRenderers()) {
+					try {
+						renderer.onCleanup();
+					} catch(Throwable ex) {
+						if(!handleRendererException(renderer, ex, "onCleanup")) {
+							this.window.unregisterRenderer(renderer);
+							continue;
+						}
+					}
+				}
+			}
 			
 			GL.destroy();
 			this.glCanvas.deleteContext();

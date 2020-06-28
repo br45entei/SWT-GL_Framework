@@ -18,7 +18,10 @@
  *******************************************************************************/
 package com.gmail.br45entei.game.input;
 
+import com.badlogic.gdx.controllers.Controller;
+import com.gmail.br45entei.game.graphics.Renderer;
 import com.gmail.br45entei.game.input.Keyboard.Keys;
+import com.gmail.br45entei.game.ui.Window;
 import com.gmail.br45entei.util.CodeUtil;
 
 import java.io.PrintStream;
@@ -29,8 +32,8 @@ import java.io.PrintStream;
  * <b>Note:</b>&nbsp;The methods that this interface defines are called by the
  * {@link com.gmail.br45entei.game.ui.Window Window}'s display thread.
  *
- * @author Brian_Entei
- * @since 1.0 */
+ * @since 1.0
+ * @author Brian_Entei */
 public interface InputCallback {
 	
 	/** @return Whether or not {@link #initialize()} has been called at least
@@ -48,15 +51,23 @@ public interface InputCallback {
 		return false;
 	}
 	
-	/** Called once per frame to allow this callback to receive and use input
-	 * data
+	/** Called once per frame by the {@link Window}'s display thread to allow
+	 * this callback to receive and use input
+	 * data.<br>
+	 * If this InputCallback also implements {@link Renderer}, and it is not the
+	 * Window's {@link Window#getActiveRenderer() active renderer}, then this
+	 * method is <b>not</b> called.
 	 * 
 	 * @param deltaTime The delta time of the current frame from the last (will
 	 *            be the same value in {@link #update(double)}) */
 	public void input(double deltaTime);
 	
-	/** Called once per frame to allow this callback to update anything it needs
-	 * to before the next frame
+	/** Called once per frame by the {@link Window}'s display thread to allow
+	 * this callback to update anything it needs
+	 * to before the next frame.<br>
+	 * If this InputCallback also implements {@link Renderer}, and it is not the
+	 * Window's {@link Window#getActiveRenderer() active renderer}, then this
+	 * method is <b>not</b> called.
 	 * 
 	 * @param deltaTime The delta time of the current frame from the last (will
 	 *            be the same value in {@link #input(double)}) */
@@ -137,6 +148,16 @@ public interface InputCallback {
 	 * @param key The {@link Keys Key} that was just released */
 	public void onKeyUp(int key);
 	
+	/** Called whenever a {@link Controller} is connected to the system.
+	 * 
+	 * @param controller The controller that was just connected */
+	public void onControllerConnected(Controller controller);
+	
+	/** Called whenever a {@link Controller} is removed from the system.
+	 * 
+	 * @param controller The controller that was just removed */
+	public void onControllerDisconnected(Controller controller);
+	
 	/** Gives this callback a chance to handle any exceptions that it might
 	 * throw.<br>
 	 * If the exception is not handled, this callback is removed from the
@@ -146,7 +167,7 @@ public interface InputCallback {
 	 * @param method This callback's method that threw the error
 	 * @param params The method parameters (if any) that were passed in
 	 * @return Whether or not this callback has handled the exception */
-	/*default */public boolean handleException(Throwable ex, String method, Object... params);/* {
+	/*default */public boolean handleException(Throwable ex, String method, Object... params);/* {//@formatter:off
 		StringBuilder sb = new StringBuilder();
 		for(int i = 0; i < params.length; i++) {
 			Object param = params[i];
@@ -166,7 +187,7 @@ public interface InputCallback {
 		System.err.println(String.format("An InputCallback (class \"%s\") threw an exception while executing method %s(%s)!", this.getClass().getName(), method, parameters));
 		System.err.flush();
 		return false;
-	}*/
+	}*///@formatter:on
 	
 	/** InputLogger is a class which implements {@link InputCallback} and logs
 	 * the input it receives to a user-provided {@link PrintStream}.
@@ -259,6 +280,16 @@ public interface InputCallback {
 		@Override
 		public void onKeyUp(int key) {
 			this.pr.println(String.format("On key up:   %s", Keys.getNameForKey(key)));
+		}
+		
+		@Override
+		public void onControllerConnected(Controller controller) {
+			
+		}
+		
+		@Override
+		public void onControllerDisconnected(Controller controller) {
+			
 		}
 		
 		@Override

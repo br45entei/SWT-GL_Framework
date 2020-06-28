@@ -18,6 +18,7 @@
  *******************************************************************************/
 package com.gmail.br45entei.game;
 
+import com.badlogic.gdx.controllers.Controller;
 import com.gmail.br45entei.game.graphics.Renderer;
 import com.gmail.br45entei.game.input.InputCallback;
 import com.gmail.br45entei.game.ui.MenuProvider;
@@ -40,13 +41,14 @@ import org.eclipse.swt.graphics.Rectangle;
  * code intended for another thread (e.g. OpenGL code being called by the
  * Window's display thread or vice versa), or exceptions may be thrown.
  *
- * @author Brian_Entei
- * @since 1.0 */
+ * @since 1.0
+ * @author Brian_Entei */
 public interface Game extends Renderer, InputCallback {
 	
 	/** GameAdapter is a helper interface which extends {@link Game} and
 	 * implements all of its defined methods, except for {@link #getName()},
-	 * {@link #isInitialized()}, and {@link #initialize()}.<br>
+	 * {@link #isInitialized()}, {@link #initialize()}, and
+	 * {@link #onCleanup()}.<br>
 	 * <br>
 	 * Classes implementing this interface may <em>optionally</em> override any
 	 * of the methods defined by {@link Game} <em>except</em> for the above
@@ -122,6 +124,14 @@ public interface Game extends Renderer, InputCallback {
 		default public void onKeyUp(int key) {
 		}
 		
+		@Override
+		default public void onControllerConnected(Controller controller) {
+		}
+		
+		@Override
+		default public void onControllerDisconnected(Controller controller) {
+		}
+		
 		//=============================================================================================
 		
 		@Override
@@ -134,8 +144,9 @@ public interface Game extends Renderer, InputCallback {
 					toString = Objects.toString(param);
 				} else {
 					toString = param.toString();
-					if(toString.startsWith(param.getClass().getName().concat("@"))) {
-						toString = param.getClass().getName();
+					String className = param.getClass().getName();
+					if(toString.startsWith(className.concat("@"))) {
+						toString = className;
 					}
 				}
 				

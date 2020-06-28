@@ -31,8 +31,8 @@ import org.lwjgl.opengl.GL11;
 /** Renderer is an interface which defines OpenGL related methods which are
  * then called by the {@link GLThread}'s render loop.
  *
- * @author Brian_Entei
- * @since 1.0 */
+ * @since 1.0
+ * @author Brian_Entei */
 public interface Renderer {
 	
 	/** @return The name of this {@link Renderer} */
@@ -50,7 +50,8 @@ public interface Renderer {
 	 * selected for rendering. */
 	public void onSelected();
 	
-	/** Called by the {@link GLThread} when the {@link Window}'s viewport has changed.
+	/** Called by the {@link GLThread} when the {@link Window}'s viewport has
+	 * changed.
 	 * 
 	 * @param oldViewport The old viewport
 	 * @param newViewport The new viewport */
@@ -67,6 +68,10 @@ public interface Renderer {
 	 * unselected for rendering. */
 	public void onDeselected();
 	
+	/** Called by the {@link GLThread} when it is about to stop running, and is
+	 * getting ready to destroy the GL context. */
+	public void onCleanup();
+	
 	/** Gives this renderer a chance to handle any exceptions that it might
 	 * throw.<br>
 	 * If the exception is not handled, this renderer is deselected from the
@@ -76,7 +81,7 @@ public interface Renderer {
 	 * @param method This renderer's method that threw the error
 	 * @param params The method parameters (if any) that were passed in
 	 * @return Whether or not this renderer has handled the exception */
-	/*default */public boolean handleException(Throwable ex, String method, Object... params);/* {
+	/*default */public boolean handleException(Throwable ex, String method, Object... params);/* {//@formatter:off
 		StringBuilder sb = new StringBuilder();
 		for(int i = 0; i < params.length; i++) {
 			Object param = params[i];
@@ -96,7 +101,7 @@ public interface Renderer {
 		System.err.println(String.format("The renderer \"%s\" threw an exception while executing method %s(%s)!", this.getName(), method, parameters));
 		System.err.flush();
 		return false;
-	}*/
+	}*///@formatter:on
 	
 	//=======================================================================================================================
 	
@@ -234,6 +239,11 @@ public interface Renderer {
 		}
 		
 		@Override
+		public void onCleanup() {
+			this.initialized = false;
+		}
+		
+		@Override
 		public boolean handleException(Throwable ex, String method, Object... params) {
 			StringBuilder sb = new StringBuilder();
 			for(int i = 0; i < params.length; i++) {
@@ -276,6 +286,10 @@ public interface Renderer {
 		
 		@Override
 		public void onPopupMenuDeletion(Menu menu) {
+		}
+		
+		@Override
+		public void updateMenuItems() {
 		}
 		
 	}
