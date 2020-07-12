@@ -152,12 +152,12 @@ public strictfp class CubeTexture {
 		if(textures.length != this.textures.length) {
 			throw new IllegalArgumentException("Cube textures must have 6 textures!");
 		}
-		this.textures[0] = TextureLoader.getTextureIfExists(textures[1]);
-		this.textures[1] = TextureLoader.getTextureIfExists(textures[0]);
-		this.textures[2] = TextureLoader.getTextureIfExists(textures[2]);
-		this.textures[3] = TextureLoader.getTextureIfExists(textures[3]);
-		this.textures[4] = TextureLoader.getTextureIfExists(textures[4]);
-		this.textures[5] = TextureLoader.getTextureIfExists(textures[5]);
+		this.textures[0] = TextureLoader.getTexture(textures[1]);
+		this.textures[1] = TextureLoader.getTexture(textures[0]);
+		this.textures[2] = TextureLoader.getTexture(textures[2]);
+		this.textures[3] = TextureLoader.getTexture(textures[3]);
+		this.textures[4] = TextureLoader.getTexture(textures[4]);
+		this.textures[5] = TextureLoader.getTexture(textures[5]);
 	}
 	
 	/** @param cubeTexture The cube texture to copy */

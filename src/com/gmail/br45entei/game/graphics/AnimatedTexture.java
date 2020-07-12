@@ -1,0 +1,191 @@
+/*******************************************************************************
+ * 
+ * Copyright (C) 2020 Brian_Entei (br45entei@gmail.com)
+ * 
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * 
+ *******************************************************************************/
+package com.gmail.br45entei.game.graphics;
+
+import com.gmail.br45entei.game.ui.Window;
+
+import java.util.ArrayList;
+import java.util.Collection;
+
+/** Class used to store multiple textures and activate each one for a set amount
+ * of time before moving on to the next one, creating a single 'animated'
+ * texture.
+ * 
+ * @since 1.0
+ * @author Brian_Entei */
+public class AnimatedTexture {
+	
+	private volatile double millisBetweenChanges;
+	private final ArrayList<Texture> textures = new ArrayList<>();
+	private volatile int texIndex = 0;
+	private volatile double frameRenderCount = 0;
+	
+	/** Creates a new AnimatedTexture with the specified settings and textures.
+	 * 
+	 * @param millisBetweenChanges The time, in milliseconds, that each texture
+	 *            will display on screen before changing to the next texture
+	 * @param textures The textures that will make up this animated texture */
+	public AnimatedTexture(double millisBetweenChanges, Texture... textures) {
+		this.millisBetweenChanges = millisBetweenChanges;
+		final Texture missingNo = TextureLoader.getMissingTexture();
+		textures = textures == null ? new Texture[] {missingNo} : textures;
+		
+		for(int i = 0; i < textures.length; i++) {
+			Texture tex = textures[i];
+			if(tex == null) {
+				this.textures.add(missingNo);
+			} else {
+				this.textures.add(tex);
+			}
+		}
+	}
+	
+	/** Creates a new AnimatedTexture with the specified settings and textures.
+	 * 
+	 * @param textures The textures that will make up this animated texture */
+	public AnimatedTexture(Texture... textures) {
+		this(Window.getDefaultRefreshRate(), textures);
+	}
+	
+	private void advanceNextTexture() {
+		if(this.texIndex + 1 < this.textures.size()) {
+			this.texIndex++;
+		} else {
+			this.texIndex = 0;
+		}
+	}
+	
+	private void checkNextTexture(double deltaTime) {
+		this.frameRenderCount += deltaTime * 1000.0;
+		if(this.frameRenderCount >= this.millisBetweenChanges) {
+			this.frameRenderCount = 0;
+			this.advanceNextTexture();
+		}
+	}
+	
+	/** @param deltaTime The amount of time that has passed from the current
+	 *            frame to the last (usually in microseconds, or milliseconds /
+	 *            1000)
+	 * @return This AnimatedTexture */
+	public AnimatedTexture bind(double deltaTime) {
+		this.checkNextTexture(deltaTime);
+		
+		if(this.texIndex >= 0 && this.texIndex < this.textures.size()) {
+			this.textures.get(this.texIndex).bind();
+		}
+		return this;
+	}
+	
+	/** @return The Texture that this AnimatedTexture currently has selected for
+	 *         rendering */
+	public Texture getCurrentTexture() {
+		if(this.texIndex >= 0 && this.texIndex < this.textures.size()) {
+			return this.textures.get(this.texIndex);
+		}
+		return null;
+	}
+	
+	/** @return The total number of textures that this AnimatedTexture has
+	 *         stored */
+	public int getNumTextures() {
+		return this.textures.size();
+	}
+	
+	/** Returns a new array containing this AnimatedTexture's textures, in
+	 * order.<br>
+	 * Modifications to the returned array will not affect the contents of this
+	 * AnimatedTexture's internal list.
+	 * 
+	 * @return A new array containing this AnimatedTexture's textures, in
+	 *         order */
+	public Texture[] getTextures() {
+		return this.textures.toArray(new Texture[this.textures.size()]);
+	}
+	
+	/** Returns the Texture at the specified index.<br>
+	 * The index must be greater than or equal to zero, and less than the
+	 * {@link #getNumTextures() number of existing textures}.
+	 * 
+	 * @param index The zero-based index of the desired Texture
+	 * @return The Texture at the specified index, or <tt><b>null</b></tt> if
+	 *         the specified index was out of range */
+	public Texture getTexture(int index) {
+		return index >= 0 && index < this.textures.size() ? this.textures.get(index) : null;
+	}
+	
+	/** Puts the given Texture in this AnimatedTexture's internal list at the
+	 * specified index.<br>
+	 * The index must be greater than or equal to zero, and less than the
+	 * {@link #getNumTextures() number of existing textures}.
+	 * 
+	 * @param index The zero-based index where the Texture will be set
+	 * @param texture The Texture to set at the specified index
+	 * @return The Texture that was previously at the specified index, or
+	 *         <tt><b>null</b></tt> if the specified index was out of range */
+	public Texture setTexture(int index, Texture texture) {
+		if(index >= 0 && index < this.textures.size()) {
+			Texture oldTex = this.getTexture(index);
+			this.textures.set(index, texture == null ? TextureLoader.getMissingTexture() : texture);
+			return oldTex;
+		}
+		return null;
+	}
+	
+	/** Inserts the given Texture at the specified index.<br>
+	 * The index must be greater than or equal to zero, and less than <em>or
+	 * equal to</em> the {@link #getNumTextures() number of existing textures}.
+	 * 
+	 * @param index The index to insert the Texture at (the existing Texture at
+	 *            this index and subsequent textures are shifted up to the
+	 *            next index and so forth)
+	 * @param texture The Texture to insert
+	 * @return True if the specified index was valid and the Texture was
+	 *         added */
+	public boolean addTexture(int index, Texture texture) {
+		if(index >= 0 && index <= this.textures.size()) {
+			this.textures.add(index, texture == null ? TextureLoader.getMissingTexture() : texture);
+			return true;
+		}
+		return false;
+	}
+	
+	/** Removes the Texture at the specified index from this AnimatedTexture's
+	 * internal list of textures.
+	 * 
+	 * @param index The index of the Texture to remove (any Textures at indices
+	 *            greater than this are shifted down to the previous index and
+	 *            so forth)
+	 * @return The Texture that was previously at the specified index, or
+	 *         <tt><b>null</b></tt> if the specified index was out of range */
+	public Texture removeTexture(int index) {
+		if(index >= 0 && index < this.textures.size()) {
+			return this.textures.remove(index);
+		}
+		return null;
+	}
+	
+	/** Adds the given texture to the end of the existing list of textures.
+	 * 
+	 * @param texture The texture to insert
+	 * @return True, as specified by {@link Collection#add(Object)} */
+	public boolean addTexture(Texture texture) {
+		return this.addTexture(this.textures.size(), texture);
+	}
+	
+}

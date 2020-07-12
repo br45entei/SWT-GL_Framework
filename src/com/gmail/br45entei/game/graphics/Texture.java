@@ -25,8 +25,9 @@ public class Texture {
 	protected int target;
 	/** The GL texture ID */
 	private final int textureID;
+	private final boolean hasAlpha;
 	
-	private final String fileName;
+	protected final String name;
 	/** The height of the image */
 	private int height;
 	/** The width of the image */
@@ -44,11 +45,13 @@ public class Texture {
 	 *
 	 * @param target The GL target
 	 * @param textureID The GL texture ID
-	 * @param fileName The path to the file used to load this texture */
-	public Texture(int target, int textureID, String fileName) {
+	 * @param name The path to the resource used to load this texture
+	 * @param hasAlpha Whether or not this Texture has an alpha channel */
+	public Texture(int target, int textureID, String name, boolean hasAlpha) {
 		this.target = target;
 		this.textureID = textureID;
-		this.fileName = fileName;
+		this.name = name;
+		this.hasAlpha = hasAlpha;
 	}
 	
 	/** @return This texture's id */
@@ -60,8 +63,12 @@ public class Texture {
 	}
 	
 	/** @return The file name or resource path name used to load this texture */
-	public final String getTextureFileName() {
-		return this.fileName;
+	public final String getTextureName() {
+		return this.name;
+	}
+	
+	public final boolean hasAlpha() {
+		return this.hasAlpha;
 	}
 	
 	/** Unbinds any textures of any kind that may be in use */
@@ -78,18 +85,12 @@ public class Texture {
 		}
 	}
 	
-	/** Bind the GL context to this texture<br>
-	 * <b>Note:</b> Use {@link Renderer#bindOpenGLTexture(Texture, int)} instead
-	 * of
-	 * this. */
+	/** Binds the GL context to this texture. */
 	public void bind() {
 		this.bind(0);
 	}
 	
-	/** Bind the GL context to this texture<br>
-	 * <b>Note:</b> Use {@link Renderer#bindOpenGLTexture(Texture, int)} instead
-	 * of
-	 * this.
+	/** Binds the GL context to this texture in the specified sampler slot.
 	 * 
 	 * @param samplerSlot The sampler slot to use */
 	public void bind(int samplerSlot) {
@@ -118,7 +119,7 @@ public class Texture {
 	 *
 	 * @return The height of the original image */
 	public int getImageHeight() {
-		if(this.fileName != null && this.fileName.equals("OpenGL")) {
+		if(this == TextureLoader.OPENGL) {
 			return Window.getWindow().getHeight();
 		}
 		return this.height;
@@ -128,7 +129,7 @@ public class Texture {
 	 *
 	 * @return The width of the original image */
 	public int getImageWidth() {
-		if(this.fileName != null && this.fileName.equals("OpenGL")) {
+		if(this == TextureLoader.OPENGL) {
 			return Window.getWindow().getWidth();
 		}
 		return this.width;
@@ -178,6 +179,21 @@ public class Texture {
 		if(this.texWidth != 0) {
 			this.widthRatio = ((float) this.getImageWidth()) / this.texWidth;
 		}
+	}
+	
+	/** @param minFilter The min filter to use for this Texture
+	 * @param magFilter The mag filter to use for this Texture
+	 * @return This Texture */
+	public Texture glTexParameteri(int minFilter, int magFilter) {
+		this.bind();
+		GL11.glTexParameteri(this.target, GL11.GL_TEXTURE_MIN_FILTER, minFilter);
+		GL11.glTexParameteri(this.target, GL11.GL_TEXTURE_MAG_FILTER, magFilter);
+		return this;
+	}
+	
+	/** Disposes of this Texture's resources */
+	public final void dispose() {
+		GL11.glDeleteTextures(this.textureID);
 	}
 	
 }

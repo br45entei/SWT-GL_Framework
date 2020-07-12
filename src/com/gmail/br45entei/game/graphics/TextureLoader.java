@@ -1,15 +1,21 @@
 package com.gmail.br45entei.game.graphics;
 
-import com.gmail.br45entei.util.BufferUtil;
+import com.gmail.br45entei.util.ResourceUtil;
 
 import java.awt.Color;
 import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.Transparency;
 import java.awt.color.ColorSpace;
+import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.awt.image.ColorModel;
 import java.awt.image.ComponentColorModel;
 import java.awt.image.DataBuffer;
 import java.awt.image.DataBufferByte;
+import java.awt.image.LookupOp;
+import java.awt.image.LookupTable;
 import java.awt.image.Raster;
 import java.awt.image.WritableRaster;
 import java.io.BufferedInputStream;
@@ -18,17 +24,16 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.IntBuffer;
-import java.util.HashMap;
 import java.util.Hashtable;
+import java.util.concurrent.ConcurrentHashMap;
 
 import javax.imageio.ImageIO;
 
-import org.lwjgl.opengl.ARBTextureRectangle;
 import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL31;
+import org.lwjgl.opengl.GL13;
 
-/** A utility class to load textures for JOGL. This source is based
- * on a texture that can be found in the Java Gaming (www.javagaming.org)
+/** A utility class to load textures for <strike>JOGL</strike>. This source is
+ * based on a texture that can be found in the Java Gaming (www.javagaming.org)
  * Wiki. It has been simplified slightly for explicit 2D graphics use.
  * 
  * OpenGL uses a particular image format. Since the images that are
@@ -40,85 +45,150 @@ import org.lwjgl.opengl.GL31;
  *
  * @author Kevin Glass
  * @author Brian Matzon */
-@SuppressWarnings("static-access")
 public class TextureLoader {
+	/** (Totally not a Pokémon reference) */
+	private static final String missingNo = "/assets/textures/missing.png";
 	
 	protected static volatile int openGLTextureID;
 	
 	/** The table of textures that have been loaded in this loader */
-	private static final HashMap<String, Texture> table = new HashMap<>();
+	private static final ConcurrentHashMap<String, Texture> table = new ConcurrentHashMap<>();
 	
 	/** The colour model including alpha for the GL image */
-	private static final ColorModel glAlphaColorModel;
+	private static final ColorModel glAlphaColorModel = new ComponentColorModel(ColorSpace.getInstance(ColorSpace.CS_sRGB), new int[] {8, 8, 8, 8}, true, false, Transparency.TRANSLUCENT, DataBuffer.TYPE_BYTE);
 	
 	/** The colour model for the GL image */
-	private static final ColorModel glColorModel;
+	private static final ColorModel glColorModel = new ComponentColorModel(ColorSpace.getInstance(ColorSpace.CS_sRGB), new int[] {8, 8, 8, 0}, false, false, Transparency.OPAQUE, DataBuffer.TYPE_BYTE);
 	
-	public static final Texture NONE = new Texture(GL11.GL_TEXTURE_2D, 0, "null");
-	public static final Texture OPENGL = new Texture(GL11.GL_TEXTURE_2D, 0, "OpenGL");
-	
-	/** Create a new texture loader based on the game panel */
-	static {
-		glAlphaColorModel = new ComponentColorModel(ColorSpace.getInstance(ColorSpace.CS_sRGB), new int[] {8, 8, 8, 8}, true, false, ComponentColorModel.TRANSLUCENT, DataBuffer.TYPE_BYTE);
-		glColorModel = new ComponentColorModel(ColorSpace.getInstance(ColorSpace.CS_sRGB), new int[] {8, 8, 8, 0}, false, false, ComponentColorModel.OPAQUE, DataBuffer.TYPE_BYTE);
-	}
+	public static final Texture NONE = new Texture(GL11.GL_TEXTURE_2D, 0, "null", false);
+	public static final Texture OPENGL = new Texture(GL11.GL_TEXTURE_2D, 0, "OpenGL", true);
 	
 	/** Create a new texture ID
 	 *
 	 * @return A new texture ID */
-	private static final int createTextureID() {
-		IntBuffer tmp = BufferUtil.createDirectIntBuffer(1);//createIntBuffer(1);
+	private static int createTextureID() {
+		IntBuffer tmp = createIntBuffer(1);
 		GL11.glGenTextures(tmp);
-		return tmp.rewind().get();
+		return tmp.get(0);
 	}
 	
-	/** Totally not a Pokemon reference. Totally not. */
-	private static Texture missingNo;
-	
-	/** @return The missing texture, or null if the missing texture is
-	 *         missing.(Missing texture-ception!) */
-	public static final Texture getMissingTexture() {
-		if(missingNo != null) {
-			return missingNo;
+	/** @return The missing texture to be used when another texture is specified
+	 *         but unable to be loaded */
+	public static Texture getMissingTexture() {
+		Texture tex = table.get(missingNo);
+		if(tex != null) {
+			return tex;
 		}
+		int target = GL11.GL_TEXTURE_2D;
+		int dstPixelFormat = GL11.GL_RGBA;
+		int minFilter = GL11.GL_NEAREST;
+		int magFilter = GL11.GL_NEAREST;
+		int srcPixelFormat = 0;
+		int textureID = createTextureID();
+		BufferedImage bufferedImage = null;
 		try {
-			missingNo = getTexture("missing.png");
-		} catch(Throwable ignored) {
+			bufferedImage = loadImage(missingNo);
+		} catch(IOException e) {
+			//LogUtil.printErr("Failed to load texture \"" + resourceName + "\": ");
+			//LogUtil.printErrln(e);
+			GL11.glDeleteTextures(textureID);
+			return null;
 		}
-		return missingNo;
-	}
-	
-	public static final Texture getTextureIfExists(String resourceName) {
-		try {
-			return getTexture(resourceName);
-		} catch(IOException ignored) {
-			return getMissingTexture();
+		if(bufferedImage.getColorModel().hasAlpha()) {
+			srcPixelFormat = GL11.GL_RGBA;
+		} else {
+			srcPixelFormat = GL11.GL_RGB;
 		}
+		Texture texture = new Texture(target, textureID, missingNo, bufferedImage.getColorModel().hasAlpha());
+		texture.setWidth(bufferedImage.getWidth());
+		texture.setHeight(bufferedImage.getHeight());
+		
+		// convert that image into a byte buffer of texture data 
+		
+		ByteBuffer textureBuffer = convertImageData(bufferedImage, texture);
+		
+		if(target == GL11.GL_TEXTURE_2D) {
+			GL11.glTexParameteri(target, GL11.GL_TEXTURE_MIN_FILTER, minFilter);
+			GL11.glTexParameteri(target, GL11.GL_TEXTURE_MAG_FILTER, magFilter);
+		}
+		
+		// produce a texture from the byte buffer
+		
+		GL11.glTexImage2D(target, 0, dstPixelFormat, get2Fold(bufferedImage.getWidth()), get2Fold(bufferedImage.getHeight()), 0, srcPixelFormat, GL11.GL_UNSIGNED_BYTE, textureBuffer);
+		
+		// Unbind the newly created texture
+		
+		GL13.glActiveTexture(GL13.GL_TEXTURE0);
+		GL11.glBindTexture(target, 0);
+		table.put(missingNo, texture);
+		return texture;
 	}
 	
 	/** Load a texture
 	 *
 	 * @param resourceName The location of the resource to load
-	 * @return The loaded texture
-	 * @throws IOException Indicates a failure to access the resource */
-	public static final Texture getTexture(String resourceName) throws IOException {
+	 * @return The loaded texture */
+	public static Texture getTexture(String resourceName) {
+		resourceName = fullPath(resourceName);
 		Texture tex = table.get(resourceName);
-		
 		if(tex != null) {
 			return tex;
 		}
-		
-		tex = getTexture(resourceName, GL11.GL_TEXTURE_2D, // target
+		return getTexture(resourceName, GL11.GL_TEXTURE_2D, // target
 				
 				GL11.GL_RGBA,     // dst pixel format
 				
-				GL11.GL_NEAREST, // min filter (unused) <--? orlly?
+				GL11.GL_NEAREST, // min filter
 				
-				GL11.GL_NEAREST);
-		
-		table.put(resourceName, tex);
-		
-		return tex;
+				GL11.GL_NEAREST); // max filter
+	}
+	
+	/** Load a texture
+	 *
+	 * @param resourceName The location of the resource to load
+	 * @param target The GL target to load the texture against
+	 * @return The loaded texture */
+	public static Texture getTexture(String resourceName, int target) {
+		resourceName = fullPath(resourceName);
+		Texture tex = table.get(resourceName);
+		if(tex != null) {
+			return tex;
+		}
+		return getTexture(resourceName, target, GL11.GL_RGBA,     // dst pixel format
+				
+				GL11.GL_LINEAR, // min filter
+				
+				GL11.GL_LINEAR); // max filter
+	}
+	
+	/** Load a texture into OpenGL from a image reference on
+	 * disk.
+	 *
+	 * @param resourceName The location of the resource to load
+	 * @param target The GL target to load the texture against
+	 * @param minFilter The minimizing filter
+	 * @param magFilter The magnification filter
+	 * @return The loaded texture */
+	public static Texture getTexture(String resourceName, int target, int minFilter, int magFilter) {
+		resourceName = fullPath(resourceName);
+		Texture tex = table.get(resourceName);
+		if(tex != null) {
+			return tex;
+		}
+		return getTexture(resourceName, target, GL11.GL_RGBA, minFilter, magFilter);
+	}
+	
+	private static final String fullPath(String resourceName) {
+		if(!resourceName.startsWith("/")) {
+			resourceName = "/" + resourceName;
+			if(!resourceName.startsWith("/textures")) {
+				resourceName = "/textures" + resourceName;
+			}
+			if(!resourceName.startsWith("/assets")) {
+				resourceName = "/assets" + resourceName;
+			}
+		}
+		return resourceName;
 	}
 	
 	/** Load a texture into OpenGL from a image reference on
@@ -129,53 +199,55 @@ public class TextureLoader {
 	 * @param dstPixelFormat The pixel format of the screen
 	 * @param minFilter The minimizing filter
 	 * @param magFilter The magnification filter
-	 * @return The loaded texture
-	 * @throws IOException Indicates a failure to access the resource */
-	public static final Texture getTexture(String resourceName, int target, int dstPixelFormat, int minFilter, int magFilter) throws IOException {
-		return getTexture(resourceName, new Texture(target, createTextureID(), resourceName), target, dstPixelFormat, minFilter, magFilter);
-	}
-	
-	/** @param resourceName The location of the resource to load
-	 * @param texture The GL target to load the texture against
-	 * @param target The GL target to load the texture against
-	 * @param dstPixelFormat The pixel format of the screen
-	 * @param minFilter The minimizing filter
-	 * @param magFilter The magnification filter
-	 * @return The loaded texture
-	 * @throws IOException Indicates a failure to access the resource */
-	public static final Texture getTexture(String resourceName, Texture texture, int target, int dstPixelFormat, int minFilter, int magFilter) throws IOException {
-		String ref = resourceName == null ? "" : resourceName;
-		ref = ref.startsWith("/") ? ref : "/assets/" + (ref.startsWith("textures") ? "" : "textures/") + ref;
-		if(resourceName == null || !doesResourceExist(ref)) {
-			return getMissingTexture();
+	 * @return The loaded texture */
+	public static Texture getTexture(String resourceName, int target, int dstPixelFormat, int minFilter, int magFilter) {
+		resourceName = fullPath(resourceName);
+		Texture tex = table.get(resourceName);
+		if(tex != null) {
+			return tex;
+		}
+		Texture check = table.get(resourceName);
+		if(check != null) {
+			return check;
 		}
 		int srcPixelFormat = 0;
 		
+		// create the texture ID for this texture 
+		int textureID = createTextureID();
+		
 		// bind this texture 
-		
-		GL11.glBindTexture(target, texture.getID());//this.bind(0);
-		
-		BufferedImage bufferedImage = loadImage(resourceName);
-		texture.setWidth(bufferedImage.getWidth());
-		texture.setHeight(bufferedImage.getHeight());
-		if(target == GL11.GL_TEXTURE_2D) {
-			if(texture.getWidth() != texture.getHeight()) {
-				target = GL31.GL_TEXTURE_RECTANGLE;
-				texture.target = GL31.GL_TEXTURE_RECTANGLE;
+		GL13.glActiveTexture(GL13.GL_TEXTURE0);
+		GL11.glBindTexture(target, textureID);
+		resourceName = fullPath(resourceName);
+		BufferedImage bufferedImage = null;
+		try {
+			bufferedImage = loadImage(resourceName);
+		} catch(IOException e) {
+			//LogUtil.printErr("Failed to load texture \"" + resourceName + "\": ");
+			//LogUtil.printErrln(e);
+			try {
+				bufferedImage = loadImage(missingNo);
+			} catch(IOException e1) {
+				//LogUtil.printErr(" /!\\  Failed to missing texture(\"" + missingNo + "\")!\r\n/___\\ Cause: ");
+				//LogUtil.printErrln(e);
+				GL11.glDeleteTextures(textureID);
+				return null;
 			}
 		}
-		
 		if(bufferedImage.getColorModel().hasAlpha()) {
 			srcPixelFormat = GL11.GL_RGBA;
 		} else {
 			srcPixelFormat = GL11.GL_RGB;
 		}
+		Texture texture = new Texture(target, textureID, resourceName, bufferedImage.getColorModel().hasAlpha());
+		texture.setWidth(bufferedImage.getWidth());
+		texture.setHeight(bufferedImage.getHeight());
 		
 		// convert that image into a byte buffer of texture data 
 		
 		ByteBuffer textureBuffer = convertImageData(bufferedImage, texture);
 		
-		if(target == GL11.GL_TEXTURE_2D || target == ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB) {
+		if(target == GL11.GL_TEXTURE_2D) {
 			GL11.glTexParameteri(target, GL11.GL_TEXTURE_MIN_FILTER, minFilter);
 			GL11.glTexParameteri(target, GL11.GL_TEXTURE_MAG_FILTER, magFilter);
 		}
@@ -184,14 +256,31 @@ public class TextureLoader {
 		
 		GL11.glTexImage2D(target, 0, dstPixelFormat, get2Fold(bufferedImage.getWidth()), get2Fold(bufferedImage.getHeight()), 0, srcPixelFormat, GL11.GL_UNSIGNED_BYTE, textureBuffer);
 		
+		// Unbind the newly created texture
+		
+		GL13.glActiveTexture(GL13.GL_TEXTURE0);
+		GL11.glBindTexture(target, 0);
+		table.put(resourceName, texture);
 		return texture;
+	}
+	
+	/** Disposes of all of this TextureLoader's loaded Textures */
+	public static final void disposeAll() {
+		for(Texture tex : table.values()) {
+			disposeTexture(tex);
+		}
+	}
+	
+	protected static final void disposeTexture(Texture texture) {
+		texture.dispose();
+		table.remove(texture.name);
 	}
 	
 	/** Get the closest greater power of 2 to the fold number
 	 * 
 	 * @param fold The target number
 	 * @return The power of 2 */
-	private static final int get2Fold(int fold) {
+	public static final int get2Fold(int fold) {
 		int ret = 2;
 		while(ret < fold) {
 			ret *= 2;
@@ -204,7 +293,7 @@ public class TextureLoader {
 	 * @param bufferedImage The image to convert to a texture
 	 * @param texture The texture to store the data into
 	 * @return A buffer containing the data */
-	private static final ByteBuffer convertImageData(BufferedImage bufferedImage, Texture texture) {
+	private static ByteBuffer convertImageData(BufferedImage bufferedImage, Texture texture) {
 		ByteBuffer imageBuffer = null;
 		WritableRaster raster;
 		BufferedImage texImage;
@@ -259,26 +348,21 @@ public class TextureLoader {
 		return imageBuffer;
 	}
 	
-	private static final boolean doesResourceExist(String ref) {
-		try(InputStream in = TextureLoader.class.getResourceAsStream(ref)) {
-			return in != null;
-		} catch(IOException ex) {
-			ex.printStackTrace(System.err);
-			System.err.flush();
-			return false;
-		}
-	}
-	
 	/** Load a given resource as a buffered image
 	 * 
 	 * @param ref The location of the resource to load
 	 * @return The loaded buffered image
 	 * @throws IOException Indicates a failure to find a resource */
-	private static final BufferedImage loadImage(String ref) throws IOException {
-		ref = ref.startsWith("/") ? ref : "/assets/" + (ref.startsWith("textures") ? "" : "textures/") + ref;
-		try(BufferedInputStream in = new BufferedInputStream(TextureLoader.class.getResourceAsStream(ref))) {
-			return ImageIO.read(in);
-		}
+	private static BufferedImage loadImage(String ref) throws IOException {
+		BufferedImage bufferedImage = null;
+		try(InputStream in = ResourceUtil.loadResource(ref)) {//;//getClass().getClassLoader().getResourceAsStream(ref);//URL url = TextureLoader.class.getClassLoader().getResource(ref);
+			if(in == null) {
+				throw new IOException("Cannot find: " + ref);
+			}
+			bufferedImage = createFlipped(ImageIO.read(new BufferedInputStream(in)));
+		}//in.close();
+			//LogUtil.println/*Debug*/("Loaded texture: " + ref);
+		return bufferedImage;
 	}
 	
 	/** Creates an integer buffer to hold specified ints
@@ -286,10 +370,59 @@ public class TextureLoader {
 	 *
 	 * @param size how many int to contain
 	 * @return created IntBuffer */
-	/*protected static final IntBuffer createIntBuffer(int size) {
+	protected static IntBuffer createIntBuffer(int size) {
 		ByteBuffer temp = ByteBuffer.allocateDirect(4 * size);
 		temp.order(ByteOrder.nativeOrder());
 		
 		return temp.asIntBuffer();
-	}*/
+	}
+	
+	private static BufferedImage convertToARGB(BufferedImage image) {
+		BufferedImage newImage = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_ARGB);
+		Graphics2D g = newImage.createGraphics();
+		g.drawImage(image, 0, 0, null);
+		g.dispose();
+		return newImage;
+	}
+	
+	private static BufferedImage createFlipped(BufferedImage image) {
+		AffineTransform at = new AffineTransform();
+		at.concatenate(AffineTransform.getScaleInstance(1, -1));
+		at.concatenate(AffineTransform.getTranslateInstance(0, -image.getHeight()));
+		return createTransformed(image, at);
+	}
+	
+	@SuppressWarnings("unused")
+	private static BufferedImage createRotated(BufferedImage image) {
+		AffineTransform at = AffineTransform.getRotateInstance(Math.PI, image.getWidth() / 2, image.getHeight() / 2.0);
+		return createTransformed(image, at);
+	}
+	
+	private static BufferedImage createTransformed(BufferedImage image, AffineTransform at) {
+		BufferedImage newImage = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_ARGB);
+		Graphics2D g = newImage.createGraphics();
+		g.transform(at);
+		g.drawImage(image, 0, 0, null);
+		g.dispose();
+		return newImage;
+	}
+	
+	@SuppressWarnings("unused")
+	private static BufferedImage createInverted(BufferedImage image) {
+		if(image.getType() != BufferedImage.TYPE_INT_ARGB) {
+			image = convertToARGB(image);
+		}
+		LookupTable lookup = new LookupTable(0, 4) {
+			@Override
+			public int[] lookupPixel(int[] src, int[] dest) {
+				dest[0] = 255 - src[0];
+				dest[1] = 255 - src[1];
+				dest[2] = 255 - src[2];
+				return dest;
+			}
+		};
+		LookupOp op = new LookupOp(lookup, new RenderingHints(null));
+		return op.filter(image, null);
+	}
+	
 }
