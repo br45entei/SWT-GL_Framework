@@ -18,8 +18,11 @@
  *******************************************************************************/
 package com.gmail.br45entei.util;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.math.BigDecimal;
+import java.io.IOException;
+import java.io.PrintStream;
+import java.lang.reflect.Array;
 import java.nio.ByteBuffer;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
@@ -31,7 +34,10 @@ import java.util.UUID;
 
 import org.apache.commons.text.similarity.LevenshteinDistance;
 
-/** @since 1.0
+/** Utility class containing general utility methods that don't really fit
+ * anywhere else.
+ *
+ * @since 1.0
  * @author Brian_Entei */
 public class CodeUtil {
 	
@@ -77,7 +83,9 @@ public class CodeUtil {
 	
 	/** Enum class differentiating types of operating systems
 	 * 
+	 * @deprecated Use {@link Platform} and {@link Architecture} instead
 	 * @author Brian_Entei */
+	@Deprecated
 	public static enum EnumOS {
 		/** Unix operating systems */
 		UNIX,
@@ -95,8 +103,10 @@ public class CodeUtil {
 		UNKNOWN;
 	}
 	
-	/** @return The type of operating system that java is currently running
+	/** @deprecated Use {@link Platform} and {@link Architecture} instead
+	 * @return The type of operating system that java is currently running
 	 *         on */
+	@Deprecated
 	public static EnumOS getOSType() {
 		String s = System.getProperty("os.name").toLowerCase();
 		return s.contains("win") ? EnumOS.WINDOWS : (s.contains("mac") ? EnumOS.OSX : (s.contains("solaris") ? EnumOS.SOLARIS : (s.contains("sunos") ? EnumOS.SOLARIS : (s.contains("linux") ? EnumOS.LINUX : (s.contains("unix") ? EnumOS.UNIX : (s.contains("android") ? EnumOS.ANDROID : EnumOS.UNKNOWN))))));
@@ -184,6 +194,14 @@ public class CodeUtil {
 		}
 	}
 	
+	/** Get the time in milliseconds using {@link System#nanoTime()}.
+	 * 
+	 * @return The system time in milliseconds
+	 * @see System#currentTimeMillis() */
+	public static final double getTime() {
+		return System.nanoTime() / 1000000.000D;
+	}
+	
 	private static volatile boolean debugLoggingEnabled = false;
 	
 	/** @return Whether or not debug logging is enabled for the various debug
@@ -253,142 +271,28 @@ public class CodeUtil {
 		}
 	}
 	
-	/** @param decimal The decimal
-	 * @return The whole number portion of the given decimal */
-	public static final String getWholePartOf(double decimal) {
-		if(decimal != decimal) {
-			return Long.toString(Double.doubleToLongBits(decimal));
-		}
-		String d = new BigDecimal(decimal).toPlainString();
-		int indexOfDecimalPoint = d.indexOf(".");
-		if(indexOfDecimalPoint != -1) {
-			return d.substring(0, indexOfDecimalPoint);
-		}
-		return Long.toString((long) decimal);
-	}
-	
-	/** @param decimal The decimal
-	 * @return The given decimal without */
-	public static final String getDecimalPartOf(double decimal) {
-		if(decimal != decimal) {
-			return Double.toString(decimal);
-		}
-		String d = new BigDecimal(decimal).toPlainString();
-		int indexOfDecimalPoint = d.indexOf(".");
-		if(indexOfDecimalPoint == -1) {
-			d = Double.toString(decimal);
-			indexOfDecimalPoint = d.indexOf(".");
-		}
-		if(indexOfDecimalPoint != -1) {
-			return d.substring(indexOfDecimalPoint);
-		}
-		return d;
-	}
-	
-	/** Returns a string of characters.<br>
-	 * Example: <code>lineOf('a', 5);</code> --&gt; <code>aaaaa</code>
-	 * 
-	 * @param c The character to use
-	 * @param length The number of characters
-	 * @return A string full of the given characters at the given length */
-	public static final String lineOf(char c, int length) {
-		char[] str = new char[length];
-		for(int i = 0; i < length; i++) {
-			str[i] = c;
-		}
-		return new String(str);
-	}
-	
-	/** @param decimal The decimal to limit
-	 * @param numOfPlaces The number of places to limit the decimal to(radix)
-	 * @param pad Whether or not the decimal should be padded with trailing
-	 *            zeros if the resulting length is less than
-	 *            <code>numOfPads</code>
-	 * @return The limited decimal */
-	public static final String limitDecimalNoRounding(double decimal, int numOfPlaces, boolean pad) {
-		if(Double.isNaN(decimal) || Double.isInfinite(decimal)) {
-			return Double.toString(decimal);
-		}
-		String padStr = pad ? lineOf('0', numOfPlaces) : "0";
-		if(Double.doubleToLongBits(decimal) == Double.doubleToLongBits(0.0)) {
-			return "0" + (numOfPlaces != 0 ? "." + padStr : "");
-		}
-		if(Double.doubleToLongBits(decimal) == Double.doubleToLongBits(-0.0)) {
-			return "-0" + (numOfPlaces != 0 ? "." + padStr : "");
-		}
-		numOfPlaces += 1;
-		String whole = Double.isFinite(decimal) ? getWholePartOf(decimal) : Double.isInfinite(decimal) ? "Infinity" : "NaN";
-		if(numOfPlaces == 0) {
-			return whole;
-		}
-		
-		if(pad) {
-			int checkWholeLength = whole.length();
-			checkWholeLength = decimal < 0 ? checkWholeLength - 1 : checkWholeLength;
-			checkWholeLength -= 2;
-			if(checkWholeLength > 0) {
-				if(padStr.length() - checkWholeLength <= 0) {
-					padStr = "";
-				} else {
-					padStr = padStr.substring(0, padStr.length() - checkWholeLength);
-				}
+	/** @param code The code to run with printing disabled
+	 * @param ex An array whose length is at least one which any thrown
+	 *            exception will be stored into
+	 * @return Any bytes written to the standard output stream while executing
+	 *         the given code */
+	public static final byte[] runNoSTDOutPrinting(Runnable code, Throwable[] ex) {
+		final PrintStream out = System.out;
+		try(ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+			System.setOut(new PrintStream(baos, true));
+			Throwable thrown = null;
+			try {
+				code.run();
+			} catch(Throwable e) {
+				thrown = e;
 			}
-			if(padStr.isEmpty()) {
-				return whole;
-			}
+			ex[0] = thrown;
+			return baos.toByteArray();
+		} catch(IOException ignored) {
+			throw new Error(ignored);
+		} finally {
+			System.setOut(out);
 		}
-		
-		String d = Double.isFinite(decimal) ? getDecimalPartOf(decimal) : "";
-		if(d.length() == 1 || d.equals(".0")) {
-			return whole + (numOfPlaces != 0 ? "." + padStr : "");
-		}
-		if(d.length() > numOfPlaces) {
-			d = d.substring(d.indexOf('.') + 1, numOfPlaces);
-		}
-		if(d.startsWith(".")) {
-			d = d.substring(1);
-		}
-		String restore = d;
-		if(d.endsWith("9")) {//Combat weird java rounding
-			int chopIndex = -1;
-			char[] array = d.toCharArray();
-			boolean lastChar9 = false;
-			for(int i = array.length - 1; i >= 0; i--) {
-				boolean _9 = array[i] == '9';
-				array[i] = _9 ? '0' : array[i];
-				chopIndex = i;
-				if(!_9 && lastChar9) {//If the current character isn't a 9 and the one after it(to the right) is, then add one to the current non-nine char and set the chop-off index, "removing" the "rounding issue"
-					array[i] = Integer.valueOf(Integer.valueOf(new String(new char[] {array[i]})).intValue() + 1).toString().charAt(0);
-					chopIndex = i + 1;
-					break;
-				}
-				lastChar9 = _9;
-			}
-			d = new String(array, 0, (chopIndex == -1 ? array.length : chopIndex));
-		}
-		if(d.endsWith("0")) {
-			while(d.endsWith("0")) {
-				d = d.substring(0, d.length() - 1);
-			}
-		}
-		if(d.isEmpty()) {
-			d = restore;
-		}
-		if(pad && (numOfPlaces - d.length()) > 0) {
-			d += lineOf('0', numOfPlaces - d.length());
-		}
-		if(d.length() > numOfPlaces - 1) {
-			d = d.substring(0, numOfPlaces - 1);
-		}
-		//System.out.println("\"" + whole + "." + d + "\"");
-		return whole + "." + d;//(d.isEmpty() ? "" : ("." + d));
-	}
-	
-	/** @param decimal The decimal to limit
-	 * @param numOfPlaces The number of places to limit the decimal to(radix)
-	 * @return The limited decimal */
-	public static final String limitDecimalNoRounding(double decimal, int numOfPlaces) {
-		return limitDecimalNoRounding(decimal, numOfPlaces, false);
 	}
 	
 	/** Creates a new writable {@link Entry} that maps the given key and value.
@@ -472,6 +376,19 @@ public class CodeUtil {
 				}
 				return this.getValue();
 			}
+			
+			public int hashCode() {
+				return Objects.hash(key);//, value);
+			}
+			
+			public boolean equals(Object obj) {
+				if(!(obj instanceof Entry)) {
+					return false;
+				}
+				Entry<?, ?> other = (Entry<?, ?>) obj;
+				return Objects.equals(key, other.getKey());// && Objects.equals(value, other.getValue());
+			}
+			
 		};
 	}
 	
@@ -525,7 +442,10 @@ public class CodeUtil {
 	
 	/** Compares each of the given objects within the collection with the given
 	 * target object, and then returns the one that matches the given target
-	 * object the closest.
+	 * object the closest.<br>
+	 * This function converts each element into a String and then uses the
+	 * {@link LevenshteinDistance} to compare them, then returns the element
+	 * with the lowest distance.
 	 * 
 	 * @param <T> The type of the collection's objects to compare
 	 * @param collection The collection of objects to compare
@@ -698,6 +618,123 @@ public class CodeUtil {
 	public static final <V> boolean containsUUIDKey(Map<? extends UUID, V> map, UUID uuid) {
 		return containsUUIDKey(map, uuid == null ? null : uuid.toString());
 	}
+	
+	//=======================================================================================================================================================
+	
+	/** @param arrays The array or arrays to check
+	 * @return The Class type of the array */
+	@SafeVarargs
+	@SuppressWarnings("unchecked")
+	public static final <T> Class<T> getClassFromArray(T[]... arrays) {
+		Class<T> clazz = null;
+		for(T[] array : arrays) {
+			if(clazz != null) {
+				break;
+			}
+			if(array != null) {
+				for(T element : array) {
+					if(element != null) {
+						clazz = (Class<T>) element.getClass();
+						break;
+					}
+				}
+			}
+		}
+		return clazz;
+	}
+	
+	/** Resizes an array. Can be used to copy arrays as well.
+	 * 
+	 * @param clazz The class type of the array
+	 * @param array The array to resize
+	 * @param startIndex The index at which the resizing will start (must fall
+	 *            within the specified <tt>array</tt>)
+	 * @param endIndex The index at which the resizing will stop short at (may
+	 *            extend past <tt>array.length</tt> to return an extended array;
+	 *            elements past the length of the original array will be
+	 *            <tt><b>null</b></tt>)
+	 * @return The resized array, or <tt><b>null</b></tt> if any of the
+	 *         specified parameters were <tt><b>null</b></tt> or out of range */
+	public static final <T> T[] resizeArray(Class<T> clazz, T[] array, int startIndex, int endIndex) {
+		if(array == null || clazz == null || startIndex >= array.length || startIndex >= endIndex || startIndex < 0 || endIndex < 0) {
+			return null;
+		}
+		@SuppressWarnings("unchecked")
+		T[] rtrn = (T[]) Array.newInstance(clazz, (endIndex - startIndex));
+		int i = 0;
+		for(int j = startIndex; j < endIndex; j++) {
+			if(j >= array.length) {
+				rtrn[i++] = null;
+				continue;
+			}
+			rtrn[i++] = array[j];
+		}
+		return rtrn;
+	}
+	
+	/** Resizes an array. Can be used to copy arrays as well.
+	 * 
+	 * @param array The array to resize
+	 * @param startIndex The index at which the resizing will start (must fall
+	 *            within the specified <tt>array</tt>)
+	 * @param endIndex The index at which the resizing will stop short at (may
+	 *            extend past <tt>array.length</tt> to return an extended array;
+	 *            elements past the length of the original array will be
+	 *            <tt><b>null</b></tt>)
+	 * @return The resized array, or <tt><b>null</b></tt> if either
+	 *         <ul>
+	 *         <li>any of the specified parameters were <tt><b>null</b></tt> or
+	 *         out of range</li>(or)
+	 *         <li>the array did not contain any <tt><b>non-null</b></tt>
+	 *         elements</li>
+	 *         </ul>
+	 */
+	public static final <T> T[] resizeArray(T[] array, int startIndex, int endIndex) {
+		Class<T> clazz = getClassFromArray(array);
+		if(clazz != null) {
+			return resizeArray(clazz, array, startIndex, endIndex);
+		}
+		return null;
+	}
+	
+	/** @param <T> The arrays' class
+	 * @param arrays The String arrays to combine
+	 * @return The combined arrays as one String[] array, or null if none of the
+	 *         arrays contained any instances or if null was given */
+	@SuppressWarnings("unchecked")
+	public static final <T> T[] combine(T[]... arrays) {
+		if(arrays == null) {
+			return null;
+		}
+		Class<T> clazz = null;
+		int newLength = 0;
+		for(T[] array : arrays) {
+			newLength += array != null ? array.length : 0;
+			if(clazz == null && array != null) {
+				for(T element : array) {
+					if(element != null) {
+						clazz = (Class<T>) element.getClass();
+						break;
+					}
+				}
+			}
+		}
+		if(clazz == null) {
+			return null;
+		}
+		T[] rtrn = (T[]) Array.newInstance(clazz, newLength);//new T[newLength];
+		int index = 0;
+		for(T[] array : arrays) {
+			if(array != null) {
+				for(T element : array) {
+					rtrn[index++] = element;
+				}
+			}
+		}
+		return rtrn;
+	}
+	
+	//=======================================================================================================================================================
 	
 	/** @return The path of the file or folder containing this application code.
 	 * @author <a href=

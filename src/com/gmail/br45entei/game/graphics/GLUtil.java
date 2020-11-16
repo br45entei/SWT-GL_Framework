@@ -1,6 +1,6 @@
 /*******************************************************************************
  * 
- * Copyright (C) 2020 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2020 Brian_Entei (br45entei@gmail.com)
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,15 +18,30 @@
  *******************************************************************************/
 package com.gmail.br45entei.game.graphics;
 
-import com.gmail.br45entei.util.CodeUtil;
+import com.gmail.br45entei.game.input.Mouse;
+import com.gmail.br45entei.game.math.MathUtil;
+import com.gmail.br45entei.game.math.Vector2d;
+import com.gmail.br45entei.game.ui.Window;
+import com.gmail.br45entei.util.Platform;
+import com.gmail.br45entei.util.StringUtil;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 import org.eclipse.swt.graphics.Color;
+import org.lwjgl.opengl.ARBInternalformatQuery;
+import org.lwjgl.opengl.ARBInternalformatQuery2;
+import org.lwjgl.opengl.EXTFramebufferObject;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL14;
+import org.lwjgl.opengl.GL45;
 import org.lwjgl.opengl.GLCapabilities;
+import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector3f;
+import org.lwjgl.util.vector.Vector4f;
 
 import static org.lwjgl.system.Checks.checkFunctions;
 
@@ -34,6 +49,7 @@ import static org.lwjgl.system.Checks.checkFunctions;
  *
  * @since 1.0
  * @author Brian_Entei */
+@SuppressWarnings("javadoc")
 public class GLUtil {
 	
 	public static final void main(String[] args) {
@@ -151,10 +167,33 @@ public class GLUtil {
 		
 		System.out.println("Yaw: ".concat(Double.toString(yaw)).concat("; Pitch: ").concat(Double.toString(pitch)).concat(";"));
 		*/
+		
+		System.out.println("\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n");
+		
+		float[] vertices = new float[] {//@formatter:off
+				0.5f, -0.5f, 0.5f,    -0.5f, -0.5f, 0.5f,    0.5f, 0.5f, 0.5f,    -0.5f, -0.5f, 0.5f,   -0.5f, 0.5f, 0.5f,     0.5f, 0.5f, 0.5f
+		};//@formatter:on
+		float[] positionf = new float[] {1, 5, 7};
+		
+		float[] sum = GLUtil.add(vertices, positionf);
+		float[] test = GLUtil.addDivisibly(vertices, positionf, false);
+		
+		System.out.println(String.format("sum.length: %s; test.length: %s;", Integer.toString(sum.length), Integer.toString(test.length)));
+		
+		System.out.println("sum:");
+		System.out.println(GLUtil.vectorToString(sum, 2, true));
+		System.out.println();
+		System.out.println("test:");
+		System.out.println(GLUtil.vectorToString(test, 2, true));
+		System.out.println("original vertices:");
+		System.out.println(GLUtil.vectorToString(vertices, 2, true));
+		System.out.println();
+		System.out.println("positionf:");
+		System.out.println(GLUtil.vectorToString(positionf, 2, true));
 	}
 	
 	public static final double[] getYawPitchRollFrom4x4Matrixd(double[] viewMatrix) {
-		//Column-major order ( |/|/| )
+		//Column-major order ( |/|/|/| )
 		
 		double[] right = new double[3];
 		right[0] = viewMatrix[0];
@@ -177,16 +216,172 @@ public class GLUtil {
 		return new double[] {yaw, pitch, roll};
 	}
 	
-	public static final String vectorToString(double[] vector, int numOfPlaces, boolean pad) {
-		double x = vector[0], y = vector[1], z = vector[2];
+	public static final String vectorToString(boolean[] vector) {
 		StringBuilder sb = new StringBuilder("(");
-		sb.append(x < 0.0 || Double.doubleToLongBits(x) == negZero ? "" : " ").append(CodeUtil.limitDecimalNoRounding(x, numOfPlaces, pad)).append(", ");
-		sb.append(y < 0.0 || Double.doubleToLongBits(y) == negZero ? "" : " ").append(CodeUtil.limitDecimalNoRounding(y, numOfPlaces, pad)).append(", ");
-		sb.append(z < 0.0 || Double.doubleToLongBits(z) == negZero ? "" : " ").append(CodeUtil.limitDecimalNoRounding(z, numOfPlaces, pad)).append(")");
-		return sb.toString();
+		for(int i = 0; i < vector.length; i++) {
+			boolean x = vector[i];
+			sb.append(x).append(i + 1 == vector.length ? "" : ", ");
+		}
+		return sb.append(")").toString();
+	}
+	
+	public static final String vectorToString(byte[] vector, boolean unsigned) {
+		StringBuilder sb = new StringBuilder("(");
+		for(int i = 0; i < vector.length; i++) {
+			byte x = vector[i];
+			sb.append(unsigned || x < 0 ? "" : " ").append(unsigned ? Integer.toString(x & 0xFF) : Byte.toString(x)).append(i + 1 == vector.length ? "" : ", ");
+		}
+		return sb.append(")").toString();
+	}
+	
+	public static final String vectorToString(short[] vector) {
+		StringBuilder sb = new StringBuilder("(");
+		for(int i = 0; i < vector.length; i++) {
+			short x = vector[i];
+			sb.append(x < 0 ? "" : " ").append(Short.toString(x)).append(i + 1 == vector.length ? "" : ", ");
+		}
+		return sb.append(")").toString();
+	}
+	
+	public static final String vectorToString(int[] vector) {
+		StringBuilder sb = new StringBuilder("(");
+		for(int i = 0; i < vector.length; i++) {
+			int x = vector[i];
+			sb.append(x < 0 ? "" : " ").append(Integer.toString(x)).append(i + 1 == vector.length ? "" : ", ");
+		}
+		return sb.append(")").toString();
+	}
+	
+	public static final String vectorToStringOutOf(int[] vector, int dividend) {
+		StringBuilder sb = new StringBuilder("(");
+		for(int i = 0; i < vector.length; i++) {
+			int x = vector[i];
+			sb.append(x < 0 ? "" : " ").append(Integer.toString(x)).append("/").append(Integer.toString(dividend)).append(i + 1 == vector.length ? "" : ", ");
+		}
+		return sb.append(")").toString();
+	}
+	
+	public static final String vectorToStringOutOf(int[] vector, int[] dividend) {
+		StringBuilder sb = new StringBuilder("(");
+		for(int i = 0; i < vector.length; i++) {
+			int x = vector[i], d = dividend[i];
+			sb.append(x < 0 ? "" : " ").append(Integer.toString(x)).append("/").append(Integer.toString(d)).append(i + 1 == vector.length ? "" : ", ");
+		}
+		return sb.append(")").toString();
+	}
+	
+	public static final String vectorToString(float[] vector, int numOfPlaces, boolean pad) {
+		StringBuilder sb = new StringBuilder("(");
+		for(int i = 0; i < vector.length; i++) {
+			float x = vector[i];
+			sb.append(x < 0.0 || Float.floatToIntBits(x) == negZerof ? "" : " ").append(MathUtil.limitDecimalNoRounding(x, numOfPlaces, pad)).append(i + 1 == vector.length ? "" : ", ");
+		}
+		return sb.append(" )").toString();
+	}
+	
+	public static final String vectorToStringOutOf(float[] vector, int numOfPlaces, boolean pad, float dividend) {
+		StringBuilder sb = new StringBuilder("(");
+		for(int i = 0; i < vector.length; i++) {
+			float x = vector[i];
+			sb.append(x < 0.0 || Float.floatToIntBits(x) == negZerof ? "" : " ").append(MathUtil.limitDecimalNoRounding(x, numOfPlaces, pad)).append("/").append(MathUtil.limitDecimalNoRounding(dividend, numOfPlaces, pad)).append(i + 1 == vector.length ? "" : ", ");
+		}
+		return sb.append(" )").toString();
+	}
+	
+	public static final String vectorToStringOutOf(float[] vector, int numOfPlaces, boolean pad, float[] dividend) {
+		StringBuilder sb = new StringBuilder("(");
+		for(int i = 0; i < vector.length; i++) {
+			float x = vector[i], d = dividend[i];
+			sb.append(x < 0.0 || Float.floatToIntBits(x) == negZerof ? "" : " ").append(MathUtil.limitDecimalNoRounding(x, numOfPlaces, pad)).append("/").append(MathUtil.limitDecimalNoRounding(d, numOfPlaces, pad)).append(i + 1 == vector.length ? "" : ", ");
+		}
+		return sb.append(" )").toString();
+	}
+	
+	public static final String vectorToString(long[] vector) {
+		StringBuilder sb = new StringBuilder("(");
+		for(int i = 0; i < vector.length; i++) {
+			long x = vector[i];
+			sb.append(x < 0 ? "" : " ").append(Long.toString(x)).append(i + 1 == vector.length ? "" : ", ");
+		}
+		return sb.append(")").toString();
+	}
+	
+	public static final String vectorToStringOutOf(long[] vector, long dividend) {
+		StringBuilder sb = new StringBuilder("(");
+		for(int i = 0; i < vector.length; i++) {
+			long x = vector[i];
+			sb.append(x < 0 ? "" : " ").append(Long.toString(x)).append("/").append(Long.toString(dividend)).append(i + 1 == vector.length ? "" : ", ");
+		}
+		return sb.append(")").toString();
+	}
+	
+	public static final String vectorToStringOutOf(long[] vector, long[] dividend) {
+		StringBuilder sb = new StringBuilder("(");
+		for(int i = 0; i < vector.length; i++) {
+			long x = vector[i], d = dividend[i];
+			sb.append(x < 0 ? "" : " ").append(Long.toString(x)).append("/").append(Long.toString(d)).append(i + 1 == vector.length ? "" : ", ");
+		}
+		return sb.append(")").toString();
+	}
+	
+	public static final String vectorToString(double[] vector, int numOfPlaces, boolean pad) {
+		StringBuilder sb = new StringBuilder("(");
+		for(int i = 0; i < vector.length; i++) {
+			double x = vector[i];
+			sb.append(x < 0.0 || Double.doubleToLongBits(x) == negZero ? "" : " ").append(MathUtil.limitDecimalNoRounding(x, numOfPlaces, pad)).append(i + 1 == vector.length ? "" : ", ");
+		}
+		return sb.append(")").toString();
+	}
+	
+	public static final String vectorToStringOutOf(double[] vector, int numOfPlaces, boolean pad, double dividend) {
+		StringBuilder sb = new StringBuilder("(");
+		for(int i = 0; i < vector.length; i++) {
+			double x = vector[i];
+			sb.append(x < 0.0 || Double.doubleToLongBits(x) == negZero ? "" : " ").append(MathUtil.limitDecimalNoRounding(x, numOfPlaces, pad)).append("/").append(MathUtil.limitDecimalNoRounding(dividend, numOfPlaces, pad)).append(i + 1 == vector.length ? "" : ", ");
+		}
+		return sb.append(")").toString();
+	}
+	
+	public static final String vectorToStringOutOf(double[] vector, int numOfPlaces, boolean pad, double[] dividend) {
+		StringBuilder sb = new StringBuilder("(");
+		for(int i = 0; i < vector.length; i++) {
+			double x = vector[i], d = dividend[i];
+			sb.append(x < 0.0 || Double.doubleToLongBits(x) == negZero ? "" : " ").append(MathUtil.limitDecimalNoRounding(x, numOfPlaces, pad)).append("/").append(MathUtil.limitDecimalNoRounding(d, numOfPlaces, pad)).append(i + 1 == vector.length ? "" : ", ");
+		}
+		return sb.append(")").toString();
 	}
 	
 	//=====================================================================================================================
+	
+	public static final float[] concat(float[] array1, float... array2) {
+		float[] array3 = new float[array1.length + array2.length];
+		System.arraycopy(array1, 0, array3, 0, array1.length);
+		System.arraycopy(array2, 0, array3, array1.length, array2.length);
+		return array3;
+	}
+	
+	public static final double[] concat(double[] array1, double... array2) {
+		double[] array3 = new double[array1.length + array2.length];
+		System.arraycopy(array1, 0, array3, 0, array1.length);
+		System.arraycopy(array2, 0, array3, array1.length, array2.length);
+		return array3;
+	}
+	
+	public static final strictfp double[] asDoubleArray(float[] array) {
+		double[] rtrn = new double[array.length];
+		for(int i = 0; i < rtrn.length; i++) {
+			rtrn[i] = array[i];
+		}
+		return rtrn;
+	}
+	
+	public static final strictfp float[] asFloatArray(double[] array) {
+		float[] rtrn = new float[array.length];
+		for(int i = 0; i < rtrn.length; i++) {
+			rtrn[i] = (float) array[i];
+		}
+		return rtrn;
+	}
 	
 	public static final strictfp double[] normalize(double x, double y) {
 		double magnitude = Math.sqrt((x * x) + (y * y));
@@ -241,6 +436,503 @@ public class GLUtil {
 		return result;
 	}
 	
+	/** Adds every three elements in the given array with the given
+	 * three-dimensional vector.<br>
+	 * If the given array's length is not a multiple of three, the remaining
+	 * elements are simply copied into the returned array (they are not added
+	 * together with the vector).
+	 *
+	 * @param array The array in which every three elements will be added
+	 *            together with the given vector
+	 * @param x The x component of the vector
+	 * @param y The y component of the vector
+	 * @return The resulting array */
+	public static final strictfp float[] addVector2(float[] array, float x, float y) {
+		float[] sum = new float[array.length];
+		int i = 0;
+		for(; i < sum.length; i += 2) {
+			sum[i + 0] = array[i + 0] + x;
+			sum[i + 1] = array[i + 1] + y;
+		}
+		for(; i < sum.length; i++) {
+			sum[i] = array[i];
+		}
+		return sum;
+	}
+	
+	/** Adds every three elements in the given array with the given
+	 * three-dimensional vector.<br>
+	 * If the given array's length is not a multiple of three, the remaining
+	 * elements are simply copied into the returned array (they are not added
+	 * together with the vector).
+	 *
+	 * @param array The array in which every three elements will be added
+	 *            together with the given vector
+	 * @param x The x component of the vector
+	 * @param y The y component of the vector
+	 * @return The resulting array */
+	public static final strictfp double[] addVector2(double[] array, double x, double y) {
+		double[] sum = new double[array.length];
+		int i = 0;
+		for(; i < sum.length; i += 2) {
+			sum[i + 0] = array[i + 0] + x;
+			sum[i + 1] = array[i + 1] + y;
+		}
+		for(; i < sum.length; i++) {
+			sum[i] = array[i];
+		}
+		return sum;
+	}
+	
+	/** Adds every three elements in the given array with the given
+	 * three-dimensional vector.<br>
+	 * If the given array's length is not a multiple of three, the remaining
+	 * elements are simply copied into the returned array (they are not added
+	 * together with the vector).
+	 *
+	 * @param array The array in which every three elements will be added
+	 *            together with the given vector
+	 * @param x The x component of the vector
+	 * @param y The y component of the vector
+	 * @param z The z component of the vector
+	 * @return The resulting array */
+	public static final strictfp float[] addVector3(float[] array, float x, float y, float z) {
+		float[] sum = new float[array.length];
+		int i = 0;
+		for(; i < sum.length; i += 3) {
+			sum[i + 0] = array[i + 0] + x;
+			sum[i + 1] = array[i + 1] + y;
+			sum[i + 2] = array[i + 2] + z;
+		}
+		for(; i < sum.length; i++) {
+			sum[i] = array[i];
+		}
+		return sum;
+	}
+	
+	/** Adds every three elements in the given array with the given
+	 * three-dimensional vector.<br>
+	 * If the given array's length is not a multiple of three, the remaining
+	 * elements are simply copied into the returned array (they are not added
+	 * together with the vector).
+	 *
+	 * @param array The array in which every three elements will be added
+	 *            together with the given vector
+	 * @param x The x component of the vector
+	 * @param y The y component of the vector
+	 * @param z The z component of the vector
+	 * @return The resulting array */
+	public static final strictfp double[] addVector3(double[] array, double x, double y, double z) {
+		double[] sum = new double[array.length];
+		int i = 0;
+		for(; i < sum.length; i += 3) {
+			sum[i + 0] = array[i + 0] + x;
+			sum[i + 1] = array[i + 1] + y;
+			sum[i + 2] = array[i + 2] + z;
+		}
+		for(; i < sum.length; i++) {
+			sum[i] = array[i];
+		}
+		return sum;
+	}
+	
+	/** Adds every three elements in the given array with the given
+	 * three-dimensional vector.<br>
+	 * If the given array's length is not a multiple of three, the remaining
+	 * elements are simply copied into the returned array (they are not added
+	 * together with the vector).
+	 *
+	 * @param array The array in which every three elements will be added
+	 *            together with the given vector
+	 * @param x The x component of the vector
+	 * @param y The y component of the vector
+	 * @param z The z component of the vector
+	 * @return The resulting array */
+	public static final strictfp float[] addVector4(float[] array, float x, float y, float z, float w) {
+		float[] sum = new float[array.length];
+		int i = 0;
+		for(; i < sum.length; i += 3) {
+			sum[i + 0] = array[i + 0] + x;
+			sum[i + 1] = array[i + 1] + y;
+			sum[i + 2] = array[i + 2] + z;
+			sum[i + 3] = array[i + 3] + w;
+		}
+		for(; i < sum.length; i++) {
+			sum[i] = array[i];
+		}
+		return sum;
+	}
+	
+	/** Adds every three elements in the given array with the given
+	 * three-dimensional vector.<br>
+	 * If the given array's length is not a multiple of three, the remaining
+	 * elements are simply copied into the returned array (they are not added
+	 * together with the vector).
+	 *
+	 * @param array The array in which every three elements will be added
+	 *            together with the given vector
+	 * @param x The x component of the vector
+	 * @param y The y component of the vector
+	 * @param z The z component of the vector
+	 * @return The resulting array */
+	public static final strictfp double[] addVector4(double[] array, double x, double y, double z, double w) {
+		double[] sum = new double[array.length];
+		int i = 0;
+		for(; i < sum.length; i += 4) {
+			sum[i + 0] = array[i + 0] + x;
+			sum[i + 1] = array[i + 1] + y;
+			sum[i + 2] = array[i + 2] + z;
+			sum[i + 3] = array[i + 3] + w;
+		}
+		for(; i < sum.length; i++) {
+			sum[i] = array[i];
+		}
+		return sum;
+	}
+	
+	public static final boolean doAnyElementsMatch(boolean[] v, boolean b) {
+		if(v == null) {
+			return false;
+		}
+		for(boolean vB : v) {
+			if(vB == b) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	public static final boolean equals(boolean[] v, boolean b) {
+		if(v == null) {
+			return false;
+		}
+		for(boolean vB : v) {
+			if(vB != b) {
+				return false;
+			}
+		}
+		return true;
+	}
+	
+	public static final boolean equals(boolean[] v1, boolean[] v2) {
+		if(v1 == null) {
+			return v2 == null;
+		}
+		if(v2 == null) {
+			return false;
+		}
+		if(v1.length != v2.length) {
+			return false;
+		}
+		for(int i = 0; i < v1.length; i++) {
+			if(v1[i] != v2[i]) {
+				return false;
+			}
+		}
+		return true;
+	}
+	
+	public static final boolean doAnyElementsMatch(int[] v, int i) {
+		if(v == null) {
+			return false;
+		}
+		for(int vI : v) {
+			if(vI == i) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	public static final boolean equals(int[] v, int i) {
+		if(v == null) {
+			return false;
+		}
+		for(int vI : v) {
+			if(vI != i) {
+				return false;
+			}
+		}
+		return true;
+	}
+	
+	public static final strictfp boolean equals(int[] v1, int[] v2) {
+		if(v1 == null) {
+			return v2 == null;
+		}
+		if(v2 == null) {
+			return false;
+		}
+		if(v1.length != v2.length) {
+			return false;
+		}
+		for(int i = 0; i < v1.length; i++) {
+			if(v1[i] != v2[i]) {
+				return false;
+			}
+		}
+		return true;
+	}
+	
+	public static final boolean doAnyElementsMatch(float[] v, float f) {
+		if(v == null) {
+			return false;
+		}
+		for(float vF : v) {
+			if(vF == f) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	public static final boolean doAnyElementsMatchExact(float[] v, float f) {
+		if(v == null) {
+			return false;
+		}
+		for(float vF : v) {
+			if(Float.floatToRawIntBits(vF) == Float.floatToRawIntBits(f)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	public static final strictfp boolean equals(float[] v, float f) {
+		if(v == null) {
+			return false;
+		}
+		for(float vF : v) {
+			if(vF != f) {
+				return false;
+			}
+		}
+		return true;
+	}
+	
+	public static final strictfp boolean equalsExact(float[] v, float f) {
+		if(v == null) {
+			return false;
+		}
+		for(float vF : v) {
+			if(Float.floatToRawIntBits(vF) != Float.floatToRawIntBits(f)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	
+	public static final strictfp boolean equals(float[] v1, float[] v2) {
+		if(v1 == null) {
+			return v2 == null;
+		}
+		if(v2 == null) {
+			return false;
+		}
+		if(v1.length != v2.length) {
+			return false;
+		}
+		for(int i = 0; i < v1.length; i++) {
+			if(v1[i] != v2[i]) {
+				return false;
+			}
+		}
+		return true;
+	}
+	
+	public static final strictfp boolean equalsExact(float[] v1, float[] v2) {
+		if(v1 == null) {
+			return v2 == null;
+		}
+		if(v2 == null) {
+			return false;
+		}
+		if(v1.length != v2.length) {
+			return false;
+		}
+		for(int i = 0; i < v1.length; i++) {
+			if(Float.floatToRawIntBits(v1[i]) != Float.floatToRawIntBits(v2[i])) {
+				return false;
+			}
+		}
+		return true;
+	}
+	
+	public static final boolean doAnyElementsMatch(long[] v, long l) {
+		if(v == null) {
+			return false;
+		}
+		for(long vL : v) {
+			if(vL == l) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	public static final boolean equals(long[] v, long l) {
+		if(v == null) {
+			return false;
+		}
+		for(long vL : v) {
+			if(vL != l) {
+				return false;
+			}
+		}
+		return true;
+	}
+	
+	public static final strictfp boolean equals(long[] v1, long[] v2) {
+		if(v1 == null) {
+			return v2 == null;
+		}
+		if(v2 == null) {
+			return false;
+		}
+		if(v1.length != v2.length) {
+			return false;
+		}
+		for(int i = 0; i < v1.length; i++) {
+			if(v1[i] != v2[i]) {
+				return false;
+			}
+		}
+		return true;
+	}
+	
+	public static final boolean doAnyElementsMatch(double[] v, double d) {
+		if(v == null) {
+			return false;
+		}
+		for(double vD : v) {
+			if(vD == d) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	public static final boolean doAnyElementsMatchExact(double[] v, double d) {
+		if(v == null) {
+			return false;
+		}
+		for(double vD : v) {
+			if(Double.doubleToRawLongBits(vD) == Double.doubleToRawLongBits(d)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	public static final strictfp boolean equals(double[] v, double d) {
+		if(v == null) {
+			return false;
+		}
+		for(double vD : v) {
+			if(vD != d) {
+				return false;
+			}
+		}
+		return true;
+	}
+	
+	public static final strictfp boolean equalsExact(double[] v, double d) {
+		if(v == null) {
+			return false;
+		}
+		for(double vD : v) {
+			if(Double.doubleToRawLongBits(vD) != Double.doubleToRawLongBits(d)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	
+	public static final strictfp boolean equals(double[] v1, double[] v2) {
+		if(v1 == null) {
+			return v2 == null;
+		}
+		if(v2 == null) {
+			return false;
+		}
+		if(v1.length != v2.length) {
+			return false;
+		}
+		for(int i = 0; i < v1.length; i++) {
+			if(v1[i] != v2[i]) {
+				return false;
+			}
+		}
+		return true;
+	}
+	
+	public static final strictfp boolean equalsExact(double[] v1, double[] v2) {
+		if(v1 == null) {
+			return v2 == null;
+		}
+		if(v2 == null) {
+			return false;
+		}
+		if(v1.length != v2.length) {
+			return false;
+		}
+		for(int i = 0; i < v1.length; i++) {
+			if(Double.doubleToRawLongBits(v1[i]) != Double.doubleToRawLongBits(v2[i])) {
+				return false;
+			}
+		}
+		return true;
+	}
+	
+	public static final strictfp int[] abs(int[] v) {
+		int[] abs = new int[v.length];
+		for(int i = 0; i < abs.length; i++) {
+			abs[i] = Math.abs(v[i]);
+		}
+		return abs;
+	}
+	
+	public static final strictfp float[] abs(float[] v) {
+		float[] abs = new float[v.length];
+		for(int i = 0; i < abs.length; i++) {
+			abs[i] = Math.abs(v[i]);
+		}
+		return abs;
+	}
+	
+	public static final strictfp long[] abs(long[] v) {
+		long[] abs = new long[v.length];
+		for(int i = 0; i < abs.length; i++) {
+			abs[i] = Math.abs(v[i]);
+		}
+		return abs;
+	}
+	
+	public static final strictfp double[] abs(double[] v) {
+		double[] abs = new double[v.length];
+		for(int i = 0; i < abs.length; i++) {
+			abs[i] = Math.abs(v[i]);
+		}
+		return abs;
+	}
+	
+	public static final strictfp int[] add(int[] v1, int[] v2) {
+		int length = Math.min(v1.length, v2.length);
+		int[] sum = new int[length];
+		for(int i = 0; i < sum.length; i++) {
+			sum[i] = v1[i] + v2[i];
+		}
+		return sum;
+	}
+	
+	public static final strictfp int[] add(int[] v, int value) {
+		int[] sum = new int[v.length];
+		for(int i = 0; i < sum.length; i++) {
+			sum[i] = v[i] + value;
+		}
+		return sum;
+	}
+	
 	public static final strictfp float[] add(float[] v1, float[] v2) {
 		int length = Math.min(v1.length, v2.length);
 		float[] sum = new float[length];
@@ -250,8 +942,48 @@ public class GLUtil {
 		return sum;
 	}
 	
+	public static final strictfp float[] addDivisibly(float[] augend, float[] addend, boolean copySign) {
+		if(augend.length < addend.length) {
+			float[] tmp = augend;
+			augend = addend;
+			addend = tmp;
+		}
+		
+		if(augend.length % addend.length != 0) {
+			throw new IllegalArgumentException(String.format("augend.length (%s) is not divisible by addend.length! (%s)", Integer.toString(augend.length), Integer.toString(addend.length)));
+		}
+		float[] sum = new float[augend.length];
+		/*for(int i = 0; i < sum.length;) {
+			for(float f : addend) {
+				sum[i] = augend[i] + f;
+				i++;
+			}
+		}*/
+		for(int i = 0; i < sum.length; i++) {
+			sum[i] = augend[i] + (addend[i % addend.length] * (copySign && augend[i] < 0 ? -1.0f : 1.0f));
+		}
+		return sum;
+	}
+	
 	public static final strictfp float[] add(float[] v, float value) {
 		float[] sum = new float[v.length];
+		for(int i = 0; i < sum.length; i++) {
+			sum[i] = v[i] + value;
+		}
+		return sum;
+	}
+	
+	public static final strictfp long[] add(long[] v1, long[] v2) {
+		int length = Math.min(v1.length, v2.length);
+		long[] sum = new long[length];
+		for(int i = 0; i < sum.length; i++) {
+			sum[i] = v1[i] + v2[i];
+		}
+		return sum;
+	}
+	
+	public static final strictfp long[] add(long[] v, long value) {
+		long[] sum = new long[v.length];
 		for(int i = 0; i < sum.length; i++) {
 			sum[i] = v[i] + value;
 		}
@@ -275,6 +1007,23 @@ public class GLUtil {
 		return sum;
 	}
 	
+	public static final strictfp int[] subtract(int[] v1, int[] v2) {
+		int length = Math.min(v1.length, v2.length);
+		int[] difference = new int[length];
+		for(int i = 0; i < difference.length; i++) {
+			difference[i] = v1[i] - v2[i];
+		}
+		return difference;
+	}
+	
+	public static final strictfp int[] subtract(int[] v, int value) {
+		int[] difference = new int[v.length];
+		for(int i = 0; i < difference.length; i++) {
+			difference[i] = v[i] - value;
+		}
+		return difference;
+	}
+	
 	public static final strictfp float[] subtract(float[] v1, float[] v2) {
 		int length = Math.min(v1.length, v2.length);
 		float[] difference = new float[length];
@@ -286,6 +1035,23 @@ public class GLUtil {
 	
 	public static final strictfp float[] subtract(float[] v, float value) {
 		float[] difference = new float[v.length];
+		for(int i = 0; i < difference.length; i++) {
+			difference[i] = v[i] - value;
+		}
+		return difference;
+	}
+	
+	public static final strictfp long[] subtract(long[] v1, long[] v2) {
+		int length = Math.min(v1.length, v2.length);
+		long[] difference = new long[length];
+		for(int i = 0; i < difference.length; i++) {
+			difference[i] = v1[i] - v2[i];
+		}
+		return difference;
+	}
+	
+	public static final strictfp long[] subtract(long[] v, long value) {
+		long[] difference = new long[v.length];
 		for(int i = 0; i < difference.length; i++) {
 			difference[i] = v[i] - value;
 		}
@@ -309,6 +1075,23 @@ public class GLUtil {
 		return difference;
 	}
 	
+	public static final strictfp int[] multiply(int[] v1, int[] v2) {
+		int length = Math.min(v1.length, v2.length);
+		int[] product = new int[length];
+		for(int i = 0; i < product.length; i++) {
+			product[i] = v1[i] * v2[i];
+		}
+		return product;
+	}
+	
+	public static final strictfp int[] multiply(int[] v, int value) {
+		int[] product = new int[v.length];
+		for(int i = 0; i < product.length; i++) {
+			product[i] = v[i] * value;
+		}
+		return product;
+	}
+	
 	public static final strictfp float[] multiply(float[] v1, float[] v2) {
 		int length = Math.min(v1.length, v2.length);
 		float[] product = new float[length];
@@ -320,6 +1103,23 @@ public class GLUtil {
 	
 	public static final strictfp float[] multiply(float[] v, float value) {
 		float[] product = new float[v.length];
+		for(int i = 0; i < product.length; i++) {
+			product[i] = v[i] * value;
+		}
+		return product;
+	}
+	
+	public static final strictfp long[] multiply(long[] v1, long[] v2) {
+		int length = Math.min(v1.length, v2.length);
+		long[] product = new long[length];
+		for(int i = 0; i < product.length; i++) {
+			product[i] = v1[i] * v2[i];
+		}
+		return product;
+	}
+	
+	public static final strictfp long[] multiply(long[] v, long value) {
+		long[] product = new long[v.length];
 		for(int i = 0; i < product.length; i++) {
 			product[i] = v[i] * value;
 		}
@@ -343,6 +1143,31 @@ public class GLUtil {
 		return product;
 	}
 	
+	public static final strictfp int[] divide(int[] v1, int[] v2) {
+		int length = Math.min(v1.length, v2.length);
+		int[] quotient = new int[length];
+		for(int i = 0; i < quotient.length; i++) {
+			quotient[i] = v1[i] / v2[i];
+		}
+		return quotient;
+	}
+	
+	public static final strictfp int[] divide(int divisor, int[] v) {
+		int[] quotient = new int[v.length];
+		for(int i = 0; i < quotient.length; i++) {
+			quotient[i] = divisor / v[i];
+		}
+		return quotient;
+	}
+	
+	public static final strictfp int[] divide(int[] v, int dividend) {
+		int[] quotient = new int[v.length];
+		for(int i = 0; i < quotient.length; i++) {
+			quotient[i] = v[i] / dividend;
+		}
+		return quotient;
+	}
+	
 	public static final strictfp float[] divide(float[] v1, float[] v2) {
 		int length = Math.min(v1.length, v2.length);
 		float[] quotient = new float[length];
@@ -362,6 +1187,31 @@ public class GLUtil {
 	
 	public static final strictfp float[] divide(float[] v, float dividend) {
 		float[] quotient = new float[v.length];
+		for(int i = 0; i < quotient.length; i++) {
+			quotient[i] = v[i] / dividend;
+		}
+		return quotient;
+	}
+	
+	public static final strictfp long[] divide(long[] v1, long[] v2) {
+		int length = Math.min(v1.length, v2.length);
+		long[] quotient = new long[length];
+		for(int i = 0; i < quotient.length; i++) {
+			quotient[i] = v1[i] / v2[i];
+		}
+		return quotient;
+	}
+	
+	public static final strictfp long[] divide(long divisor, long[] v) {
+		long[] quotient = new long[v.length];
+		for(int i = 0; i < quotient.length; i++) {
+			quotient[i] = divisor / v[i];
+		}
+		return quotient;
+	}
+	
+	public static final strictfp long[] divide(long[] v, long dividend) {
+		long[] quotient = new long[v.length];
 		for(int i = 0; i < quotient.length; i++) {
 			quotient[i] = v[i] / dividend;
 		}
@@ -393,11 +1243,179 @@ public class GLUtil {
 		return quotient;
 	}
 	
+	public static final strictfp int[] modulus(int[] v1, int[] v2, boolean copySign) {
+		int length = Math.min(v1.length, v2.length);
+		int[] sum = new int[length];
+		for(int i = 0; i < sum.length; i++) {
+			sum[i] = v1[i] % v2[i];
+			if(copySign) {
+				if(v2[i] > 0 && sum[i] < 0) {
+					sum[i] += v2[i];
+				} else if(v2[i] < 0 && sum[i] > 0) {
+					sum[i] -= v2[i];
+				}
+			}
+		}
+		return sum;
+	}
+	
+	public static final strictfp int[] modulus(int[] v1, int[] v2) {
+		return modulus(v1, v2, false);
+	}
+	
+	public static final strictfp int[] modulus(int[] v, int value, boolean copySign) {
+		int[] sum = new int[v.length];
+		for(int i = 0; i < sum.length; i++) {
+			sum[i] = v[i] % value;
+			if(copySign) {
+				if(value > 0 && sum[i] < 0) {
+					sum[i] += value;
+				} else if(value < 0 && sum[i] > 0) {
+					sum[i] -= value;
+				}
+			}
+		}
+		return sum;
+	}
+	
+	public static final strictfp int[] modulus(int[] v1, int value) {
+		return modulus(v1, value, false);
+	}
+	
+	public static final strictfp int modulus(int i, int m, boolean copySign) {
+		i = i % m;
+		if(copySign) {
+			if(m > 0 && i < 0) {
+				i += m;
+			} else if(m < 0 && i > 0) {
+				i -= m;
+			}
+		}
+		return i;
+	}
+	
+	public static final strictfp float[] modulus(float[] v1, float[] v2, boolean copySign) {
+		int length = Math.min(v1.length, v2.length);
+		float[] sum = new float[length];
+		for(int i = 0; i < sum.length; i++) {
+			sum[i] = v1[i] % v2[i];
+			if(copySign) {
+				if(v2[i] > 0 && sum[i] < 0) {
+					sum[i] += v2[i];
+				} else if(v2[i] < 0 && sum[i] > 0) {
+					sum[i] -= v2[i];
+				}
+			}
+		}
+		return sum;
+	}
+	
+	public static final strictfp float[] modulus(float[] v1, float[] v2) {
+		return modulus(v1, v2, false);
+	}
+	
+	public static final strictfp float[] modulus(float[] v, float value, boolean copySign) {
+		float[] mod = new float[v.length];
+		for(int i = 0; i < mod.length; i++) {
+			mod[i] = v[i] % value;
+			if(copySign) {
+				if(value > 0 && mod[i] < 0) {
+					mod[i] += value;
+				} else if(value < 0 && mod[i] > 0) {
+					mod[i] -= value;
+				}
+			}
+		}
+		return mod;
+	}
+	
+	public static final strictfp float[] modulus(float[] v, float value) {
+		return modulus(v, value, false);
+	}
+	
+	public static final strictfp long[] modulus(long[] v1, long[] v2, boolean copySign) {
+		int length = Math.min(v1.length, v2.length);
+		long[] mod = new long[length];
+		for(int i = 0; i < mod.length; i++) {
+			mod[i] = v1[i] % v2[i];
+			if(copySign) {
+				if(v2[i] > 0 && mod[i] < 0) {
+					mod[i] += v2[i];
+				} else if(v2[i] < 0 && mod[i] > 0) {
+					mod[i] -= v2[i];
+				}
+			}
+		}
+		return mod;
+	}
+	
+	public static final strictfp long[] modulus(long[] v1, long[] v2) {
+		return modulus(v1, v2, false);
+	}
+	
+	public static final strictfp long[] modulus(long[] v, long value, boolean copySign) {
+		long[] mod = new long[v.length];
+		for(int i = 0; i < mod.length; i++) {
+			mod[i] = v[i] % value;
+			if(copySign) {
+				if(value > 0 && mod[i] < 0) {
+					mod[i] += value;
+				} else if(value < 0 && mod[i] > 0) {
+					mod[i] -= value;
+				}
+			}
+		}
+		return mod;
+	}
+	
+	public static final strictfp long[] modulus(long[] v, long value) {
+		return modulus(v, value, false);
+	}
+	
+	public static final strictfp double[] modulus(double[] v1, double[] v2, boolean copySign) {
+		int length = Math.min(v1.length, v2.length);
+		double[] mod = new double[length];
+		for(int i = 0; i < mod.length; i++) {
+			mod[i] = v1[i] % v2[i];
+			if(copySign) {
+				if(v2[i] > 0 && mod[i] < 0) {
+					mod[i] += v2[i];
+				} else if(v2[i] < 0 && mod[i] > 0) {
+					mod[i] -= v2[i];
+				}
+			}
+		}
+		return mod;
+	}
+	
+	public static final strictfp double[] modulus(double[] v1, double[] v2) {
+		return modulus(v1, v2, false);
+	}
+	
+	public static final strictfp double[] modulus(double[] v, double value, boolean copySign) {
+		double[] mod = new double[v.length];
+		for(int i = 0; i < mod.length; i++) {
+			mod[i] = v[i] % value;
+			if(copySign) {
+				if(value > 0 && mod[i] < 0) {
+					mod[i] += value;
+				} else if(value < 0 && mod[i] > 0) {
+					mod[i] -= value;
+				}
+			}
+		}
+		return mod;
+	}
+	
+	public static final strictfp double[] modulus(double[] v, double value) {
+		return modulus(v, value, false);
+	}
+	
 	public static final strictfp float[] cross(float[] u, float[] v) {
 		float uvi, uvj, uvk;
-		uvi = u[1] * v[2] - v[1] * u[2];
-		uvj = v[0] * u[2] - u[0] * v[2];
-		uvk = u[0] * v[1] - v[0] * u[1];
+		uvi = (u[1] * v[2]) - (v[1] * u[2]);
+		uvj = (v[0] * u[2]) - (u[0] * v[2]);
+		uvk = (u[0] * v[1]) - (v[0] * u[1]);
 		return new float[] {uvi, uvj, uvk};
 	}
 	
@@ -427,6 +1445,187 @@ public class GLUtil {
 		return sum;
 	}
 	
+	public static final strictfp float[] pow(float[] v, float pow) {
+		float[] r = new float[v.length];
+		for(int i = 0; i < r.length; i++) {
+			r[i] = (float) Math.pow(v[i], pow);
+		}
+		return r;
+	}
+	
+	public static final strictfp double[] pow(double[] v, double pow) {
+		double[] r = new double[v.length];
+		for(int i = 0; i < r.length; i++) {
+			r[i] = Math.pow(v[i], pow);
+		}
+		return r;
+	}
+	
+	public static final strictfp float[] pow(float[] v1, float[] v2) {
+		float[] r = new float[Math.min(v1.length, v2.length)];
+		for(int i = 0; i < r.length; i++) {
+			r[i] = (float) Math.pow(v1[i], v2[i]);
+		}
+		return r;
+	}
+	
+	public static final strictfp double[] pow(double[] v1, double[] v2) {
+		double[] r = new double[Math.min(v1.length, v2.length)];
+		for(int i = 0; i < r.length; i++) {
+			r[i] = Math.pow(v1[i], v2[i]);
+		}
+		return r;
+	}
+	
+	/** @param v The vector whose entries will be added together
+	 * @return The sum of all of the given vector's entries */
+	public static final byte sum(byte[] v, boolean unsigned) {
+		byte sum = 0;
+		for(byte b : v) {
+			sum += unsigned ? (b & 0xFF) : b;
+		}
+		return sum;
+	}
+	
+	/** @param v The vector whose entries will be added together
+	 * @return The sum of all of the given vector's entries */
+	public static final int sumToInt(byte[] v, boolean unsigned) {
+		int sum = 0;
+		for(byte b : v) {
+			sum += unsigned ? (b & 0xFF) : b;
+		}
+		return sum;
+	}
+	
+	/** @param v The vector whose entries will be added together
+	 * @return The sum of all of the given vector's entries */
+	public static final long sumToLong(byte[] v, boolean unsigned) {
+		long sum = 0;
+		for(byte b : v) {
+			sum += unsigned ? (b & 0xFF) : b;
+		}
+		return sum;
+	}
+	
+	/** @param v The vector whose entries will be added together
+	 * @return The sum of all of the given vector's entries */
+	public static final short sum(short[] v) {
+		short sum = 0;
+		for(short s : v) {
+			sum += s;
+		}
+		return sum;
+	}
+	
+	/** @param v The vector whose entries will be added together
+	 * @return The sum of all of the given vector's entries */
+	public static final int sum(int[] v) {
+		int sum = 0;
+		for(int i : v) {
+			sum += i;
+		}
+		return sum;
+	}
+	
+	/** @param v The vector whose entries will be added together
+	 * @return The sum of all of the given vector's entries */
+	public static final strictfp float sum(float[] v) {
+		float sum = 0x0.0p0f;
+		for(float f : v) {
+			sum += f;
+		}
+		return sum;
+	}
+	
+	/** @param v The vector whose entries will be added together
+	 * @return The sum of all of the given vector's entries */
+	public static final long sum(long[] v) {
+		long sum = 0;
+		for(long l : v) {
+			sum += l;
+		}
+		return sum;
+	}
+	
+	/** @param v The vector whose entries will be added together
+	 * @return The sum of all of the given vector's entries */
+	public static final strictfp double sum(double[] v) {
+		double sum = 0x0.0p0;
+		for(double d : v) {
+			sum += d;
+		}
+		return sum;
+	}
+	
+	public static final strictfp float difference(float[] v) {
+		float difference = 0x0.0p0f;
+		for(float f : v) {
+			difference = f - difference;
+		}
+		return difference;
+	}
+	
+	public static final strictfp double difference(double[] v) {
+		double difference = 0x0.0p0f;
+		for(double f : v) {
+			difference = f - difference;
+		}
+		return difference;
+	}
+	
+	public static final strictfp float product(float[] v) {
+		float product = 1.0f;
+		for(float d : v) {
+			product *= d;
+		}
+		return product;
+	}
+	
+	public static final strictfp double product(double[] v) {
+		double product = 1.0;
+		for(double d : v) {
+			product *= d;
+		}
+		return product;
+	}
+	
+	public static final strictfp float quotient(float[] v) {
+		float quotient = 1.0f;
+		for(float d : v) {
+			quotient = d / quotient;
+		}
+		return quotient;
+	}
+	
+	public static final strictfp double quotient(double[] v) {
+		double quotient = 1.0;
+		for(double d : v) {
+			quotient = d / quotient;
+		}
+		return quotient;
+	}
+	
+	public static final strictfp float getDistanceBetween(float[] v1, float[] v2) {
+		float[] diff = subtract(v2, v1);
+		float[] squared = pow(diff, 2.0f);
+		float magnitude = sum(squared);
+		return (float) Math.sqrt(magnitude);
+	}
+	
+	public static final strictfp double getDistanceBetween(double[] v1, double[] v2) {
+		double[] diff = subtract(v2, v1);
+		double[] squared = pow(diff, 2.0);
+		double magnitude = sum(squared);
+		return Math.sqrt(magnitude);
+	}
+	
+	//@formatter:off
+	/** @return <table border=1 cellPadding=6 cellSpacing=0>
+	 * <tr><td>1.0f</td><td>0.0f</td><td>0.0f</td><td>0.0f</td></tr>
+	 * <tr><td>0.0f</td><td>1.0f</td><td>0.0f</td><td>0.0f</td></tr>
+	 * <tr><td>0.0f</td><td>0.0f</td><td>1.0f</td><td>0.0f</td></tr>
+	 * <tr><td>0.0f</td><td>0.0f</td><td>0.0f</td><td>1.0f</td></tr>
+	 * </table> *///@formatter:on
 	public static final strictfp float[] getIdentityf() {
 		return new float[] {//
 				1, 0, 0, 0,//
@@ -436,6 +1635,13 @@ public class GLUtil {
 		};
 	}
 	
+	//@formatter:off
+	/** @return <table border=1 cellPadding=6 cellSpacing=0>
+	 * <tr><td>1.0</td><td>0.0</td><td>0.0</td><td>0.0</td></tr>
+	 * <tr><td>0.0</td><td>1.0</td><td>0.0</td><td>0.0</td></tr>
+	 * <tr><td>0.0</td><td>0.0</td><td>1.0</td><td>0.0</td></tr>
+	 * <tr><td>0.0</td><td>0.0</td><td>0.0</td><td>1.0</td></tr>
+	 * </table> *///@formatter:on
 	public static final strictfp double[] getIdentityd() {
 		return new double[] {//
 				1, 0, 0, 0,//
@@ -445,6 +1651,24 @@ public class GLUtil {
 		};
 	}
 	
+	//@formatter:off
+	/** @param m The matrix to be transposed
+	 * @return Example matrix before transposing:<br>
+	 * Row-Major Order (-↩-↩-↩-)<br>
+	 * <table border=1 cellPadding=6 cellSpacing=0>
+	 * <tr><td>&nbsp;0.0f</td><td>&nbsp;1.0f</td><td>&nbsp;2.0f</td><td>&nbsp;3.0f</td></tr>
+	 * <tr><td>&nbsp;4.0f</td><td>&nbsp;5.0f</td><td>&nbsp;6.0f</td><td>&nbsp;7.0f</td></tr>
+	 * <tr><td>&nbsp;8.0f</td><td>&nbsp;9.0f</td><td>10.0f</td><td>11.0f</td></tr>
+	 * <tr><td>12.0f</td><td>13.0f</td><td>14.0f</td><td>15.0f</td></tr>
+	 * </table><br>
+	 * After transposing:<br>
+	 * Column-Major Order (|↗|↗|↗|, used by OpenGL)<br>
+	 * <table border=1 cellPadding=6 cellSpacing=0>
+	 * <tr><td>&nbsp;0.0f&nbsp;</td><td>&nbsp;4.0f&nbsp;</td><td>&nbsp;8.0f</td><td>12.0f</td></tr>
+	 * <tr><td>&nbsp;1.0f&nbsp;</td><td>&nbsp;5.0f&nbsp;</td><td>&nbsp;9.0f</td><td>13.0f</td></tr>
+	 * <tr><td>&nbsp;2.0f&nbsp;</td><td>&nbsp;6.0f&nbsp;</td><td>10.0f</td><td>14.0f</td></tr>
+	 * <tr><td>&nbsp;3.0f&nbsp;</td><td>&nbsp;7.0f&nbsp;</td><td>11.0f</td><td>15.0f</td></tr>
+	 * </table>*///@formatter:on
 	public static final strictfp float[] transpose(float[] m) {
 		float[] mat = new float[16];
 		mat[0] = m[0];//
@@ -469,6 +1693,24 @@ public class GLUtil {
 		return mat;
 	}
 	
+	//@formatter:off
+	/** @param m The matrix to be transposed
+	 * @return Example matrix before transposing:<br>
+	 * Row-Major Order (-↩-↩-↩-)<br>
+	 * <table border=1 cellPadding=6 cellSpacing=0>
+	 * <tr><td>&nbsp;0.0</td><td>&nbsp;1.0</td><td>&nbsp;2.0</td><td>&nbsp;3.0</td></tr>
+	 * <tr><td>&nbsp;4.0</td><td>&nbsp;5.0</td><td>&nbsp;6.0</td><td>&nbsp;7.0</td></tr>
+	 * <tr><td>&nbsp;8.0</td><td>&nbsp;9.0</td><td>10.0</td><td>11.0</td></tr>
+	 * <tr><td>12.0</td><td>13.0</td><td>14.0</td><td>15.0</td></tr>
+	 * </table><br>
+	 * After transposing:<br>
+	 * Column-Major Order (|↗|↗|↗|, used by OpenGL)<br>
+	 * <table border=1 cellPadding=6 cellSpacing=0>
+	 * <tr><td>&nbsp;0.0&nbsp;</td><td>&nbsp;4.0&nbsp;</td><td>&nbsp;8.0</td><td>12.0</td></tr>
+	 * <tr><td>&nbsp;1.0&nbsp;</td><td>&nbsp;5.0&nbsp;</td><td>&nbsp;9.0</td><td>13.0</td></tr>
+	 * <tr><td>&nbsp;2.0&nbsp;</td><td>&nbsp;6.0&nbsp;</td><td>10.0</td><td>14.0</td></tr>
+	 * <tr><td>&nbsp;3.0&nbsp;</td><td>&nbsp;7.0&nbsp;</td><td>11.0</td><td>15.0</td></tr>
+	 * </table>*///@formatter:on
 	public static final strictfp double[] transpose(double[] m) {
 		double[] mat = new double[16];
 		mat[0] = m[0];//
@@ -585,7 +1827,8 @@ public class GLUtil {
 	}
 	
 	public static final strictfp float[] multMatrix4x4f(float[] m1, float[] m2) {
-		return new float[] {(m1[0] * m2[0]) + (m1[1] * m2[4]) + (m1[2] * m2[8]) + (m1[3] * m2[12]),//0
+		return new float[] {//@formatter:off
+				(m1[0] * m2[0]) + (m1[1] * m2[4]) + (m1[2] * m2[8]) + (m1[3] * m2[12]),//0
 				(m1[0] * m2[1]) + (m1[1] * m2[5]) + (m1[2] * m2[9]) + (m1[3] * m2[13]),//1
 				(m1[0] * m2[2]) + (m1[1] * m2[6]) + (m1[2] * m2[10]) + (m1[3] * m2[14]),//2
 				(m1[0] * m2[3]) + (m1[1] * m2[7]) + (m1[2] * m2[11]) + (m1[3] * m2[15]),//3
@@ -604,11 +1847,12 @@ public class GLUtil {
 				(m1[12] * m2[1]) + (m1[13] * m2[5]) + (m1[14] * m2[9]) + (m1[15] * m2[13]),//13
 				(m1[12] * m2[2]) + (m1[13] * m2[6]) + (m1[14] * m2[10]) + (m1[15] * m2[14]),//14
 				(m1[12] * m2[3]) + (m1[13] * m2[7]) + (m1[14] * m2[11]) + (m1[15] * m2[15])//15
-		};
+		};//@formatter:on
 	}
 	
 	public static final strictfp double[] multMatrix4x4d(double[] m1, double[] m2) {
-		return new double[] {(m1[0] * m2[0]) + (m1[1] * m2[4]) + (m1[2] * m2[8]) + (m1[3] * m2[12]),//0
+		return new double[] {//@formatter:off
+				(m1[0] * m2[0]) + (m1[1] * m2[4]) + (m1[2] * m2[8]) + (m1[3] * m2[12]),//0
 				(m1[0] * m2[1]) + (m1[1] * m2[5]) + (m1[2] * m2[9]) + (m1[3] * m2[13]),//1
 				(m1[0] * m2[2]) + (m1[1] * m2[6]) + (m1[2] * m2[10]) + (m1[3] * m2[14]),//2
 				(m1[0] * m2[3]) + (m1[1] * m2[7]) + (m1[2] * m2[11]) + (m1[3] * m2[15]),//3
@@ -627,55 +1871,59 @@ public class GLUtil {
 				(m1[12] * m2[1]) + (m1[13] * m2[5]) + (m1[14] * m2[9]) + (m1[15] * m2[13]),//13
 				(m1[12] * m2[2]) + (m1[13] * m2[6]) + (m1[14] * m2[10]) + (m1[15] * m2[14]),//14
 				(m1[12] * m2[3]) + (m1[13] * m2[7]) + (m1[14] * m2[11]) + (m1[15] * m2[15])//15
-		};
+		};//@formatter:on
 	}
 	
 	public static final float[] buildTranslate4x4f(float x, float y, float z) {
-		return new float[] {1.0f, 0.0f, 0.0f, 0.0f,//
-				0.0f, 1.0f, 0.0f, 0.0f,//
-				0.0f, 0.0f, 1.0f, 0.0f,//
-				x, y, z, 1.0f//
-		};
+		return new float[] {//@formatter:off
+				1.0f, 0.0f, 0.0f, 0.0f,
+				0.0f, 1.0f, 0.0f, 0.0f,
+				0.0f, 0.0f, 1.0f, 0.0f,
+				x, y, z, 1.0f
+		};//@formatter:on
 	}
 	
 	public static final double[] buildTranslate4x4d(double x, double y, double z) {
-		return new double[] {1.0, 0.0, 0.0, 0.0,//
-				0.0, 1.0, 0.0, 0.0,//
-				0.0, 0.0, 1.0, 0.0,//
-				x, y, z, 1.0//
-		};
+		return new double[] {//@formatter:off
+				1.0, 0.0, 0.0, 0.0,
+				0.0, 1.0, 0.0, 0.0,
+				0.0, 0.0, 1.0, 0.0,
+				x, y, z, 1.0
+		};//@formatter:on
 	}
 	
 	public static final strictfp float[] translateMatrix4x4f(float[] matrix, float x, float y, float z) {
-		return multMatrix4x4f(matrix, buildTranslate4x4f(x, y, z));
+		return multMatrix4x4f(buildTranslate4x4f(x, y, z), matrix);
 	}
 	
 	public static final strictfp double[] translateMatrix4x4d(double[] matrix, double x, double y, double z) {
-		return multMatrix4x4d(matrix, buildTranslate4x4d(x, y, z));
+		return multMatrix4x4d(buildTranslate4x4d(x, y, z), matrix);
 	}
 	
 	public static final float[] buildScale4x4f(float x, float y, float z) {
-		return new float[] {x, 0.0f, 0.0f, 0.0f,//
-				0.0f, y, 0.0f, 0.0f,//
-				0.0f, 0.0f, z, 0.0f,//
-				0.0f, 0.0f, 0.0f, 1.0f,//
-		};
+		return new float[] {//@formatter:off
+				x, 0.0f, 0.0f, 0.0f,
+				0.0f, y, 0.0f, 0.0f,
+				0.0f, 0.0f, z, 0.0f,
+				0.0f, 0.0f, 0.0f, 1.0f,
+		};//@formatter:on
 	}
 	
 	public static final double[] buildScale4x4d(double x, double y, double z) {
-		return new double[] {x, 0.0, 0.0, 0.0,//
-				0.0, y, 0.0, 0.0,//
-				0.0, 0.0, z, 0.0,//
-				0.0, 0.0, 0.0, 1.0,//
-		};
+		return new double[] {//@formatter:off
+				x, 0.0, 0.0, 0.0,
+				0.0, y, 0.0, 0.0,
+				0.0, 0.0, z, 0.0,
+				0.0, 0.0, 0.0, 1.0,
+		};//@formatter:on
 	}
 	
 	public static final strictfp float[] scaleMatrix4x4f(float[] matrix, float x, float y, float z) {
-		return multMatrix4x4f(matrix, buildScale4x4f(x, y, z));
+		return multMatrix4x4f(buildScale4x4f(x, y, z), matrix);
 	}
 	
 	public static final strictfp double[] scaleMatrix4x4d(double[] matrix, double x, double y, double z) {
-		return multMatrix4x4d(matrix, buildScale4x4d(x, y, z));
+		return multMatrix4x4d(buildScale4x4d(x, y, z), matrix);
 	}
 	
 	public static final strictfp float[] buildRotateX4x4Radf(float angleRad, float axis) {
@@ -709,21 +1957,23 @@ public class GLUtil {
 	public static final strictfp float[] buildRotateY4x4Radf(float angleRad, float axis) {
 		float cos = (float) (Math.cos(angleRad) * axis);
 		float sin = (float) (Math.sin(angleRad) * axis);
-		return new float[] {cos, 0.0f, sin, 0.0f,//
-				0.0f, 1.0f, 0.0f, 0.0f,//
-				-sin, 0.0f, cos, 0.0f,//
-				0.0f, 0.0f, 0.0f, 1.0f//
-		};
+		return new float[] {//@formatter:off
+				 cos,  0.0f, sin,  0.0f,
+				 0.0f, 1.0f, 0.0f, 0.0f,
+				-sin,  0.0f, cos,  0.0f,
+				 0.0f, 0.0f, 0.0f, 1.0f
+		};//@formatter:on
 	}
 	
 	public static final strictfp double[] buildRotateY4x4Radd(double angleRad, double axis) {
 		double cos = Math.cos(angleRad) * axis;
 		double sin = Math.sin(angleRad) * axis;
-		return new double[] {cos, 0.0, sin, 0.0,//
-				0.0, 1.0, 0.0, 0.0,//
-				-sin, 0.0, cos, 0.0,//
-				0.0, 0.0, 0.0, 1.0//
-		};
+		return new double[] {//@formatter:off
+				 cos, 0.0, sin, 0.0,
+				 0.0, 1.0, 0.0, 0.0,
+				-sin, 0.0, cos, 0.0,
+				 0.0, 0.0, 0.0, 1.0
+		};//@formatter:on
 	}
 	
 	public static final strictfp float[] buildRotateY4x4Degf(float angleDeg, float axis) {
@@ -772,29 +2022,32 @@ public class GLUtil {
 		if(z != posZerof && z != negZerof) {
 			float cos = c * zAxisRoll;
 			float sin = s * zAxisRoll;
-			matrix = multMatrix4x4f(matrix, new float[] {cos, -sin, 0.0f, 0.0f,//
-					sin, cos, 0.0f, 0.0f,//
-					0.0f, 0.0f, 1.0f, 0.0f,//
-					0.0f, 0.0f, 0.0f, 1.0f//
-			});
+			matrix = multMatrix4x4f(new float[] {//@formatter:off
+					cos, -sin, 0.0f, 0.0f,
+					sin, cos, 0.0f, 0.0f,
+					0.0f, 0.0f, 1.0f, 0.0f,
+					0.0f, 0.0f, 0.0f, 1.0f
+			}, matrix);//@formatter:on
 		}
 		if(x != posZerof && x != negZerof) {
 			float cos = c * xAxisPitch;
 			float sin = s * xAxisPitch;
-			matrix = multMatrix4x4f(matrix, new float[] {1.0f, 0.0f, 0.0f, 0.0f,//
-					0.0f, cos, -sin, 0.0f,//
-					0.0f, sin, cos, 0.0f,//
-					0.0f, 0.0f, 0.0f, 1.0f//
-			});
+			matrix = multMatrix4x4f(new float[] {//@formatter:off
+					1.0f, 0.0f, 0.0f, 0.0f,
+					0.0f, cos, -sin, 0.0f,
+					0.0f, sin, cos, 0.0f,
+					0.0f, 0.0f, 0.0f, 1.0f
+			}, matrix);//@formatter:on
 		}
 		if(y != posZerof && y != negZerof) {
 			float cos = c * yAxisYaw;
 			float sin = s * yAxisYaw;
-			matrix = multMatrix4x4f(matrix, new float[] {cos, 0.0f, sin, 0.0f,//
-					0.0f, 1.0f, 0.0f, 0.0f,//
-					-sin, 0.0f, cos, 0.0f,//
-					0.0f, 0.0f, 0.0f, 1.0f//
-			});
+			matrix = multMatrix4x4f(new float[] {//@formatter:off
+					cos, 0.0f, sin, 0.0f,
+					0.0f, 1.0f, 0.0f, 0.0f,
+					-sin, 0.0f, cos, 0.0f,
+					0.0f, 0.0f, 0.0f, 1.0f
+			}, matrix);//@formatter:on
 		}
 		return matrix;
 	}
@@ -809,29 +2062,32 @@ public class GLUtil {
 		if(z != posZero && z != negZero) {
 			double cos = c * zAxisRoll;
 			double sin = s * zAxisRoll;
-			matrix = multMatrix4x4d(matrix, new double[] {cos, -sin, 0.0, 0.0,//
-					sin, cos, 0.0, 0.0,//
-					0.0, 0.0, 1.0, 0.0,//
-					0.0, 0.0, 0.0, 1.0//
-			});
+			matrix = multMatrix4x4d(new double[] {//@formatter:off
+					cos, -sin, 0.0, 0.0,
+					sin, cos, 0.0, 0.0,
+					0.0, 0.0, 1.0, 0.0,
+					0.0, 0.0, 0.0, 1.0
+			}, matrix);//@formatter:on
 		}
 		if(x != posZero && x != negZero) {
 			double cos = c * xAxisPitch;
 			double sin = s * xAxisPitch;
-			matrix = multMatrix4x4d(matrix, new double[] {1.0, 0.0, 0.0, 0.0,//
+			matrix = multMatrix4x4d(new double[] {//@formatter:off
+					1.0, 0.0, 0.0, 0.0,//
 					0.0, cos, -sin, 0.0,//
 					0.0, sin, cos, 0.0,//
 					0.0, 0.0, 0.0, 1.0//
-			});
+			}, matrix);//@formatter:on
 		}
 		if(y != posZero && y != negZero) {
 			double cos = c * yAxisYaw;
 			double sin = s * yAxisYaw;
-			matrix = multMatrix4x4d(matrix, new double[] {cos, 0.0, sin, 0.0,//
-					0.0, 1.0, 0.0, 0.0,//
-					-sin, 0.0, cos, 0.0,//
-					0.0, 0.0, 0.0, 1.0//
-			});
+			matrix = multMatrix4x4d(new double[] {//@formatter:off
+					cos, 0.0, sin, 0.0,
+					0.0, 1.0, 0.0, 0.0,
+					-sin, 0.0, cos, 0.0,
+					0.0, 0.0, 0.0, 1.0
+			}, matrix);//@formatter:on
 		}
 		return matrix;
 	}
@@ -851,31 +2107,34 @@ public class GLUtil {
 			float a = (float) (roll * toRadiansMultiplier);
 			float cos = (float) Math.cos(a);
 			float sin = (float) Math.sin(a);
-			matrix = multMatrix4x4f(matrix, new float[] {cos, -sin, 0.0f, 0.0f,//
-					sin, cos, 0.0f, 0.0f,//
-					0.0f, 0.0f, 1.0f, 0.0f,//
-					0.0f, 0.0f, 0.0f, 1.0f//
-			});
+			matrix = multMatrix4x4f(new float[] {//@formatter:off
+					cos, -sin, 0.0f, 0.0f,
+					sin, cos, 0.0f, 0.0f,
+					0.0f, 0.0f, 1.0f, 0.0f,
+					0.0f, 0.0f, 0.0f, 1.0f
+			}, matrix);//@formatter:on
 		}
 		if(p != posZerof && p != negZerof) {
 			float a = (float) (pitch * toRadiansMultiplier);
 			float cos = (float) Math.cos(a);
 			float sin = (float) Math.sin(a);
-			matrix = multMatrix4x4f(matrix, new float[] {1.0f, 0.0f, 0.0f, 0.0f,//
+			matrix = multMatrix4x4f(new float[] {//@formatter:off
+					1.0f, 0.0f, 0.0f, 0.0f,//
 					0.0f, cos, -sin, 0.0f,//
 					0.0f, sin, cos, 0.0f,//
 					0.0f, 0.0f, 0.0f, 1.0f//
-			});
+			}, matrix);//@formatter:on
 		}
 		if(y != posZerof && y != negZerof) {
 			float a = (float) (yaw * toRadiansMultiplier);
 			float cos = (float) Math.cos(a);
 			float sin = (float) Math.sin(a);
-			matrix = multMatrix4x4f(matrix, new float[] {cos, 0.0f, sin, 0.0f,//
+			matrix = multMatrix4x4f(new float[] {//@formatter:off
+					cos, 0.0f, sin, 0.0f,//
 					0.0f, 1.0f, 0.0f, 0.0f,//
 					-sin, 0.0f, cos, 0.0f,//
 					0.0f, 0.0f, 0.0f, 1.0f//
-			});
+			}, matrix);//@formatter:on
 		}
 		return matrix;
 	}
@@ -888,34 +2147,34 @@ public class GLUtil {
 			double a = roll * toRadiansMultiplier;
 			double cos = Math.cos(a);
 			double sin = Math.sin(a);
-			matrix = multMatrix4x4d(matrix, new double[] {//@formatter:off
+			matrix = multMatrix4x4d(new double[] {//@formatter:off
 					cos, -sin, 0.0, 0.0,
 					sin, cos, 0.0, 0.0,
 					0.0, 0.0, 1.0, 0.0,
 					0.0, 0.0, 0.0, 1.0
-			});//@formatter:on
+			}, matrix);//@formatter:on
 		}
 		if(p != posZero && p != negZero) {
 			double a = pitch * toRadiansMultiplier;
 			double cos = Math.cos(a);
 			double sin = Math.sin(a);
-			matrix = multMatrix4x4d(matrix, new double[] {//@formatter:off
+			matrix = multMatrix4x4d(new double[] {//@formatter:off
 					1.0, 0.0, 0.0, 0.0,
 					0.0, cos, -sin, 0.0,
 					0.0, sin, cos, 0.0,
 					0.0, 0.0, 0.0, 1.0
-			});//@formatter:on
+			}, matrix);//@formatter:on
 		}
 		if(y != posZero && y != negZero) {
 			double a = yaw * toRadiansMultiplier;
 			double cos = Math.cos(a);
 			double sin = Math.sin(a);
-			matrix = multMatrix4x4d(matrix, new double[] {//@formatter:off
+			matrix = multMatrix4x4d(new double[] {//@formatter:off
 					cos, 0.0, sin, 0.0,
 					0.0, 1.0, 0.0, 0.0,
 					-sin, 0.0, cos, 0.0,
 					0.0, 0.0, 0.0, 1.0
-			});//@formatter:on
+			}, matrix);//@formatter:on
 		}
 		return matrix;
 	}
@@ -937,29 +2196,32 @@ public class GLUtil {
 		if(y != posZerof && y != negZerof) {
 			float cos = c * yAxis;
 			float sin = s * yAxis;
-			matrix = multMatrix4x4f(matrix, new float[] {cos, 0.0f, sin, 0.0f,//
-					0.0f, 1.0f, 0.0f, 0.0f,//
-					-sin, 0.0f, cos, 0.0f,//
-					0.0f, 0.0f, 0.0f, 1.0f//
-			});
+			matrix = multMatrix4x4f(new float[] {//@formatter:off
+					cos, 0.0f, sin, 0.0f,
+					0.0f, 1.0f, 0.0f, 0.0f,
+					-sin, 0.0f, cos, 0.0f,
+					0.0f, 0.0f, 0.0f, 1.0f
+			}, matrix);//@formatter:on
 		}
 		if(x != posZerof && x != negZerof) {
 			float cos = c * xAxis;
 			float sin = s * xAxis;
-			matrix = multMatrix4x4f(matrix, new float[] {1.0f, 0.0f, 0.0f, 0.0f,//
-					0.0f, cos, -sin, 0.0f,//
-					0.0f, sin, cos, 0.0f,//
-					0.0f, 0.0f, 0.0f, 1.0f//
-			});
+			matrix = multMatrix4x4f(new float[] {//@formatter:off
+					1.0f, 0.0f, 0.0f, 0.0f,
+					0.0f, cos, -sin, 0.0f,
+					0.0f, sin, cos, 0.0f,
+					0.0f, 0.0f, 0.0f, 1.0f
+			}, matrix);//@formatter:on
 		}
 		if(z != posZerof && z != negZerof) {
 			float cos = c * zAxis;
 			float sin = s * zAxis;
-			matrix = multMatrix4x4f(matrix, new float[] {cos, -sin, 0.0f, 0.0f,//
-					sin, cos, 0.0f, 0.0f,//
-					0.0f, 0.0f, 1.0f, 0.0f,//
-					0.0f, 0.0f, 0.0f, 1.0f//
-			});
+			matrix = multMatrix4x4f(new float[] {//@formatter:off
+					cos, -sin, 0.0f, 0.0f,
+					sin, cos, 0.0f, 0.0f,
+					0.0f, 0.0f, 1.0f, 0.0f,
+					0.0f, 0.0f, 0.0f, 1.0f
+			}, matrix);//@formatter:on
 		}
 		return matrix;
 	}
@@ -974,29 +2236,32 @@ public class GLUtil {
 		if(y != posZero && y != negZero) {
 			double cos = c * yAxis;
 			double sin = s * yAxis;
-			matrix = multMatrix4x4d(matrix, new double[] {cos, 0.0, sin, 0.0,//
-					0.0, 1.0, 0.0, 0.0,//
-					-sin, 0.0, cos, 0.0,//
-					0.0, 0.0, 0.0, 1.0//
-			});
+			matrix = multMatrix4x4d(new double[] {//@formatter:off
+					cos, 0.0, sin, 0.0,
+					0.0, 1.0, 0.0, 0.0,
+					-sin, 0.0, cos, 0.0,
+					0.0, 0.0, 0.0, 1.0
+			}, matrix);//@formatter:on
 		}
 		if(x != posZero && x != negZero) {
 			double cos = c * xAxis;
 			double sin = s * xAxis;
-			matrix = multMatrix4x4d(matrix, new double[] {1.0, 0.0, 0.0, 0.0,//
-					0.0, cos, -sin, 0.0,//
-					0.0, sin, cos, 0.0,//
-					0.0, 0.0, 0.0, 1.0//
-			});
+			matrix = multMatrix4x4d(new double[] {//@formatter:off
+					1.0, 0.0, 0.0, 0.0,
+					0.0, cos, -sin, 0.0,
+					0.0, sin, cos, 0.0,
+					0.0, 0.0, 0.0, 1.0
+			}, matrix);//@formatter:on
 		}
 		if(z != posZero && z != negZero) {
 			double cos = c * zAxis;
 			double sin = s * zAxis;
-			matrix = multMatrix4x4d(matrix, new double[] {cos, -sin, 0.0, 0.0,//
-					sin, cos, 0.0, 0.0,//
-					0.0, 0.0, 1.0, 0.0,//
-					0.0, 0.0, 0.0, 1.0//
-			});
+			matrix = multMatrix4x4d(new double[] {//@formatter:off
+					cos, -sin, 0.0, 0.0,
+					sin, cos, 0.0, 0.0,
+					0.0, 0.0, 1.0, 0.0,
+					0.0, 0.0, 0.0, 1.0
+			}, matrix);//@formatter:on
 		}
 		return matrix;
 	}
@@ -1008,31 +2273,34 @@ public class GLUtil {
 			float a = (float) (yaw * toRadiansMultiplier);
 			float cos = (float) Math.cos(a);
 			float sin = (float) Math.sin(a);
-			matrix = multMatrix4x4f(matrix, new float[] {cos, 0.0f, sin, 0.0f,//
-					0.0f, 1.0f, 0.0f, 0.0f,//
-					-sin, 0.0f, cos, 0.0f,//
-					0.0f, 0.0f, 0.0f, 1.0f//
-			});
+			matrix = multMatrix4x4f(new float[] {//@formatter:off
+					cos, 0.0f, sin, 0.0f,
+					0.0f, 1.0f, 0.0f, 0.0f,
+					-sin, 0.0f, cos, 0.0f,
+					0.0f, 0.0f, 0.0f, 1.0f
+			}, matrix);//@formatter:on
 		}
 		if(p != posZerof && p != negZerof) {
 			float a = (float) (pitch * toRadiansMultiplier);
 			float cos = (float) Math.cos(a);
 			float sin = (float) Math.sin(a);
-			matrix = multMatrix4x4f(matrix, new float[] {1.0f, 0.0f, 0.0f, 0.0f,//
-					0.0f, cos, -sin, 0.0f,//
-					0.0f, sin, cos, 0.0f,//
-					0.0f, 0.0f, 0.0f, 1.0f//
-			});
+			matrix = multMatrix4x4f(new float[] {//@formatter:off
+					1.0f, 0.0f, 0.0f, 0.0f,
+					0.0f, cos, -sin, 0.0f,
+					0.0f, sin, cos, 0.0f,
+					0.0f, 0.0f, 0.0f, 1.0f
+			}, matrix);//@formatter:on
 		}
 		if(r != posZerof && r != negZerof) {
 			float a = (float) (roll * toRadiansMultiplier);
 			float cos = (float) Math.cos(a);
 			float sin = (float) Math.sin(a);
-			matrix = multMatrix4x4f(matrix, new float[] {cos, -sin, 0.0f, 0.0f,//
-					sin, cos, 0.0f, 0.0f,//
-					0.0f, 0.0f, 1.0f, 0.0f,//
-					0.0f, 0.0f, 0.0f, 1.0f//
-			});
+			matrix = multMatrix4x4f(new float[] {//@formatter:off
+					cos, -sin, 0.0f, 0.0f,
+					sin, cos, 0.0f, 0.0f,
+					0.0f, 0.0f, 1.0f, 0.0f,
+					0.0f, 0.0f, 0.0f, 1.0f
+			}, matrix);//@formatter:on
 		}
 		return matrix;
 	}
@@ -1045,51 +2313,39 @@ public class GLUtil {
 			double a = yaw * toRadiansMultiplier;
 			double cos = Math.cos(a);
 			double sin = Math.sin(a);
-			matrix = multMatrix4x4d(matrix, new double[] {cos, 0.0, sin, 0.0,//
-					0.0, 1.0, 0.0, 0.0,//
-					-sin, 0.0, cos, 0.0,//
-					0.0, 0.0, 0.0, 1.0//
-			});
+			matrix = multMatrix4x4d(new double[] {//@formatter:off
+					cos, 0.0, sin, 0.0,
+					0.0, 1.0, 0.0, 0.0,
+					-sin, 0.0, cos, 0.0,
+					0.0, 0.0, 0.0, 1.0
+			}, matrix);//@formatter:on
 		}
 		if(p != posZero && p != negZero) {
 			double a = pitch * toRadiansMultiplier;
 			double cos = Math.cos(a);
 			double sin = Math.sin(a);
-			matrix = multMatrix4x4d(matrix, new double[] {1.0, 0.0, 0.0, 0.0,//
-					0.0, cos, -sin, 0.0,//
-					0.0, sin, cos, 0.0,//
-					0.0, 0.0, 0.0, 1.0//
-			});
+			matrix = multMatrix4x4d(new double[] {//@formatter:off
+					1.0, 0.0, 0.0, 0.0,
+					0.0, cos, -sin, 0.0,
+					0.0, sin, cos, 0.0,
+					0.0, 0.0, 0.0, 1.0
+			}, matrix);//@formatter:on
 		}
 		if(r != posZero && r != negZero) {
 			double a = roll * toRadiansMultiplier;
 			double cos = Math.cos(a);
 			double sin = Math.sin(a);
-			matrix = multMatrix4x4d(matrix, new double[] {cos, -sin, 0.0, 0.0,//
-					sin, cos, 0.0, 0.0,//
-					0.0, 0.0, 1.0, 0.0,//
-					0.0, 0.0, 0.0, 1.0//
-			});
+			matrix = multMatrix4x4d(new double[] {//@formatter:off
+					cos, -sin, 0.0, 0.0,
+					sin, cos, 0.0, 0.0,
+					0.0, 0.0, 1.0, 0.0,
+					0.0, 0.0, 0.0, 1.0
+			}, matrix);//@formatter:on
 		}
 		return matrix;
 	}
 	
-	public static final strictfp double[] lookAtd(double[] eye, double[] target, double[] y) {
-		double[] fwd = normalize(subtract(target, eye));
-		double[] side = normalize(cross(fwd, y));
-		double[] up = normalize(cross(side, fwd));
-		fwd = multiply(fwd, -1.0);
-		eye = multiply(eye, -1.0);
-		
-		return new double[] {//@formatter:off
-				side[0],			up[0],			fwd[0],			0.0,
-				side[1],			up[1],			fwd[1],			0.0,
-				side[2],			up[2],			fwd[2],			0.0,
-				dot(side, eye),		dot(up, eye),	dot(fwd, eye),	1.0
-		};//@formatter:on
-	}
-	
-	public static final strictfp float[] lookAtf(float[] eye, float[] target, float[] y) {
+	public static final strictfp float[] lookAtMatrix4x4f(float[] eye, float[] target, float[] y) {
 		float[] fwd = normalize(subtract(target, eye));
 		float[] side = normalize(cross(fwd, y));
 		float[] up = normalize(cross(side, fwd));
@@ -1105,77 +2361,216 @@ public class GLUtil {
 		};//@formatter:on
 	}
 	
-	public static final String matrix4x4ToStringf(float[] matrix, int numOfPlaces, boolean pad) {
-		/*StringBuilder sb = new StringBuilder(CodeUtil.lineOf('=', ((numOfPlaces + 5) * 4) - 1)).append("\r\n");
+	public static final strictfp double[] lookAtMatrix4x4d(double[] eye, double[] target, double[] y) {
+		double[] fwd = normalize(subtract(target, eye));
+		double[] side = normalize(cross(fwd, y));
+		double[] up = normalize(cross(side, fwd));
 		
-		for(int i = 0; i < 4; i++) {
-			float d0 = matrix[0 + (4 * i)];
-			float d1 = matrix[1 + (4 * i)];
-			float d2 = matrix[2 + (4 * i)];
-			float d3 = matrix[3 + (4 * i)];
-			sb.append(d0 < 0.0 || Float.floatToIntBits(d0) == negZerof ? "" : " ").append(CodeUtil.limitDecimalNoRounding(d0, numOfPlaces, pad)).append(", ");
-			sb.append(d1 < 0.0 || Float.floatToIntBits(d1) == negZerof ? "" : " ").append(CodeUtil.limitDecimalNoRounding(d1, numOfPlaces, pad)).append(", ");
-			sb.append(d2 < 0.0 || Float.floatToIntBits(d2) == negZerof ? "" : " ").append(CodeUtil.limitDecimalNoRounding(d2, numOfPlaces, pad)).append(", ");
-			sb.append(d3 < 0.0 || Float.floatToIntBits(d3) == negZerof ? "" : " ").append(CodeUtil.limitDecimalNoRounding(d3, numOfPlaces, pad)).append(i == 3 ? ";" : ",\r\n");
+		fwd = multiply(fwd, -1.0);
+		eye = multiply(eye, -1.0);
+		
+		return new double[] {//@formatter:off
+				side[0],			up[0],			fwd[0],			0.0,
+				side[1],			up[1],			fwd[1],			0.0,
+				side[2],			up[2],			fwd[2],			0.0,
+				dot(side, eye),		dot(up, eye),	dot(fwd, eye),	1.0
+		};//@formatter:on
+	}
+	
+	public static final strictfp float[] adjugateMatrix4x4f(float[] matrix) {
+		final float[] adjugate = new float[16];
+		adjugate[0] = matrix[5] * matrix[10] * matrix[15] - matrix[5] * matrix[11] * matrix[14] - matrix[9] * matrix[6] * matrix[15] + matrix[9] * matrix[7] * matrix[14] + matrix[13] * matrix[6] * matrix[11] - matrix[13] * matrix[7] * matrix[10];
+		adjugate[1] = -matrix[1] * matrix[10] * matrix[15] + matrix[1] * matrix[11] * matrix[14] + matrix[9] * matrix[2] * matrix[15] - matrix[9] * matrix[3] * matrix[14] - matrix[13] * matrix[2] * matrix[11] + matrix[13] * matrix[3] * matrix[10];
+		adjugate[2] = matrix[1] * matrix[6] * matrix[15] - matrix[1] * matrix[7] * matrix[14] - matrix[5] * matrix[2] * matrix[15] + matrix[5] * matrix[3] * matrix[14] + matrix[13] * matrix[2] * matrix[7] - matrix[13] * matrix[3] * matrix[6];
+		adjugate[3] = -matrix[1] * matrix[6] * matrix[11] + matrix[1] * matrix[7] * matrix[10] + matrix[5] * matrix[2] * matrix[11] - matrix[5] * matrix[3] * matrix[10] - matrix[9] * matrix[2] * matrix[7] + matrix[9] * matrix[3] * matrix[6];
+		adjugate[4] = -matrix[4] * matrix[10] * matrix[15] + matrix[4] * matrix[11] * matrix[14] + matrix[8] * matrix[6] * matrix[15] - matrix[8] * matrix[7] * matrix[14] - matrix[12] * matrix[6] * matrix[11] + matrix[12] * matrix[7] * matrix[10];
+		adjugate[5] = matrix[0] * matrix[10] * matrix[15] - matrix[0] * matrix[11] * matrix[14] - matrix[8] * matrix[2] * matrix[15] + matrix[8] * matrix[3] * matrix[14] + matrix[12] * matrix[2] * matrix[11] - matrix[12] * matrix[3] * matrix[10];
+		adjugate[6] = -matrix[0] * matrix[6] * matrix[15] + matrix[0] * matrix[7] * matrix[14] + matrix[4] * matrix[2] * matrix[15] - matrix[4] * matrix[3] * matrix[14] - matrix[12] * matrix[2] * matrix[7] + matrix[12] * matrix[3] * matrix[6];
+		adjugate[7] = matrix[0] * matrix[6] * matrix[11] - matrix[0] * matrix[7] * matrix[10] - matrix[4] * matrix[2] * matrix[11] + matrix[4] * matrix[3] * matrix[10] + matrix[8] * matrix[2] * matrix[7] - matrix[8] * matrix[3] * matrix[6];
+		adjugate[8] = matrix[4] * matrix[9] * matrix[15] - matrix[4] * matrix[11] * matrix[13] - matrix[8] * matrix[5] * matrix[15] + matrix[8] * matrix[7] * matrix[13] + matrix[12] * matrix[5] * matrix[11] - matrix[12] * matrix[7] * matrix[9];
+		adjugate[9] = -matrix[0] * matrix[9] * matrix[15] + matrix[0] * matrix[11] * matrix[13] + matrix[8] * matrix[1] * matrix[15] - matrix[8] * matrix[3] * matrix[13] - matrix[12] * matrix[1] * matrix[11] + matrix[12] * matrix[3] * matrix[9];
+		adjugate[10] = matrix[0] * matrix[5] * matrix[15] - matrix[0] * matrix[7] * matrix[13] - matrix[4] * matrix[1] * matrix[15] + matrix[4] * matrix[3] * matrix[13] + matrix[12] * matrix[1] * matrix[7] - matrix[12] * matrix[3] * matrix[5];
+		adjugate[11] = -matrix[0] * matrix[5] * matrix[11] + matrix[0] * matrix[7] * matrix[9] + matrix[4] * matrix[1] * matrix[11] - matrix[4] * matrix[3] * matrix[9] - matrix[8] * matrix[1] * matrix[7] + matrix[8] * matrix[3] * matrix[5];
+		adjugate[12] = -matrix[4] * matrix[9] * matrix[14] + matrix[4] * matrix[10] * matrix[13] + matrix[8] * matrix[5] * matrix[14] - matrix[8] * matrix[6] * matrix[13] - matrix[12] * matrix[5] * matrix[10] + matrix[12] * matrix[6] * matrix[9];
+		adjugate[13] = matrix[0] * matrix[9] * matrix[14] - matrix[0] * matrix[10] * matrix[13] - matrix[8] * matrix[1] * matrix[14] + matrix[8] * matrix[2] * matrix[13] + matrix[12] * matrix[1] * matrix[10] - matrix[12] * matrix[2] * matrix[9];
+		adjugate[14] = -matrix[0] * matrix[5] * matrix[14] + matrix[0] * matrix[6] * matrix[13] + matrix[4] * matrix[1] * matrix[14] - matrix[4] * matrix[2] * matrix[13] - matrix[12] * matrix[1] * matrix[6] + matrix[12] * matrix[2] * matrix[5];
+		adjugate[15] = matrix[0] * matrix[5] * matrix[10] - matrix[0] * matrix[6] * matrix[9] - matrix[4] * matrix[1] * matrix[10] + matrix[4] * matrix[2] * matrix[9] + matrix[8] * matrix[1] * matrix[6] - matrix[8] * matrix[2] * matrix[5];
+		return adjugate;
+	}
+	
+	public static final strictfp double[] adjugateMatrix4x4d(double[] matrix) {
+		final double[] adjugate = new double[16];
+		adjugate[0] = matrix[5] * matrix[10] * matrix[15] - matrix[5] * matrix[11] * matrix[14] - matrix[9] * matrix[6] * matrix[15] + matrix[9] * matrix[7] * matrix[14] + matrix[13] * matrix[6] * matrix[11] - matrix[13] * matrix[7] * matrix[10];
+		adjugate[1] = -matrix[1] * matrix[10] * matrix[15] + matrix[1] * matrix[11] * matrix[14] + matrix[9] * matrix[2] * matrix[15] - matrix[9] * matrix[3] * matrix[14] - matrix[13] * matrix[2] * matrix[11] + matrix[13] * matrix[3] * matrix[10];
+		adjugate[2] = matrix[1] * matrix[6] * matrix[15] - matrix[1] * matrix[7] * matrix[14] - matrix[5] * matrix[2] * matrix[15] + matrix[5] * matrix[3] * matrix[14] + matrix[13] * matrix[2] * matrix[7] - matrix[13] * matrix[3] * matrix[6];
+		adjugate[3] = -matrix[1] * matrix[6] * matrix[11] + matrix[1] * matrix[7] * matrix[10] + matrix[5] * matrix[2] * matrix[11] - matrix[5] * matrix[3] * matrix[10] - matrix[9] * matrix[2] * matrix[7] + matrix[9] * matrix[3] * matrix[6];
+		adjugate[4] = -matrix[4] * matrix[10] * matrix[15] + matrix[4] * matrix[11] * matrix[14] + matrix[8] * matrix[6] * matrix[15] - matrix[8] * matrix[7] * matrix[14] - matrix[12] * matrix[6] * matrix[11] + matrix[12] * matrix[7] * matrix[10];
+		adjugate[5] = matrix[0] * matrix[10] * matrix[15] - matrix[0] * matrix[11] * matrix[14] - matrix[8] * matrix[2] * matrix[15] + matrix[8] * matrix[3] * matrix[14] + matrix[12] * matrix[2] * matrix[11] - matrix[12] * matrix[3] * matrix[10];
+		adjugate[6] = -matrix[0] * matrix[6] * matrix[15] + matrix[0] * matrix[7] * matrix[14] + matrix[4] * matrix[2] * matrix[15] - matrix[4] * matrix[3] * matrix[14] - matrix[12] * matrix[2] * matrix[7] + matrix[12] * matrix[3] * matrix[6];
+		adjugate[7] = matrix[0] * matrix[6] * matrix[11] - matrix[0] * matrix[7] * matrix[10] - matrix[4] * matrix[2] * matrix[11] + matrix[4] * matrix[3] * matrix[10] + matrix[8] * matrix[2] * matrix[7] - matrix[8] * matrix[3] * matrix[6];
+		adjugate[8] = matrix[4] * matrix[9] * matrix[15] - matrix[4] * matrix[11] * matrix[13] - matrix[8] * matrix[5] * matrix[15] + matrix[8] * matrix[7] * matrix[13] + matrix[12] * matrix[5] * matrix[11] - matrix[12] * matrix[7] * matrix[9];
+		adjugate[9] = -matrix[0] * matrix[9] * matrix[15] + matrix[0] * matrix[11] * matrix[13] + matrix[8] * matrix[1] * matrix[15] - matrix[8] * matrix[3] * matrix[13] - matrix[12] * matrix[1] * matrix[11] + matrix[12] * matrix[3] * matrix[9];
+		adjugate[10] = matrix[0] * matrix[5] * matrix[15] - matrix[0] * matrix[7] * matrix[13] - matrix[4] * matrix[1] * matrix[15] + matrix[4] * matrix[3] * matrix[13] + matrix[12] * matrix[1] * matrix[7] - matrix[12] * matrix[3] * matrix[5];
+		adjugate[11] = -matrix[0] * matrix[5] * matrix[11] + matrix[0] * matrix[7] * matrix[9] + matrix[4] * matrix[1] * matrix[11] - matrix[4] * matrix[3] * matrix[9] - matrix[8] * matrix[1] * matrix[7] + matrix[8] * matrix[3] * matrix[5];
+		adjugate[12] = -matrix[4] * matrix[9] * matrix[14] + matrix[4] * matrix[10] * matrix[13] + matrix[8] * matrix[5] * matrix[14] - matrix[8] * matrix[6] * matrix[13] - matrix[12] * matrix[5] * matrix[10] + matrix[12] * matrix[6] * matrix[9];
+		adjugate[13] = matrix[0] * matrix[9] * matrix[14] - matrix[0] * matrix[10] * matrix[13] - matrix[8] * matrix[1] * matrix[14] + matrix[8] * matrix[2] * matrix[13] + matrix[12] * matrix[1] * matrix[10] - matrix[12] * matrix[2] * matrix[9];
+		adjugate[14] = -matrix[0] * matrix[5] * matrix[14] + matrix[0] * matrix[6] * matrix[13] + matrix[4] * matrix[1] * matrix[14] - matrix[4] * matrix[2] * matrix[13] - matrix[12] * matrix[1] * matrix[6] + matrix[12] * matrix[2] * matrix[5];
+		adjugate[15] = matrix[0] * matrix[5] * matrix[10] - matrix[0] * matrix[6] * matrix[9] - matrix[4] * matrix[1] * matrix[10] + matrix[4] * matrix[2] * matrix[9] + matrix[8] * matrix[1] * matrix[6] - matrix[8] * matrix[2] * matrix[5];
+		return adjugate;
+	}
+	
+	public static final strictfp float getDeterminantOfMatrix4x4f(float[] matrix, float[] adjugate) {
+		return matrix[0] * adjugate[0] + matrix[1] * adjugate[4] + matrix[2] * adjugate[8] + matrix[3] * adjugate[12];
+	}
+	
+	public static final strictfp float getDeterminantOfMatrix4x4f(float[] matrix) {
+		return getDeterminantOfMatrix4x4f(matrix, adjugateMatrix4x4f(matrix));
+	}
+	
+	public static final strictfp double getDeterminantOfMatrix4x4d(double[] matrix, double[] adjugate) {
+		return matrix[0] * adjugate[0] + matrix[1] * adjugate[4] + matrix[2] * adjugate[8] + matrix[3] * adjugate[12];
+	}
+	
+	public static final strictfp double getDeterminantOfMatrix4x4d(double[] matrix) {
+		return getDeterminantOfMatrix4x4d(matrix, adjugateMatrix4x4d(matrix));
+	}
+	
+	public static final strictfp float[] invertMatrix4x4f(float[] matrix) {
+		final float[] adjugate = new float[16];
+		adjugate[0] = matrix[5] * matrix[10] * matrix[15] - matrix[5] * matrix[11] * matrix[14] - matrix[9] * matrix[6] * matrix[15] + matrix[9] * matrix[7] * matrix[14] + matrix[13] * matrix[6] * matrix[11] - matrix[13] * matrix[7] * matrix[10];
+		adjugate[1] = -matrix[1] * matrix[10] * matrix[15] + matrix[1] * matrix[11] * matrix[14] + matrix[9] * matrix[2] * matrix[15] - matrix[9] * matrix[3] * matrix[14] - matrix[13] * matrix[2] * matrix[11] + matrix[13] * matrix[3] * matrix[10];
+		adjugate[2] = matrix[1] * matrix[6] * matrix[15] - matrix[1] * matrix[7] * matrix[14] - matrix[5] * matrix[2] * matrix[15] + matrix[5] * matrix[3] * matrix[14] + matrix[13] * matrix[2] * matrix[7] - matrix[13] * matrix[3] * matrix[6];
+		adjugate[3] = -matrix[1] * matrix[6] * matrix[11] + matrix[1] * matrix[7] * matrix[10] + matrix[5] * matrix[2] * matrix[11] - matrix[5] * matrix[3] * matrix[10] - matrix[9] * matrix[2] * matrix[7] + matrix[9] * matrix[3] * matrix[6];
+		adjugate[4] = -matrix[4] * matrix[10] * matrix[15] + matrix[4] * matrix[11] * matrix[14] + matrix[8] * matrix[6] * matrix[15] - matrix[8] * matrix[7] * matrix[14] - matrix[12] * matrix[6] * matrix[11] + matrix[12] * matrix[7] * matrix[10];
+		adjugate[5] = matrix[0] * matrix[10] * matrix[15] - matrix[0] * matrix[11] * matrix[14] - matrix[8] * matrix[2] * matrix[15] + matrix[8] * matrix[3] * matrix[14] + matrix[12] * matrix[2] * matrix[11] - matrix[12] * matrix[3] * matrix[10];
+		adjugate[6] = -matrix[0] * matrix[6] * matrix[15] + matrix[0] * matrix[7] * matrix[14] + matrix[4] * matrix[2] * matrix[15] - matrix[4] * matrix[3] * matrix[14] - matrix[12] * matrix[2] * matrix[7] + matrix[12] * matrix[3] * matrix[6];
+		adjugate[7] = matrix[0] * matrix[6] * matrix[11] - matrix[0] * matrix[7] * matrix[10] - matrix[4] * matrix[2] * matrix[11] + matrix[4] * matrix[3] * matrix[10] + matrix[8] * matrix[2] * matrix[7] - matrix[8] * matrix[3] * matrix[6];
+		adjugate[8] = matrix[4] * matrix[9] * matrix[15] - matrix[4] * matrix[11] * matrix[13] - matrix[8] * matrix[5] * matrix[15] + matrix[8] * matrix[7] * matrix[13] + matrix[12] * matrix[5] * matrix[11] - matrix[12] * matrix[7] * matrix[9];
+		adjugate[9] = -matrix[0] * matrix[9] * matrix[15] + matrix[0] * matrix[11] * matrix[13] + matrix[8] * matrix[1] * matrix[15] - matrix[8] * matrix[3] * matrix[13] - matrix[12] * matrix[1] * matrix[11] + matrix[12] * matrix[3] * matrix[9];
+		adjugate[10] = matrix[0] * matrix[5] * matrix[15] - matrix[0] * matrix[7] * matrix[13] - matrix[4] * matrix[1] * matrix[15] + matrix[4] * matrix[3] * matrix[13] + matrix[12] * matrix[1] * matrix[7] - matrix[12] * matrix[3] * matrix[5];
+		adjugate[11] = -matrix[0] * matrix[5] * matrix[11] + matrix[0] * matrix[7] * matrix[9] + matrix[4] * matrix[1] * matrix[11] - matrix[4] * matrix[3] * matrix[9] - matrix[8] * matrix[1] * matrix[7] + matrix[8] * matrix[3] * matrix[5];
+		adjugate[12] = -matrix[4] * matrix[9] * matrix[14] + matrix[4] * matrix[10] * matrix[13] + matrix[8] * matrix[5] * matrix[14] - matrix[8] * matrix[6] * matrix[13] - matrix[12] * matrix[5] * matrix[10] + matrix[12] * matrix[6] * matrix[9];
+		adjugate[13] = matrix[0] * matrix[9] * matrix[14] - matrix[0] * matrix[10] * matrix[13] - matrix[8] * matrix[1] * matrix[14] + matrix[8] * matrix[2] * matrix[13] + matrix[12] * matrix[1] * matrix[10] - matrix[12] * matrix[2] * matrix[9];
+		adjugate[14] = -matrix[0] * matrix[5] * matrix[14] + matrix[0] * matrix[6] * matrix[13] + matrix[4] * matrix[1] * matrix[14] - matrix[4] * matrix[2] * matrix[13] - matrix[12] * matrix[1] * matrix[6] + matrix[12] * matrix[2] * matrix[5];
+		adjugate[15] = matrix[0] * matrix[5] * matrix[10] - matrix[0] * matrix[6] * matrix[9] - matrix[4] * matrix[1] * matrix[10] + matrix[4] * matrix[2] * matrix[9] + matrix[8] * matrix[1] * matrix[6] - matrix[8] * matrix[2] * matrix[5];
+		float determinant = getDeterminantOfMatrix4x4f(matrix, adjugate);
+		if(determinant == 0) {
+			return null;
+		}
+		determinant = 1.0f / determinant;
+		for(int i = 0; i < 16; i++) {
+			adjugate[i] *= determinant;
+		}
+		//adjugate is now the 'inverse' of matrix
+		return adjugate;
+	}
+	
+	public static final strictfp double[] invertMatrix4x4d(double[] matrix) {
+		final double[] adjugate = new double[16];
+		adjugate[0] = matrix[5] * matrix[10] * matrix[15] - matrix[5] * matrix[11] * matrix[14] - matrix[9] * matrix[6] * matrix[15] + matrix[9] * matrix[7] * matrix[14] + matrix[13] * matrix[6] * matrix[11] - matrix[13] * matrix[7] * matrix[10];
+		adjugate[1] = -matrix[1] * matrix[10] * matrix[15] + matrix[1] * matrix[11] * matrix[14] + matrix[9] * matrix[2] * matrix[15] - matrix[9] * matrix[3] * matrix[14] - matrix[13] * matrix[2] * matrix[11] + matrix[13] * matrix[3] * matrix[10];
+		adjugate[2] = matrix[1] * matrix[6] * matrix[15] - matrix[1] * matrix[7] * matrix[14] - matrix[5] * matrix[2] * matrix[15] + matrix[5] * matrix[3] * matrix[14] + matrix[13] * matrix[2] * matrix[7] - matrix[13] * matrix[3] * matrix[6];
+		adjugate[3] = -matrix[1] * matrix[6] * matrix[11] + matrix[1] * matrix[7] * matrix[10] + matrix[5] * matrix[2] * matrix[11] - matrix[5] * matrix[3] * matrix[10] - matrix[9] * matrix[2] * matrix[7] + matrix[9] * matrix[3] * matrix[6];
+		adjugate[4] = -matrix[4] * matrix[10] * matrix[15] + matrix[4] * matrix[11] * matrix[14] + matrix[8] * matrix[6] * matrix[15] - matrix[8] * matrix[7] * matrix[14] - matrix[12] * matrix[6] * matrix[11] + matrix[12] * matrix[7] * matrix[10];
+		adjugate[5] = matrix[0] * matrix[10] * matrix[15] - matrix[0] * matrix[11] * matrix[14] - matrix[8] * matrix[2] * matrix[15] + matrix[8] * matrix[3] * matrix[14] + matrix[12] * matrix[2] * matrix[11] - matrix[12] * matrix[3] * matrix[10];
+		adjugate[6] = -matrix[0] * matrix[6] * matrix[15] + matrix[0] * matrix[7] * matrix[14] + matrix[4] * matrix[2] * matrix[15] - matrix[4] * matrix[3] * matrix[14] - matrix[12] * matrix[2] * matrix[7] + matrix[12] * matrix[3] * matrix[6];
+		adjugate[7] = matrix[0] * matrix[6] * matrix[11] - matrix[0] * matrix[7] * matrix[10] - matrix[4] * matrix[2] * matrix[11] + matrix[4] * matrix[3] * matrix[10] + matrix[8] * matrix[2] * matrix[7] - matrix[8] * matrix[3] * matrix[6];
+		adjugate[8] = matrix[4] * matrix[9] * matrix[15] - matrix[4] * matrix[11] * matrix[13] - matrix[8] * matrix[5] * matrix[15] + matrix[8] * matrix[7] * matrix[13] + matrix[12] * matrix[5] * matrix[11] - matrix[12] * matrix[7] * matrix[9];
+		adjugate[9] = -matrix[0] * matrix[9] * matrix[15] + matrix[0] * matrix[11] * matrix[13] + matrix[8] * matrix[1] * matrix[15] - matrix[8] * matrix[3] * matrix[13] - matrix[12] * matrix[1] * matrix[11] + matrix[12] * matrix[3] * matrix[9];
+		adjugate[10] = matrix[0] * matrix[5] * matrix[15] - matrix[0] * matrix[7] * matrix[13] - matrix[4] * matrix[1] * matrix[15] + matrix[4] * matrix[3] * matrix[13] + matrix[12] * matrix[1] * matrix[7] - matrix[12] * matrix[3] * matrix[5];
+		adjugate[11] = -matrix[0] * matrix[5] * matrix[11] + matrix[0] * matrix[7] * matrix[9] + matrix[4] * matrix[1] * matrix[11] - matrix[4] * matrix[3] * matrix[9] - matrix[8] * matrix[1] * matrix[7] + matrix[8] * matrix[3] * matrix[5];
+		adjugate[12] = -matrix[4] * matrix[9] * matrix[14] + matrix[4] * matrix[10] * matrix[13] + matrix[8] * matrix[5] * matrix[14] - matrix[8] * matrix[6] * matrix[13] - matrix[12] * matrix[5] * matrix[10] + matrix[12] * matrix[6] * matrix[9];
+		adjugate[13] = matrix[0] * matrix[9] * matrix[14] - matrix[0] * matrix[10] * matrix[13] - matrix[8] * matrix[1] * matrix[14] + matrix[8] * matrix[2] * matrix[13] + matrix[12] * matrix[1] * matrix[10] - matrix[12] * matrix[2] * matrix[9];
+		adjugate[14] = -matrix[0] * matrix[5] * matrix[14] + matrix[0] * matrix[6] * matrix[13] + matrix[4] * matrix[1] * matrix[14] - matrix[4] * matrix[2] * matrix[13] - matrix[12] * matrix[1] * matrix[6] + matrix[12] * matrix[2] * matrix[5];
+		adjugate[15] = matrix[0] * matrix[5] * matrix[10] - matrix[0] * matrix[6] * matrix[9] - matrix[4] * matrix[1] * matrix[10] + matrix[4] * matrix[2] * matrix[9] + matrix[8] * matrix[1] * matrix[6] - matrix[8] * matrix[2] * matrix[5];
+		double determinant = getDeterminantOfMatrix4x4d(matrix, adjugate);
+		if(determinant == 0) {
+			return null;
+		}
+		determinant = 1.0 / determinant;
+		for(int i = 0; i < 16; i++) {
+			adjugate[i] *= determinant;
+		}
+		//adjugate is now the 'inverse' of matrix
+		return adjugate;
+	}
+	
+	public static final String matrix4x4ToStringf(float[] matrix, int numOfPlaces, boolean pad) {
+		if(!pad) {
+			StringBuilder sb = new StringBuilder(StringUtil.lineOf('=', ((numOfPlaces + 5) * 4) - 1)).append("\r\n");
+			
+			for(int i = 0; i < 4; i++) {
+				float d0 = matrix[0 + (4 * i)];
+				float d1 = matrix[1 + (4 * i)];
+				float d2 = matrix[2 + (4 * i)];
+				float d3 = matrix[3 + (4 * i)];
+				sb.append(d0 < 0.0 || Float.floatToIntBits(d0) == negZerof ? "" : " ").append(MathUtil.limitDecimalNoRounding(d0, numOfPlaces, pad)).append(", ");
+				sb.append(d1 < 0.0 || Float.floatToIntBits(d1) == negZerof ? "" : " ").append(MathUtil.limitDecimalNoRounding(d1, numOfPlaces, pad)).append(", ");
+				sb.append(d2 < 0.0 || Float.floatToIntBits(d2) == negZerof ? "" : " ").append(MathUtil.limitDecimalNoRounding(d2, numOfPlaces, pad)).append(", ");
+				sb.append(d3 < 0.0 || Float.floatToIntBits(d3) == negZerof ? "" : " ").append(MathUtil.limitDecimalNoRounding(d3, numOfPlaces, pad)).append(i == 3 ? ";" : ",\r\n");
+			}
+			
+			return sb.toString();
 		}
 		
-		return sb.toString();*/
 		int largestWholePortionOfDecimal = 0;
 		for(int i = 0; i < 4; i++) {
 			float d0 = matrix[0 + (4 * i)];
 			float d1 = matrix[1 + (4 * i)];
 			float d2 = matrix[2 + (4 * i)];
 			float d3 = matrix[3 + (4 * i)];
-			String s0 = CodeUtil.limitDecimalNoRounding(d0, numOfPlaces, pad);
-			String s1 = CodeUtil.limitDecimalNoRounding(d1, numOfPlaces, pad);
-			String s2 = CodeUtil.limitDecimalNoRounding(d2, numOfPlaces, pad);
-			String s3 = CodeUtil.limitDecimalNoRounding(d3, numOfPlaces, pad);
+			String s0 = MathUtil.limitDecimalNoRounding(d0, numOfPlaces, pad);
+			String s1 = MathUtil.limitDecimalNoRounding(d1, numOfPlaces, pad);
+			String s2 = MathUtil.limitDecimalNoRounding(d2, numOfPlaces, pad);
+			String s3 = MathUtil.limitDecimalNoRounding(d3, numOfPlaces, pad);
 			int i0 = s0.contains(".") ? s0.substring(0, s0.indexOf(".")).length() - (s0.startsWith("-") ? 1 : 0) : 1;
 			int i1 = s1.contains(".") ? s1.substring(0, s1.indexOf(".")).length() - (s1.startsWith("-") ? 1 : 0) : 1;
 			int i2 = s2.contains(".") ? s2.substring(0, s2.indexOf(".")).length() - (s2.startsWith("-") ? 1 : 0) : 1;
 			int i3 = s3.contains(".") ? s3.substring(0, s3.indexOf(".")).length() - (s3.startsWith("-") ? 1 : 0) : 1;
 			largestWholePortionOfDecimal = Math.max(i0, Math.max(i1, Math.max(i2, Math.max(i3, largestWholePortionOfDecimal))));
 		}
-		StringBuilder sb = new StringBuilder(CodeUtil.lineOf('=', ((numOfPlaces + 5) * 4) + (largestWholePortionOfDecimal > 1 ? largestWholePortionOfDecimal + 1 : -1))).append("\r\n");
+		StringBuilder sb = new StringBuilder(StringUtil.lineOf('=', ((numOfPlaces + 5) * 4) + (largestWholePortionOfDecimal > 1 ? largestWholePortionOfDecimal + 1 : -1))).append("\r\n");
 		largestWholePortionOfDecimal += 1;
 		for(int i = 0; i < 4; i++) {
 			float d0 = matrix[0 + (4 * i)];
 			float d1 = matrix[1 + (4 * i)];
 			float d2 = matrix[2 + (4 * i)];
 			float d3 = matrix[3 + (4 * i)];
-			String s0 = CodeUtil.limitDecimalNoRounding(d0, numOfPlaces, pad);
-			String s1 = CodeUtil.limitDecimalNoRounding(d1, numOfPlaces, pad);
-			String s2 = CodeUtil.limitDecimalNoRounding(d2, numOfPlaces, pad);
-			String s3 = CodeUtil.limitDecimalNoRounding(d3, numOfPlaces, pad);
+			String s0 = MathUtil.limitDecimalNoRounding(d0, numOfPlaces, pad);
+			String s1 = MathUtil.limitDecimalNoRounding(d1, numOfPlaces, pad);
+			String s2 = MathUtil.limitDecimalNoRounding(d2, numOfPlaces, pad);
+			String s3 = MathUtil.limitDecimalNoRounding(d3, numOfPlaces, pad);
 			int i0 = s0.contains(".") ? s0.substring(0, s0.indexOf(".")).length() : 1;
 			int i1 = s1.contains(".") ? s1.substring(0, s1.indexOf(".")).length() : 1;
 			int i2 = s2.contains(".") ? s2.substring(0, s2.indexOf(".")).length() : 1;
 			int i3 = s3.contains(".") ? s3.substring(0, s3.indexOf(".")).length() : 1;
 			
-			sb.append(CodeUtil.lineOf(' ', Math.max(0, largestWholePortionOfDecimal - i0))).append(s0).append(", ");
-			sb.append(CodeUtil.lineOf(' ', Math.max(0, largestWholePortionOfDecimal - i1))).append(s1).append(", ");
-			sb.append(CodeUtil.lineOf(' ', Math.max(0, largestWholePortionOfDecimal - i2))).append(s2).append(", ");
-			sb.append(CodeUtil.lineOf(' ', Math.max(0, largestWholePortionOfDecimal - i3))).append(s3).append(i == 3 ? ";" : ",\r\n");
+			sb.append(StringUtil.lineOf(' ', Math.max(0, largestWholePortionOfDecimal - i0))).append(s0).append(", ");
+			sb.append(StringUtil.lineOf(' ', Math.max(0, largestWholePortionOfDecimal - i1))).append(s1).append(", ");
+			sb.append(StringUtil.lineOf(' ', Math.max(0, largestWholePortionOfDecimal - i2))).append(s2).append(", ");
+			sb.append(StringUtil.lineOf(' ', Math.max(0, largestWholePortionOfDecimal - i3))).append(s3).append(i == 3 ? ";" : ",\r\n");
 		}
 		
 		return sb.toString();
 	}
 	
 	public static final String matrix4x4ToStringd(double[] matrix, int numOfPlaces, boolean pad) {
-		/*StringBuilder sb = new StringBuilder(CodeUtil.lineOf('=', ((numOfPlaces + 5) * 4) - 1)).append("\r\n");
-		
-		for(int i = 0; i < 4; i++) {
-			double d0 = matrix[0 + (4 * i)];
-			double d1 = matrix[1 + (4 * i)];
-			double d2 = matrix[2 + (4 * i)];
-			double d3 = matrix[3 + (4 * i)];
-			sb.append(d0 < 0.0 || Double.doubleToLongBits(d0) == negZero ? "" : " ").append(CodeUtil.limitDecimalNoRounding(d0, numOfPlaces, pad)).append(", ");
-			sb.append(d1 < 0.0 || Double.doubleToLongBits(d1) == negZero ? "" : " ").append(CodeUtil.limitDecimalNoRounding(d1, numOfPlaces, pad)).append(", ");
-			sb.append(d2 < 0.0 || Double.doubleToLongBits(d2) == negZero ? "" : " ").append(CodeUtil.limitDecimalNoRounding(d2, numOfPlaces, pad)).append(", ");
-			sb.append(d3 < 0.0 || Double.doubleToLongBits(d3) == negZero ? "" : " ").append(CodeUtil.limitDecimalNoRounding(d3, numOfPlaces, pad)).append(i == 3 ? ";" : ",\r\n");
+		if(!pad) {
+			StringBuilder sb = new StringBuilder(StringUtil.lineOf('=', ((numOfPlaces + 5) * 4) - 1)).append("\r\n");
+			
+			for(int i = 0; i < 4; i++) {
+				double d0 = matrix[0 + (4 * i)];
+				double d1 = matrix[1 + (4 * i)];
+				double d2 = matrix[2 + (4 * i)];
+				double d3 = matrix[3 + (4 * i)];
+				sb.append(d0 < 0.0 || Double.doubleToLongBits(d0) == negZero ? "" : " ").append(MathUtil.limitDecimalNoRounding(d0, numOfPlaces, pad)).append(", ");
+				sb.append(d1 < 0.0 || Double.doubleToLongBits(d1) == negZero ? "" : " ").append(MathUtil.limitDecimalNoRounding(d1, numOfPlaces, pad)).append(", ");
+				sb.append(d2 < 0.0 || Double.doubleToLongBits(d2) == negZero ? "" : " ").append(MathUtil.limitDecimalNoRounding(d2, numOfPlaces, pad)).append(", ");
+				sb.append(d3 < 0.0 || Double.doubleToLongBits(d3) == negZero ? "" : " ").append(MathUtil.limitDecimalNoRounding(d3, numOfPlaces, pad)).append(i == 3 ? ";" : ",\r\n");
+			}
+			
+			return sb.toString();
 		}
-		
-		return sb.toString();*/
 		
 		int largestWholePortionOfDecimal = 0;
 		for(int i = 0; i < 4; i++) {
@@ -1183,36 +2578,36 @@ public class GLUtil {
 			double d1 = matrix[1 + (4 * i)];
 			double d2 = matrix[2 + (4 * i)];
 			double d3 = matrix[3 + (4 * i)];
-			String s0 = CodeUtil.limitDecimalNoRounding(d0, numOfPlaces, pad);
-			String s1 = CodeUtil.limitDecimalNoRounding(d1, numOfPlaces, pad);
-			String s2 = CodeUtil.limitDecimalNoRounding(d2, numOfPlaces, pad);
-			String s3 = CodeUtil.limitDecimalNoRounding(d3, numOfPlaces, pad);
+			String s0 = MathUtil.limitDecimalNoRounding(d0, numOfPlaces, pad);
+			String s1 = MathUtil.limitDecimalNoRounding(d1, numOfPlaces, pad);
+			String s2 = MathUtil.limitDecimalNoRounding(d2, numOfPlaces, pad);
+			String s3 = MathUtil.limitDecimalNoRounding(d3, numOfPlaces, pad);
 			int i0 = s0.contains(".") ? s0.substring(0, s0.indexOf(".")).length() - (s0.startsWith("-") ? 1 : 0) : 1;
 			int i1 = s1.contains(".") ? s1.substring(0, s1.indexOf(".")).length() - (s1.startsWith("-") ? 1 : 0) : 1;
 			int i2 = s2.contains(".") ? s2.substring(0, s2.indexOf(".")).length() - (s2.startsWith("-") ? 1 : 0) : 1;
 			int i3 = s3.contains(".") ? s3.substring(0, s3.indexOf(".")).length() - (s3.startsWith("-") ? 1 : 0) : 1;
 			largestWholePortionOfDecimal = Math.max(i0, Math.max(i1, Math.max(i2, Math.max(i3, largestWholePortionOfDecimal))));
 		}
-		StringBuilder sb = new StringBuilder(CodeUtil.lineOf('=', ((numOfPlaces + 5) * 4) + (largestWholePortionOfDecimal > 1 ? largestWholePortionOfDecimal + 1 : -1))).append("\r\n");
+		StringBuilder sb = new StringBuilder(StringUtil.lineOf('=', ((numOfPlaces + 5) * 4) + (largestWholePortionOfDecimal > 1 ? largestWholePortionOfDecimal + 1 : -1))).append("\r\n");
 		largestWholePortionOfDecimal += 1;
 		for(int i = 0; i < 4; i++) {
 			double d0 = matrix[0 + (4 * i)];
 			double d1 = matrix[1 + (4 * i)];
 			double d2 = matrix[2 + (4 * i)];
 			double d3 = matrix[3 + (4 * i)];
-			String s0 = CodeUtil.limitDecimalNoRounding(d0, numOfPlaces, pad);
-			String s1 = CodeUtil.limitDecimalNoRounding(d1, numOfPlaces, pad);
-			String s2 = CodeUtil.limitDecimalNoRounding(d2, numOfPlaces, pad);
-			String s3 = CodeUtil.limitDecimalNoRounding(d3, numOfPlaces, pad);
+			String s0 = MathUtil.limitDecimalNoRounding(d0, numOfPlaces, pad);
+			String s1 = MathUtil.limitDecimalNoRounding(d1, numOfPlaces, pad);
+			String s2 = MathUtil.limitDecimalNoRounding(d2, numOfPlaces, pad);
+			String s3 = MathUtil.limitDecimalNoRounding(d3, numOfPlaces, pad);
 			int i0 = s0.contains(".") ? s0.substring(0, s0.indexOf(".")).length() : 1;
 			int i1 = s1.contains(".") ? s1.substring(0, s1.indexOf(".")).length() : 1;
 			int i2 = s2.contains(".") ? s2.substring(0, s2.indexOf(".")).length() : 1;
 			int i3 = s3.contains(".") ? s3.substring(0, s3.indexOf(".")).length() : 1;
 			
-			sb.append(CodeUtil.lineOf(' ', Math.max(0, largestWholePortionOfDecimal - i0))).append(s0).append(", ");
-			sb.append(CodeUtil.lineOf(' ', Math.max(0, largestWholePortionOfDecimal - i1))).append(s1).append(", ");
-			sb.append(CodeUtil.lineOf(' ', Math.max(0, largestWholePortionOfDecimal - i2))).append(s2).append(", ");
-			sb.append(CodeUtil.lineOf(' ', Math.max(0, largestWholePortionOfDecimal - i3))).append(s3).append(i == 3 ? ";" : ",\r\n");
+			sb.append(StringUtil.lineOf(' ', Math.max(0, largestWholePortionOfDecimal - i0))).append(s0).append(", ");
+			sb.append(StringUtil.lineOf(' ', Math.max(0, largestWholePortionOfDecimal - i1))).append(s1).append(", ");
+			sb.append(StringUtil.lineOf(' ', Math.max(0, largestWholePortionOfDecimal - i2))).append(s2).append(", ");
+			sb.append(StringUtil.lineOf(' ', Math.max(0, largestWholePortionOfDecimal - i3))).append(s3).append(i == 3 ? ";" : ",\r\n");
 		}
 		
 		return sb.toString();
@@ -1254,6 +2649,16 @@ public class GLUtil {
 	
 	public static final double[] getGLColor() {
 		return new double[] {glColor[0], glColor[1], glColor[2], glColor[3]};
+	}
+	
+	public static final void glColorf(float[] color) {
+		glColor[0] = color[0];
+		glColor[1] = color[1];
+		glColor[2] = color[2];
+		if(color.length >= 4) {
+			glColor[3] = color[3];
+		}
+		glColord();
 	}
 	
 	public static final void glColord(Color color) {
@@ -1548,6 +2953,7 @@ public class GLUtil {
 		return color;
 	}
 	
+	@Deprecated
 	public static final int[] glGetViewport() {
 		int[] viewport = new int[4];
 		GL11.glGetIntegerv(GL11.GL_VIEWPORT, viewport);
@@ -1718,6 +3124,392 @@ public class GLUtil {
 	
 	//================================================================================================================================================================================================
 	
+	private static final Map<Integer, Integer> preferredPixelFormats = new HashMap<>();
+	
+	private static final int getPPFFromMap(int target) {
+		Integer key = Integer.valueOf(target);
+		Integer value = preferredPixelFormats.get(key);
+		if(value == null) {
+			return -1;
+		}
+		return value.intValue();
+	}
+	
+	public static final int glGetPreferredPixelFormat(int target) {
+		if(!GL.getCapabilities().GL_ARB_internalformat_query || !GL.getCapabilities().GL_ARB_internalformat_query2) {
+			if(Platform.get() == Platform.WINDOWS) {
+				return GL12.GL_BGRA;
+			}
+			return GL11.GL_RGBA;
+		}
+		int value = getPPFFromMap(target);
+		if(value == -1) {
+			try {
+				value = ARBInternalformatQuery.glGetInternalformati(target, GL11.GL_RGBA8, ARBInternalformatQuery2.GL_TEXTURE_IMAGE_FORMAT);
+			} catch(IllegalStateException ignored) {
+				if(Platform.get() == Platform.WINDOWS) {
+					value = GL12.GL_BGRA;
+				} else {
+					value = GL11.GL_RGBA;
+				}
+			}
+			preferredPixelFormats.put(Integer.valueOf(target), Integer.valueOf(value));
+		}
+		return value;
+	}
+	
+	protected static volatile boolean fboEnabled = false;
+	protected static volatile boolean fboSupported = false;
+	
+	protected static volatile boolean fboDrawing = false;
+	
+	protected static volatile int framebufferID;
+	protected static volatile int colorTextureID;
+	protected static volatile int depthRenderBufferID;
+	
+	public static final Texture fboTexture = TextureLoader.OPENGL;//new Texture(GL11.GL_TEXTURE_2D, 0, "OpenGL");
+	
+	public static final void toggleFBOEnabled() {
+		fboEnabled = !fboEnabled;
+	}
+	
+	public static final boolean areFrameBufferObjectsEnabled() {
+		return fboEnabled && fboSupported;
+	}
+	
+	public static final boolean areFrameBufferObjectsSupported() {
+		return fboSupported;
+	}
+	
+	public static final boolean isFrameBufferBeingDrawnTo() {
+		return fboDrawing;
+	}
+	
+	public static final void beginDrawingFrameBuffer() {
+		EXTFramebufferObject.glBindFramebufferEXT(EXTFramebufferObject.GL_FRAMEBUFFER_EXT, framebufferID);
+		fboDrawing = true;
+		if(fboTexture.getID() == 0) {
+			TextureLoader.openGLTextureID = GL11.glGenTextures();
+		}
+	}
+	
+	public static final void endDrawingFrameBuffer() {
+		EXTFramebufferObject.glBindFramebufferEXT(EXTFramebufferObject.GL_FRAMEBUFFER_EXT, 0);
+		Texture.unbindAllTextures();
+		
+		GL11.glClear(GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT);
+		fboDrawing = false;
+	}
+	
+	public static final void drawFrameBufferTexture(final float alpha) {
+		int width = Window.getWindow().getWidth();
+		int height = Window.getWindow().getHeight();
+		
+		GL11.glEnable(GL11.GL_TEXTURE_2D);
+		GL11.glBindTexture(GL11.GL_TEXTURE_2D, fboTexture.getID());                   // bind our FBO texture
+		GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
+		GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
+		GL11.glColor4f(1, 1, 1, alpha);
+		GL11.glBegin(GL11.GL_QUADS);//@formatter:off
+			GL11.glTexCoord2f(0, 1);
+			GL11.glVertex2f(0, 0);// top left
+			GL11.glTexCoord2f(1, 1);
+			GL11.glVertex2f(width, 0);// top right
+			GL11.glTexCoord2f(1, 0);
+			GL11.glVertex2f(width, height);// bottom right
+			GL11.glTexCoord2f(0, 0);
+			GL11.glVertex2f(0, height);// bottom left
+		GL11.glEnd();//@formatter:on
+		GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
+	}
+	
+	public static final void updateFrameBuffer() {
+		int width = Window.getWindow().getWidth();
+		int height = Window.getWindow().getHeight();
+		
+		// Initialize FrameBufferObjects ====
+		
+		// check if GL_EXT_framebuffer_object can be use on this system
+		if(GL.getCapabilities().GL_EXT_framebuffer_object) {
+			fboSupported = true;
+			
+			framebufferID = EXTFramebufferObject.glGenFramebuffersEXT();                                         // create a new framebuffer
+			colorTextureID = GL11.glGenTextures();                                               // and a new texture used as a color buffer
+			depthRenderBufferID = EXTFramebufferObject.glGenRenderbuffersEXT();                                  // And finally a new depthbuffer
+			
+			EXTFramebufferObject.glBindFramebufferEXT(EXTFramebufferObject.GL_FRAMEBUFFER_EXT, framebufferID);                        // switch to the new framebuffer
+			
+			// initialize color texture
+			GL11.glBindTexture(GL11.GL_TEXTURE_2D, colorTextureID);                                   // Bind the colorbuffer texture
+			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);               // make it linear filtered
+			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
+			GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL11.GL_RGBA8, width, height, 0, glGetPreferredPixelFormat(GL11.GL_TEXTURE_2D)/*GL11.GL_RGBA*/, GL11.GL_UNSIGNED_BYTE/*GL11.GL_INT*/, (java.nio.ByteBuffer) null);  // Create the texture data
+			EXTFramebufferObject.glFramebufferTexture2DEXT(EXTFramebufferObject.GL_FRAMEBUFFER_EXT, EXTFramebufferObject.GL_COLOR_ATTACHMENT0_EXT, GL11.GL_TEXTURE_2D, colorTextureID, 0); // attach it to the framebuffer
+			
+			// initialize depth renderbuffer
+			EXTFramebufferObject.glBindRenderbufferEXT(EXTFramebufferObject.GL_RENDERBUFFER_EXT, depthRenderBufferID);                // bind the depth renderbuffer
+			EXTFramebufferObject.glRenderbufferStorageEXT(EXTFramebufferObject.GL_RENDERBUFFER_EXT, GL14.GL_DEPTH_COMPONENT32, width, height); // get the data space for it
+			EXTFramebufferObject.glFramebufferRenderbufferEXT(EXTFramebufferObject.GL_FRAMEBUFFER_EXT, EXTFramebufferObject.GL_DEPTH_ATTACHMENT_EXT, EXTFramebufferObject.GL_RENDERBUFFER_EXT, depthRenderBufferID); // bind it to the renderbuffer
+			
+			EXTFramebufferObject.glBindFramebufferEXT(EXTFramebufferObject.GL_FRAMEBUFFER_EXT, 0);                                    // Switch back to normal framebuffer rendering
+		} else {
+			fboSupported = false;
+		}
+	}
+	
+	//================================================================================================================================================================================================
+	
+	public static final strictfp void glLegacyRenderCrosshairsAt(double x, double y, double z, double width, double height, boolean invertBackground) {
+		final int boundTexture = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+		final int texTarget = isGL45Available() ? GL45.glGetTextureParameteri(boundTexture, GL45.GL_TEXTURE_TARGET) : 0;
+		final boolean tex2DEnabled = GL11.glIsEnabled(GL11.GL_TEXTURE_2D);
+		final boolean texTargetEnabled = texTarget != 0 ? GL11.glIsEnabled(texTarget) : false;
+		final boolean blendEnabled = GL11.glIsEnabled(GL11.GL_BLEND);
+		final int srcFactor = GL11.glGetInteger(GL11.GL_BLEND_SRC);
+		final int dstFactor = GL11.glGetInteger(GL11.GL_BLEND_DST);
+		
+		GLUtil.glPushBlendMode();
+		try {
+			GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
+			if(invertBackground) {
+				GL11.glEnable(GL11.GL_BLEND);
+				GL11.glBlendFunc(GL11.GL_ONE_MINUS_DST_COLOR, GL11.GL_ZERO);
+			}
+			
+			GL11.glPushMatrix();
+			GL11.glTranslated(x - (width / 2.0), y - (height / 2.0), z);
+			GL11.glColor3f(1, 1, 1);
+			GL11.glBegin(GL11.GL_QUADS);//@formatter:off
+				GL11.glVertex2d(0, 0);// top left
+				GL11.glVertex2d(width, 0);// top right
+				GL11.glVertex2d(width, height);// bottom right
+				GL11.glVertex2d(0, height);// bottom left
+			GL11.glEnd();//@formatter:on
+			GL11.glPopMatrix();
+			
+			GL11.glPushMatrix();
+			GL11.glTranslated(x - (height / 2.0), y - (width / 2.0), z);
+			GL11.glBegin(GL11.GL_QUADS);//@formatter:off
+				GL11.glVertex2d(0, 0);// top left
+				GL11.glVertex2d(height, 0);// top right
+				GL11.glVertex2d(height, width);// bottom right
+				GL11.glVertex2d(0, width);// bottom left
+			GL11.glEnd();//@formatter:on
+			GL11.glPopMatrix();
+			
+			//if(invertBackground) {
+			//	GL11.glDisable(GL11.GL_BLEND);
+			//}
+		} finally {
+			GLUtil.glPopBlendMode();
+			
+			GL11.glEnable(GL11.GL_BLEND);
+			GL11.glBlendFunc(srcFactor, dstFactor);
+			if(!blendEnabled) {
+				GL11.glDisable(GL11.GL_BLEND);
+			}
+			GL11.glEnable(GL11.GL_TEXTURE_2D);
+			GL11.glBindTexture(texTarget == 0 ? GL11.GL_TEXTURE_2D : texTarget, boundTexture);
+			if(!tex2DEnabled) {
+				GL11.glDisable(GL11.GL_TEXTURE_2D);
+			}
+			if(texTargetEnabled) {
+				GL11.glEnable(texTarget);
+			}
+		}
+	}
+	
+	public static final strictfp void glLegacyRenderCrosshairsAt(double x, double y, double z, boolean invertBackground) {
+		glLegacyRenderCrosshairsAt(x, y, z, 21.0, 1.0, invertBackground);
+	}
+	
+	public static final strictfp void glLegacyRenderCrosshairsOnMouse(boolean invertBackground) {
+		java.awt.Point mLoc = Mouse.getLocationRelativeToCanvasOpenGL();
+		glLegacyRenderCrosshairsAt(mLoc.x, mLoc.y, 1.0, 21.0, 1.0, invertBackground);
+	}
+	
+	/** Inverts the colors within the specified area of the screen.
+	 *
+	 * @deprecated Uses deprecated legacy OpenGL calls (immediate mode) */
+	@Deprecated
+	public static final void glInvertColors(int x, int y, int width, int height) {
+		GLUtil.glPushBlendMode();
+		GLUtil.glBlend(true, GL11.GL_ONE_MINUS_DST_COLOR, GL11.GL_ZERO, GL14.GL_FUNC_ADD);
+		
+		GL11.glColor3f(1f, 1f, 1f);
+		GL11.glBegin(GL11.GL_QUADS);//@formatter:off
+			GL11.glTexCoord2f(0, 0);
+			GL11.glVertex2f(x, y);// bottom left
+			
+			GL11.glTexCoord2f(1, 0);
+			GL11.glVertex2f(x + width, y);// bottom right
+			
+			GL11.glTexCoord2f(1, 1);
+			GL11.glVertex2f(x + width, y + height);// top right
+			
+			GL11.glTexCoord2f(0, 1);
+			GL11.glVertex2f(x, y + height);// top left
+		GL11.glEnd();//@formatter:on
+		
+		GLUtil.glPopBlendMode();
+	}
+	
+	/** Inverts the entire screen contents' colors.
+	 *
+	 * @deprecated Uses deprecated legacy OpenGL calls (immediate mode) */
+	@Deprecated
+	public static final void glInvertColors() {
+		int width = Window.getWindow().getWidth();
+		int height = Window.getWindow().getHeight();
+		
+		glInvertColors(0, 0, width, height);
+	}
+	
+	/** @param texture The texture to render
+	 * @param size The size of the texture to use(null = display size, default)
+	 * @param colorHue The hue to use(null = white, default) */
+	public static void glRenderQuad(Texture texture, Vector2f size, Vector3f colorHue) {
+		Vector4f hue = colorHue != null ? new Vector4f(colorHue.getX(), colorHue.getY(), colorHue.getZ(), 0.0f) : null;
+		glRenderQuad(texture, size, hue);
+	}
+	
+	/** @param texture The texture to render
+	 * @param size The size of the texture to use(null = display size, default)
+	 * @param colorHue The hue to use(null = white, default) */
+	public static void glRenderQuad(Texture texture, Vector2f size, Vector4f colorHue) {
+		glRenderQuad(texture, size, colorHue, false, false);
+	}
+	
+	/** @param texture The texture to render
+	 * @param size The size of the texture to use(null = display size, default)
+	 * @param colorHue The hue to use(null = white, default)
+	 * @param flipHorizontally Whether or not the texture should be flipped
+	 *            horizontally(left to right)
+	 * @param flipVertically Whether or not the texture should be flipped
+	 *            vertically(top to bottom) */
+	public static void glRenderQuad(Texture texture, Vector2f size, Vector4f colorHue, boolean flipHorizontally, boolean flipVertically) {
+		if(texture != null) {
+			texture.bind();
+		}
+		if(size == null) {
+			size = new Vector2f(Window.getWindow().getWidth(), Window.getWindow().getHeight());
+		}
+		if(colorHue == null) {
+			colorHue = new Vector4f(1, 1, 1, 0);
+		}
+		if(texture == TextureLoader.NONE) {
+			GL11.glColor4f(1, 1, 1, 0);
+		} else {
+			GL11.glColor4f(colorHue.getX(), colorHue.getY(), colorHue.getZ(), colorHue.getW());
+		}
+		GL11.glBegin(GL11.GL_QUADS);
+		if(flipHorizontally && flipVertically) {
+			GL11.glTexCoord2f(1.0f, 1.0f);
+			GL11.glVertex2f(0, 0);// top left
+			GL11.glTexCoord2f(0.0f, 1.0f);
+			GL11.glVertex2f(size.getX(), 0);// top right
+			GL11.glTexCoord2f(0.0f, 0.0f);
+			GL11.glVertex2f(size.getX(), size.getY());// bottom right
+			GL11.glTexCoord2f(1.0f, 0.0f);
+			GL11.glVertex2f(0, size.getY());// bottom left
+		} else if(flipHorizontally) {
+			GL11.glTexCoord2f(1.0f, 0.0f);
+			GL11.glVertex2f(0, 0);// top left
+			GL11.glTexCoord2f(0.0f, 0.0f);
+			GL11.glVertex2f(size.getX(), 0);// top right
+			GL11.glTexCoord2f(0.0f, 1.0f);
+			GL11.glVertex2f(size.getX(), size.getY());// bottom right
+			GL11.glTexCoord2f(1.0f, 1.0f);
+			GL11.glVertex2f(0, size.getY());// bottom left
+		} else if(flipVertically) {
+			GL11.glTexCoord2f(0.0f, 1.0f);
+			GL11.glVertex2f(0, 0);// top left
+			GL11.glTexCoord2f(1.0f, 1.0f);
+			GL11.glVertex2f(size.getX(), 0);// top right
+			GL11.glTexCoord2f(1.0f, 0.0f);
+			GL11.glVertex2f(size.getX(), size.getY());// bottom right
+			GL11.glTexCoord2f(0.0f, 0.0f);
+			GL11.glVertex2f(0, size.getY());// bottom left
+		} else {
+			GL11.glTexCoord2f(0.0f, 0.0f);
+			GL11.glVertex2f(0, 0);// bottom left
+			GL11.glTexCoord2f(1.0f, 0.0f);
+			GL11.glVertex2f(size.getX(), 0);// bottom right
+			GL11.glTexCoord2f(1.0f, 1.0f);
+			GL11.glVertex2f(size.getX(), size.getY());// top right
+			GL11.glTexCoord2f(0.0f, 1.0f);
+			GL11.glVertex2f(0, size.getY());// top left
+		}
+		GL11.glEnd();
+	}
+	
+	/** @param size The size of the texture to use(null = display size, default)
+	 * @param color The color to use(null = white, default) */
+	public static void glRenderQuad(Vector2f size, Vector3f color) {
+		glRenderQuad(size, color != null ? new Vector4f(color.getX(), color.getY(), color.getZ(), 1.0f) : null);
+	}
+	
+	/** @param size The size of the texture to use(null = display size, default)
+	 * @param color The color to use(null = white, default) */
+	public static void glRenderQuad(Vector2f size, Vector4f color) {
+		if(size == null) {
+			size = new Vector2f(Window.getWindow().getWidth(), Window.getWindow().getHeight());
+		}
+		if(color == null) {
+			color = new Vector4f(1, 1, 1, 1);
+		}
+		GL11.glColor4f(color.getX(), color.getY(), color.getZ(), color.getW());
+		GL11.glBegin(GL11.GL_QUADS);//@formatter:off
+			GL11.glVertex2f(0, 0);// top left
+			GL11.glVertex2f(size.getX(), 0);// top right
+			GL11.glVertex2f(size.getX(), size.getY());// bottom right
+			GL11.glVertex2f(0, size.getY());// bottom left
+		GL11.glEnd();//@formatter:on
+	}
+	
+	/** @param size The size of the texture to use(null = display size, default)
+	 * @param color The color to use(null = white, default) */
+	public static void glRenderQuad(Vector2d size, Vector4f color) {
+		int width = Window.getWindow().getWidth();
+		int height = Window.getWindow().getHeight();
+		if(size == null) {
+			size = new Vector2d(width, height);
+		}
+		if(color == null) {
+			color = new Vector4f(1, 1, 1, 1);
+		}
+		GL11.glColor4f(color.getX(), color.getY(), color.getZ(), color.getW());
+		GL11.glBegin(GL11.GL_QUADS);//@formatter:off
+			GL11.glVertex2d(0, 0);// top left
+			GL11.glVertex2d(size.getX(), 0);// top right
+			GL11.glVertex2d(size.getX(), size.getY());// bottom right
+			GL11.glVertex2d(0, size.getY());// bottom left
+		GL11.glEnd();//@formatter:on
+	}
+	
+	private static final float[] grayPauseOverlayColor = new float[] {0.25f, 0.25f, 0.25f, 0.75f};
+	
+	/** Renders a transparent gray quad over the entire game screen */
+	public static final void glRenderGrayPauseOverlay() {
+		int width = Window.getWindow().getWidth();
+		int height = Window.getWindow().getHeight();
+		Texture.unbindAllTextures();
+		GLUtil.glPushColor();
+		GLUtil.glColorf(grayPauseOverlayColor);
+		GL11.glBegin(GL11.GL_QUADS);//@formatter:off
+			GL11.glTexCoord2f(0, 0);
+			GL11.glVertex2f(0, 0);// top left
+			GL11.glTexCoord2f(1, 0);
+			GL11.glVertex2f(width, 0);// top right
+			GL11.glTexCoord2f(1, 1);
+			GL11.glVertex2f(width, height);// bottom right
+			GL11.glTexCoord2f(0, 1);
+			GL11.glVertex2f(0, height);// bottom left
+		GL11.glEnd();//@formatter:on
+	}
+	
+	//================================================================================================================================================================================================
+	
 	public static final String getGLVersion(boolean gfxCard) {
 		String glVersion = GL11.glGetString(GL11.GL_VERSION);
 		if(!gfxCard) {
@@ -1743,8 +3535,13 @@ public class GLUtil {
 	
 	/** @return Whether or not GL11 is available */
 	public static boolean isGL11Available() {
-		GLCapabilities caps = GL.getCapabilities();
-		return isGL11Available(caps, false);
+		GLCapabilities caps = null;
+		try {
+			caps = GL.getCapabilities();
+		} catch(IllegalStateException ex) {
+			return false;
+		}
+		return caps == null ? false : isGL11Available(caps, false);
 	}
 	
 	/** @param caps The GLCapabilities
@@ -1803,8 +3600,13 @@ public class GLUtil {
 	
 	/** @return Whether or not GL12 is available */
 	public static boolean isGL12Available() {
-		GLCapabilities caps = GL.getCapabilities();
-		return isGL12Available(caps);
+		GLCapabilities caps = null;
+		try {
+			caps = GL.getCapabilities();
+		} catch(IllegalStateException ex) {
+			return false;
+		}
+		return caps == null ? false : isGL12Available(caps);
 	}
 	
 	/** @param caps The GLCapabilities
@@ -1815,8 +3617,13 @@ public class GLUtil {
 	
 	/** @return Whether or not GL13 is available */
 	public static boolean isGL13Available() {
-		GLCapabilities caps = GL.getCapabilities();
-		return isGL13Available(caps);
+		GLCapabilities caps = null;
+		try {
+			caps = GL.getCapabilities();
+		} catch(IllegalStateException ex) {
+			return false;
+		}
+		return caps == null ? false : isGL13Available(caps);
 	}
 	
 	/** @param caps The GLCapabilities
@@ -1835,8 +3642,13 @@ public class GLUtil {
 	
 	/** @return Whether or not GL14 is available */
 	public static boolean isGL14Available() {
-		GLCapabilities caps = GL.getCapabilities();
-		return isGL14Available(caps);
+		GLCapabilities caps = null;
+		try {
+			caps = GL.getCapabilities();
+		} catch(IllegalStateException ex) {
+			return false;
+		}
+		return caps == null ? false : isGL14Available(caps);
 	}
 	
 	/** @param caps The GLCapabilities
@@ -1855,8 +3667,13 @@ public class GLUtil {
 	
 	/** @return Whether or not GL15 is available */
 	public static boolean isGL15Available() {
-		GLCapabilities caps = GL.getCapabilities();
-		return isGL15Available(caps);
+		GLCapabilities caps = null;
+		try {
+			caps = GL.getCapabilities();
+		} catch(IllegalStateException ex) {
+			return false;
+		}
+		return caps == null ? false : isGL15Available(caps);
 	}
 	
 	/** @param caps The GLCapabilities
@@ -1869,8 +3686,13 @@ public class GLUtil {
 	
 	/** @return Whether or not GL20 is available */
 	public static boolean isGL20Available() {
-		GLCapabilities caps = GL.getCapabilities();
-		return isGL20Available(caps);
+		GLCapabilities caps = null;
+		try {
+			caps = GL.getCapabilities();
+		} catch(IllegalStateException ex) {
+			return false;
+		}
+		return caps == null ? false : isGL20Available(caps);
 	}
 	
 	/** @param caps The GLCapabilities
@@ -1896,8 +3718,13 @@ public class GLUtil {
 	
 	/** @return Whether or not GL21 is available */
 	public static boolean isGL21Available() {
-		GLCapabilities caps = GL.getCapabilities();
-		return isGL21Available(caps);
+		GLCapabilities caps = null;
+		try {
+			caps = GL.getCapabilities();
+		} catch(IllegalStateException ex) {
+			return false;
+		}
+		return caps == null ? false : isGL21Available(caps);
 	}
 	
 	/** @param caps The GLCapabilities
@@ -1909,8 +3736,13 @@ public class GLUtil {
 	
 	/** @return Whether or not GL30 is available */
 	public static boolean isGL30Available() {
-		GLCapabilities caps = GL.getCapabilities();
-		return isGL30Available(caps);
+		GLCapabilities caps = null;
+		try {
+			caps = GL.getCapabilities();
+		} catch(IllegalStateException ex) {
+			return false;
+		}
+		return caps == null ? false : isGL30Available(caps);
 	}
 	
 	/** @param caps The GLCapabilities
@@ -1937,8 +3769,13 @@ public class GLUtil {
 	
 	/** @return Whether or not GL31 is available */
 	public static boolean isGL31Available() {
-		GLCapabilities caps = GL.getCapabilities();
-		return isGL31Available(caps);
+		GLCapabilities caps = null;
+		try {
+			caps = GL.getCapabilities();
+		} catch(IllegalStateException ex) {
+			return false;
+		}
+		return caps == null ? false : isGL31Available(caps);
 	}
 	
 	/** @param caps The GLCapabilities
@@ -1951,8 +3788,13 @@ public class GLUtil {
 	
 	/** @return Whether or not GL32 is available */
 	public static boolean isGL32Available() {
-		GLCapabilities caps = GL.getCapabilities();
-		return isGL32Available(caps);
+		GLCapabilities caps = null;
+		try {
+			caps = GL.getCapabilities();
+		} catch(IllegalStateException ex) {
+			return false;
+		}
+		return caps == null ? false : isGL32Available(caps);
 	}
 	
 	/** @param caps The GLCapabilities
@@ -1966,8 +3808,13 @@ public class GLUtil {
 	
 	/** @return Whether or not GL33 is available */
 	public static boolean isGL33Available() {
-		GLCapabilities caps = GL.getCapabilities();
-		return isGL33Available(caps);
+		GLCapabilities caps = null;
+		try {
+			caps = GL.getCapabilities();
+		} catch(IllegalStateException ex) {
+			return false;
+		}
+		return caps == null ? false : isGL33Available(caps);
 	}
 	
 	/** @param caps The GLCapabilities
@@ -1988,8 +3835,13 @@ public class GLUtil {
 	
 	/** @return Whether or not GL40 is available */
 	public static boolean isGL40Available() {
-		GLCapabilities caps = GL.getCapabilities();
-		return isGL40Available(caps);
+		GLCapabilities caps = null;
+		try {
+			caps = GL.getCapabilities();
+		} catch(IllegalStateException ex) {
+			return false;
+		}
+		return caps == null ? false : isGL40Available(caps);
 	}
 	
 	/** @param caps The GLCapabilities
@@ -2000,8 +3852,13 @@ public class GLUtil {
 	
 	/** @return Whether or not GL41 is available */
 	public static boolean isGL41Available() {
-		GLCapabilities caps = GL.getCapabilities();
-		return isGL41Available(caps);
+		GLCapabilities caps = null;
+		try {
+			caps = GL.getCapabilities();
+		} catch(IllegalStateException ex) {
+			return false;
+		}
+		return caps == null ? false : isGL41Available(caps);
 	}
 	
 	/** @param caps The GLCapabilities
@@ -2029,8 +3886,13 @@ public class GLUtil {
 	
 	/** @return Whether or not GL42 is available */
 	public static boolean isGL42Available() {
-		GLCapabilities caps = GL.getCapabilities();
-		return isGL42Available(caps);
+		GLCapabilities caps = null;
+		try {
+			caps = GL.getCapabilities();
+		} catch(IllegalStateException ex) {
+			return false;
+		}
+		return caps == null ? false : isGL42Available(caps);
 	}
 	
 	/** @param caps The GLCapabilities
@@ -2043,8 +3905,13 @@ public class GLUtil {
 	
 	/** @return Whether or not GL43 is available */
 	public static boolean isGL43Available() {
-		GLCapabilities caps = GL.getCapabilities();
-		return isGL43Available(caps);
+		GLCapabilities caps = null;
+		try {
+			caps = GL.getCapabilities();
+		} catch(IllegalStateException ex) {
+			return false;
+		}
+		return caps == null ? false : isGL43Available(caps);
 	}
 	
 	/** @param caps The GLCapabilities
@@ -2064,8 +3931,13 @@ public class GLUtil {
 	
 	/** @return Whether or not GL44 is available */
 	public static boolean isGL44Available() {
-		GLCapabilities caps = GL.getCapabilities();
-		return isGL44Available(caps);
+		GLCapabilities caps = null;
+		try {
+			caps = GL.getCapabilities();
+		} catch(IllegalStateException ex) {
+			return false;
+		}
+		return caps == null ? false : isGL44Available(caps);
 	}
 	
 	/** @param caps The GLCapabilities
@@ -2077,8 +3949,13 @@ public class GLUtil {
 	
 	/** @return Whether or not GL45 is available */
 	public static boolean isGL45Available() {
-		GLCapabilities caps = GL.getCapabilities();
-		return isGL45Available(caps);
+		GLCapabilities caps = null;
+		try {
+			caps = GL.getCapabilities();
+		} catch(IllegalStateException ex) {
+			return false;
+		}
+		return caps == null ? false : isGL45Available(caps);
 	}
 	
 	/** @param caps The GLCapabilities
@@ -2113,8 +3990,13 @@ public class GLUtil {
 	
 	/** @return Whether or not GL46 is available */
 	public static boolean isGL46Available() {
-		GLCapabilities caps = GL.getCapabilities();
-		return isGL46Available(caps);
+		GLCapabilities caps = null;
+		try {
+			caps = GL.getCapabilities();
+		} catch(IllegalStateException ex) {
+			return false;
+		}
+		return caps == null ? false : isGL46Available(caps);
 	}
 	
 	/** @param caps The GLCapabilities

@@ -65,7 +65,10 @@ public class VideoHelper extends Thread {
 	 *
 	 * @author Brian_Entei
 	 * @see VideoHelper#registerCallback(VideoRecordingCallback)
-	 * @see VideoHelper#unregisterCallback(VideoRecordingCallback) */
+	 * @see VideoHelper#unregisterCallback(VideoRecordingCallback)
+	 * @see #onStarted(File)
+	 * @see #onFinished(File)
+	 * @see #onFailed(Throwable) */
 	public static interface VideoRecordingCallback {
 		
 		/** @param file The video file that is now being recorded to */

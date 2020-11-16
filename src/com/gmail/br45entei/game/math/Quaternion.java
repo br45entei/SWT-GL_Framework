@@ -1,7 +1,5 @@
 package com.gmail.br45entei.game.math;
 
-import com.gmail.br45entei.util.MathUtil;
-
 import org.lwjgl.util.vector.Vector3f;
 import org.lwjgl.util.vector.Vector4f;
 

@@ -1,6 +1,6 @@
 /*******************************************************************************
  * 
- * Copyright (C) 2020 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2020 Brian_Entei (br45entei@gmail.com)
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,6 +18,8 @@
  *******************************************************************************/
 package com.gmail.br45entei.game.graphics;
 
+import com.gmail.br45entei.thread.SecureRandomProvider;
+
 import java.security.SecureRandom;
 
 /** Class used to provide a random color that changes a little bit each time it
@@ -27,20 +29,29 @@ import java.security.SecureRandom;
  * @author Brian_Entei */
 public class RandomColorGenerator {
 	
-	private final SecureRandom random = new SecureRandom();// A random source of data to use for our changing canvas color
+	private final SecureRandom random;// A random source of data to use for our changing canvas color
 	private volatile float maxIncrement = 0.05f;// Each color channel will be changed by a random float value between 0 and this number
-	private volatile float r = 0.0f, g = this.random.nextFloat(), b = 1.0f;// The three color channels that we'll use to make our GLCanvas change color
-	private volatile boolean rUp = true, gUp = this.random.nextBoolean(),
-			bUp = false;// The three booleans that will tell us what each color channel's direction of change is (up/down)
+	private volatile float r = 0.0f, g, b = 1.0f;// The three color channels that we'll use to make our GLCanvas change color
+	private volatile boolean rUp = true, gUp, bUp = false;// The three booleans that will tell us what each color channel's direction of change is (up/down)
 	private volatile boolean ruWait = false, guWait = false, buWait = false;
 	private volatile boolean rdWait = false, gdWait = false, bdWait = false;
 	
-	public RandomColorGenerator(float maxIncrement) {
-		this.maxIncrement = maxIncrement;
-	}
-	
 	/** Constructs a new RandomColorGenerator using the default settings. */
 	public RandomColorGenerator() {
+		this.random = SecureRandomProvider.getSecureRandom();
+		this.g = this.random.nextFloat();
+		this.gUp = this.random.nextBoolean();
+	}
+	
+	/** Constructs a new RandomColorGenerator using the specified maximum
+	 * increment.
+	 *
+	 * @param maxIncrement The maximum increment that each color channel may be
+	 *            increased by each time {@link #getColor(boolean)
+	 *            getColor(true)} is called. */
+	public RandomColorGenerator(float maxIncrement) {
+		this();
+		this.maxIncrement = maxIncrement;
 	}
 	
 	/** @param update Whether or not the color should be updated for the next
@@ -129,6 +140,8 @@ public class RandomColorGenerator {
 		}
 	}
 	
+	/** @return The next randomly generated color, slightly different than the
+	 *         last */
 	public float[] getColor() {
 		return this.getColor(true);
 	}

@@ -1,6 +1,6 @@
 /*******************************************************************************
  * 
- * Copyright (C) 2020 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2020 Brian_Entei (br45entei@gmail.com)
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -46,8 +46,7 @@ public class BufferUtil {
 		public Unsafe run() {
 			try {
 				Field f = Unsafe.class.getDeclaredField("theUnsafe");
-				@SuppressWarnings("deprecation")
-				boolean wasAccessible = f.isAccessible();
+				boolean wasAccessible = f.canAccess(null);
 				try {
 					f.setAccessible(true);
 					return (Unsafe) f.get(null);
@@ -87,7 +86,7 @@ public class BufferUtil {
 				System.err.println(String.format("ByteBuffer's capacity calculation is off! Expected %s, got %s, %s (actual size: %s)", Integer.toString(size), Integer.toString(count1), Integer.toString(count2), Integer.toString(test.capacity())));
 				testsFailed++;
 			} else {
-				System.out.println(String.format("ByteBuffer capacity test passed. (Buffer limit: %s)", Integer.toString(test.limit())));
+				System.out.println(String.format("ByteBuffer capacity test passed. (Buffer capacity: %s)", Integer.toString(test.capacity())));
 				testsPassed++;
 			}
 			freeDirectBufferMemory(test);
@@ -109,7 +108,7 @@ public class BufferUtil {
 				System.err.println(String.format("ShortBuffer's capacity calculation is off! Expected %s, got %s, %s (actual size: %s)", Integer.toString(size), Integer.toString(count1), Integer.toString(count2), Integer.toString(buf.capacity())));
 				testsFailed++;
 			} else {
-				System.out.println(String.format("ShortBuffer capacity test passed. (Buffer limit: %s)", Integer.toString(test.limit())));
+				System.out.println(String.format("ShortBuffer capacity test passed. (Buffer capacity: %s)", Integer.toString(test.capacity())));
 				testsPassed++;
 			}
 			freeDirectBufferMemory(buf);
@@ -131,7 +130,7 @@ public class BufferUtil {
 				System.err.println(String.format("CharBuffer's capacity calculation is off! Expected %s, got %s, %s (actual size: %s)", Integer.toString(size), Integer.toString(count1), Integer.toString(count2), Integer.toString(buf.capacity())));
 				testsFailed++;
 			} else {
-				System.out.println(String.format("CharBuffer capacity test passed. (Buffer limit: %s)", Integer.toString(test.limit())));
+				System.out.println(String.format("CharBuffer capacity test passed. (Buffer capacity: %s)", Integer.toString(test.capacity())));
 				testsPassed++;
 			}
 			freeDirectBufferMemory(buf);
@@ -153,7 +152,7 @@ public class BufferUtil {
 				System.err.println(String.format("IntBuffer's capacity calculation is off! Expected %s, got %s, %s (actual size: %s)", Integer.toString(size), Integer.toString(count1), Integer.toString(count2), Integer.toString(buf.capacity())));
 				testsFailed++;
 			} else {
-				System.out.println(String.format("IntBuffer capacity test passed. (Buffer limit: %s)", Integer.toString(test.limit())));
+				System.out.println(String.format("IntBuffer capacity test passed. (Buffer capacity: %s)", Integer.toString(test.capacity())));
 				testsPassed++;
 			}
 			freeDirectBufferMemory(buf);
@@ -177,7 +176,7 @@ public class BufferUtil {
 				System.err.println(String.format("FloatBuffer's capacity calculation is off! Expected %s, got %s, %s (actual size: %s)", Integer.toString(size), Integer.toString(count1), Integer.toString(count2), Integer.toString(buf.capacity())));
 				testsFailed++;
 			} else {
-				System.out.println(String.format("FloatBuffer capacity test passed. (Buffer limit: %s)", Integer.toString(test.limit())));
+				System.out.println(String.format("FloatBuffer capacity test passed. (Buffer capacity: %s)", Integer.toString(test.capacity())));
 				testsPassed++;
 			}
 			freeDirectBufferMemory(buf);
@@ -199,7 +198,7 @@ public class BufferUtil {
 				System.err.println(String.format("LongBuffer's capacity calculation is off! Expected %s, got %s, %s (actual size: %s)", Integer.toString(size), Integer.toString(count1), Integer.toString(count2), Integer.toString(buf.capacity())));
 				testsFailed++;
 			} else {
-				System.out.println(String.format("LongBuffer capacity test passed. (Buffer limit: %s)", Integer.toString(test.limit())));
+				System.out.println(String.format("LongBuffer capacity test passed. (Buffer capacity: %s)", Integer.toString(test.capacity())));
 				testsPassed++;
 			}
 			freeDirectBufferMemory(buf);
@@ -221,7 +220,7 @@ public class BufferUtil {
 				System.err.println(String.format("DoubleBuffer's capacity calculation is off! Expected %s, got: %s, %s (actual size: %s)", Integer.toString(size), Integer.toString(count1), Integer.toString(count2), Integer.toString(buf.capacity())));
 				testsFailed++;
 			} else {
-				System.out.println(String.format("DoubleBuffer capacity test passed. (Buffer limit: %s)", Integer.toString(test.limit())));
+				System.out.println(String.format("DoubleBuffer capacity test passed. (Buffer capacity: %s)", Integer.toString(test.capacity())));
 				testsPassed++;
 			}
 			freeDirectBufferMemory(buf);
@@ -270,6 +269,24 @@ public class BufferUtil {
 		return ByteBuffer.allocateDirect(capacity).order(ByteOrder.nativeOrder()).rewind();
 	}
 	
+	/** Creates a new {@link ByteBuffer} whose capacity and contents match the
+	 * given <tt>byte</tt> array.
+	 *
+	 * @param array The <tt>byte</tt> array to wrap
+	 * @return The new ByteBuffer containing the array's contents */
+	public static final ByteBuffer wrap(byte[] array) {
+		return ByteBuffer.wrap(array);//createByteBuffer(array.length).put(array, 0, array.length).rewind();
+	}
+	
+	/** Creates a new direct {@link ByteBuffer} whose capacity and contents
+	 * match the given <tt>byte</tt> array.
+	 *
+	 * @param array The <tt>byte</tt> array to wrap
+	 * @return The new ByteBuffer containing the array's contents */
+	public static final ByteBuffer wrapDirect(byte[] array) {
+		return createDirectByteBuffer(array.length).put(array, 0, array.length).rewind();
+	}
+	
 	/** Creates a new {@link ShortBuffer} with the given capacity.
 	 * 
 	 * @param capacity The buffer's capacity, in bytes
@@ -302,6 +319,26 @@ public class BufferUtil {
 	 * @return The new byte buffer */
 	public static final ByteBuffer createDirectByteBufferWithShortCapacity(int capacity) {
 		return ByteBuffer.allocateDirect((capacity * Short.SIZE) / Byte.SIZE).order(ByteOrder.nativeOrder()).rewind();
+	}
+	
+	/** Creates a new {@link ShortBuffer} whose capacity and contents match the
+	 * given <tt>short</tt> array.
+	 *
+	 * @param array The <tt>short</tt> array to wrap
+	 * @return The new ShortBuffer containing the array's contents */
+	public static final ShortBuffer wrap(short[] array) {
+		return ShortBuffer.wrap(array);//createShortBuffer(array.length).put(array, 0, array.length).rewind();
+	}
+	
+	/** Creates a new direct {@link ByteBuffer} whose capacity and contents
+	 * match the given <tt>short</tt> array.
+	 *
+	 * @param array The <tt>short</tt> array to wrap
+	 * @return The new ByteBuffer containing the array's contents */
+	public static final ByteBuffer wrapDirect(short[] array) {
+		ByteBuffer buf = createDirectByteBufferWithShortCapacity(array.length);
+		buf.asShortBuffer().put(array, 0, array.length);
+		return buf.rewind();
 	}
 	
 	/** Creates a new {@link CharBuffer} with the given capacity.
@@ -338,6 +375,26 @@ public class BufferUtil {
 		return ByteBuffer.allocateDirect((capacity * Character.SIZE) / Byte.SIZE).order(ByteOrder.nativeOrder()).rewind();
 	}
 	
+	/** Creates a new {@link CharBuffer} whose capacity and contents match the
+	 * given <tt>char</tt> array.
+	 *
+	 * @param array The <tt>char</tt> array to wrap
+	 * @return The new CharBuffer containing the array's contents */
+	public static final CharBuffer wrap(char[] array) {
+		return CharBuffer.wrap(array);//createCharBuffer(array.length).put(array, 0, array.length).rewind();
+	}
+	
+	/** Creates a new direct {@link ByteBuffer} whose capacity and contents
+	 * match the given <tt>char</tt> array.
+	 *
+	 * @param array The <tt>char</tt> array to wrap
+	 * @return The new ByteBuffer containing the array's contents */
+	public static final ByteBuffer wrapDirect(char[] array) {
+		ByteBuffer buf = createDirectByteBufferWithCharCapacity(array.length);
+		buf.asCharBuffer().put(array, 0, array.length);
+		return buf.rewind();
+	}
+	
 	/** Creates a new {@link IntBuffer} with the given capacity.
 	 * 
 	 * @param capacity The buffer's capacity, in bytes
@@ -370,6 +427,26 @@ public class BufferUtil {
 	 * @return The new byte buffer */
 	public static final ByteBuffer createDirectByteBufferWithIntCapacity(int capacity) {
 		return ByteBuffer.allocateDirect((capacity * Integer.SIZE) / Byte.SIZE).order(ByteOrder.nativeOrder()).rewind();
+	}
+	
+	/** Creates a new {@link IntBuffer} whose capacity and contents match the
+	 * given <tt>int</tt> array.
+	 *
+	 * @param array The <tt>int</tt> array to wrap
+	 * @return The new IntBuffer containing the array's contents */
+	public static final IntBuffer wrap(int[] array) {
+		return IntBuffer.wrap(array);//createIntBuffer(array.length).put(array, 0, array.length).rewind();
+	}
+	
+	/** Creates a new direct {@link ByteBuffer} whose capacity and contents
+	 * match the given <tt>int</tt> array.
+	 *
+	 * @param array The <tt>int</tt> array to wrap
+	 * @return The new ByteBuffer containing the array's contents */
+	public static final ByteBuffer wrapDirect(int[] array) {
+		ByteBuffer buf = createDirectByteBufferWithIntCapacity(array.length);
+		buf.asIntBuffer().put(array, 0, array.length);
+		return buf.rewind();
 	}
 	
 	/** Creates a new {@link FloatBuffer} with the given capacity.
@@ -406,6 +483,26 @@ public class BufferUtil {
 		return ByteBuffer.allocateDirect((capacity * Float.SIZE) / Byte.SIZE).order(ByteOrder.nativeOrder()).rewind();
 	}
 	
+	/** Creates a new {@link FloatBuffer} whose capacity and contents match the
+	 * given <tt>float</tt> array.
+	 *
+	 * @param array The <tt>float</tt> array to wrap
+	 * @return The new FloatBuffer containing the array's contents */
+	public static final FloatBuffer wrap(float[] array) {
+		return FloatBuffer.wrap(array).rewind();//createFloatBuffer(array.length).put(array, 0, array.length).rewind();
+	}
+	
+	/** Creates a new direct {@link ByteBuffer} whose capacity and contents
+	 * match the given <tt>float</tt> array.
+	 *
+	 * @param array The <tt>float</tt> array to wrap
+	 * @return The new ByteBuffer containing the array's contents */
+	public static final ByteBuffer wrapDirect(float[] array) {
+		ByteBuffer buf = createDirectByteBufferWithFloatCapacity(array.length);
+		buf.asFloatBuffer().put(array, 0, array.length);
+		return buf.rewind();
+	}
+	
 	/** Creates a new {@link LongBuffer} with the given capacity.
 	 * 
 	 * @param capacity The buffer's capacity, in bytes
@@ -440,6 +537,26 @@ public class BufferUtil {
 		return ByteBuffer.allocateDirect((capacity * Long.SIZE) / Byte.SIZE).order(ByteOrder.nativeOrder()).rewind();
 	}
 	
+	/** Creates a new {@link LongBuffer} whose capacity and contents match the
+	 * given <tt>long</tt> array.
+	 *
+	 * @param array The <tt>float</tt> array to wrap
+	 * @return The new LongBuffer containing the array's contents */
+	public static final LongBuffer wrap(long[] array) {
+		return LongBuffer.wrap(array).rewind();//createLongBuffer(array.length).put(array, 0, array.length).rewind();
+	}
+	
+	/** Creates a new direct {@link ByteBuffer} whose capacity and contents
+	 * match the given <tt>long</tt> array.
+	 *
+	 * @param array The <tt>long</tt> array to wrap
+	 * @return The new ByteBuffer containing the array's contents */
+	public static final ByteBuffer wrapDirect(long[] array) {
+		ByteBuffer buf = createDirectByteBufferWithLongCapacity(array.length);
+		buf.asLongBuffer().put(array, 0, array.length);
+		return buf.rewind();
+	}
+	
 	/** Creates a new {@link DoubleBuffer} with the given capacity.
 	 * 
 	 * @param capacity The buffer's capacity, in bytes
@@ -472,6 +589,26 @@ public class BufferUtil {
 	 * @return The new byte buffer */
 	public static final ByteBuffer createDirectByteBufferWithDoubleCapacity(int capacity) {
 		return ByteBuffer.allocateDirect((capacity * Double.SIZE) / Byte.SIZE).order(ByteOrder.nativeOrder()).rewind();
+	}
+	
+	/** Creates a new {@link DoubleBuffer} whose capacity and contents match the
+	 * given <tt>double</tt> array.
+	 *
+	 * @param array The <tt>double</tt> array to wrap
+	 * @return The new DoubleBuffer containing the array's contents */
+	public static final DoubleBuffer wrap(double[] array) {
+		return DoubleBuffer.wrap(array);//createDoubleBuffer(array.length).put(array, 0, array.length).rewind();
+	}
+	
+	/** Creates a new direct {@link ByteBuffer} whose capacity and contents
+	 * match the given <tt>double</tt> array.
+	 *
+	 * @param array The <tt>double</tt> array to wrap
+	 * @return The new ByteBuffer containing the array's contents */
+	public static final ByteBuffer wrapDirect(double[] array) {
+		ByteBuffer buf = createDirectByteBufferWithDoubleCapacity(array.length);
+		buf.asDoubleBuffer().put(array, 0, array.length);
+		return buf.rewind();
 	}
 	
 	/** Reads the entire contents of the specified buffer and puts the data into

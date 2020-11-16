@@ -157,7 +157,9 @@ public class ResourceUtil {
 	
 	/** @return The root folder or jar file that the class loader loaded from */
 	public static final File getClasspathFile() {
-		return new File(ResourceUtil.class.getProtectionDomain().getCodeSource().getLocation().getFile());//new File(getProperty("user.dir") + File.separator + getJarFileName());
+		String path = ResourceUtil.class.getProtectionDomain().getCodeSource().getLocation().getFile();
+		path = URLDecoder.decode(path, StandardCharsets.UTF_8);
+		return new File(path);//new File(getProperty("user.dir") + File.separator + getJarFileName());
 	}
 	
 	/** @param clazz The class whose class loader will attempt to load the
@@ -275,11 +277,11 @@ public class ResourceUtil {
 	}
 	
 	/** @param path The resource path to check
-	 * @return Whether or not the resource exists(true if an input stream is
+	 * @return Whether or not the resource exists(true if an input stream was
 	 *         successfully opened from the resource, false otherwise) */
 	public static final boolean doesResourceExist(String path) {
 		path = getResourcePathFromShorthand(path);
-		try(InputStream closeMe = ResourceUtil.class.getResourceAsStream(path)) {
+		try(InputStream closeMe = ResourceUtil.getResourceAsStream(null, path)) {
 			if(closeMe != null) {
 				return true;
 			}

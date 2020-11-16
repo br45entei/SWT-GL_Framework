@@ -1,6 +1,6 @@
 /*******************************************************************************
  * 
- * Copyright (C) 2020 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2020 Brian_Entei (br45entei@gmail.com)
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,7 @@
 package com.gmail.br45entei.game.ui;
 
 import com.badlogic.gdx.controllers.Controller;
+import com.gmail.br45entei.audio.SoundManager;
 import com.gmail.br45entei.game.Game;
 import com.gmail.br45entei.game.graphics.GLThread;
 import com.gmail.br45entei.game.graphics.Renderer;
@@ -29,8 +30,12 @@ import com.gmail.br45entei.game.input.Keyboard;
 import com.gmail.br45entei.game.input.Mouse;
 import com.gmail.br45entei.game.ui.swt.RendererMenuItem;
 import com.gmail.br45entei.lwjgl.natives.LWJGL_Natives;
+import com.gmail.br45entei.thread.ScreenshotHelper;
+import com.gmail.br45entei.thread.ThreadType;
+import com.gmail.br45entei.thread.VideoHelper;
 import com.gmail.br45entei.util.Architecture;
 import com.gmail.br45entei.util.CodeUtil;
+import com.gmail.br45entei.util.FileUtil;
 import com.gmail.br45entei.util.Platform;
 import com.gmail.br45entei.util.SWTUtil;
 
@@ -56,6 +61,8 @@ import org.eclipse.swt.events.ArmListener;
 import org.eclipse.swt.events.ControlAdapter;
 import org.eclipse.swt.events.ControlEvent;
 import org.eclipse.swt.events.ControlListener;
+import org.eclipse.swt.events.FocusAdapter;
+import org.eclipse.swt.events.FocusEvent;
 import org.eclipse.swt.events.MenuDetectListener;
 import org.eclipse.swt.events.SelectionAdapter;
 import org.eclipse.swt.events.SelectionEvent;
@@ -64,6 +71,7 @@ import org.eclipse.swt.events.ShellEvent;
 import org.eclipse.swt.graphics.Image;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.graphics.Rectangle;
+import org.eclipse.swt.internal.DPIUtil;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Menu;
 import org.eclipse.swt.widgets.MenuItem;
@@ -81,6 +89,9 @@ import org.lwjgl.opengl.swt.GLData;
 public class Window {// TODO Implement InputCallback.isModal() within the Mouse class
 	
 	static {
+		//CodeUtil.setProperty("org.lwjgl.util.Debug", "true");
+		CodeUtil.setProperty("org.lwjgl.util.NoChecks", "false");
+		
 		String[] extraNativesToLoad;
 		switch(Platform.get()) {
 		case WINDOWS:
@@ -112,7 +123,28 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		LWJGL_Natives.loadNatives(extraNativesToLoad);
 	}
 	
+	private static final ConcurrentLinkedDeque<Window> instances = new ConcurrentLinkedDeque<>();
 	private static volatile Window instance = null;
+	
+	/** @return The {@link Window} that is running on the current thread, or
+	 *         <tt><b>null</b></tt> if no Window was found */
+	public static final Window getCurrent() {
+		final Thread thread = Thread.currentThread();
+		for(Window window : instances) {
+			GLThread glThread = window.glThread;
+			if(glThread == thread) {
+				return window;
+			}
+			if(window.controllerPollThread == thread) {
+				return window;
+			}
+			Display display = window.display;
+			if(display != null && !display.isDisposed() && display.getThread() == thread) {
+				return window.shouldContinueRunning() ? window : null;
+			}
+		}
+		return null;
+	}
 	
 	/** @return The main Window instance */
 	public static final Window getWindow() {
@@ -139,14 +171,16 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		boolean shellActive = shell.getDisplay().getActiveShell() == shell && shell.isVisible();
 		long shellHandle = SWTUtil.getHandle(shell);
 		switch(Platform.get()) {
-		case WINDOWS:
-			shellActive &= org.eclipse.swt.internal.win32.OS.GetForegroundWindow() == shellHandle;
+		case WINDOWS: {
+			shellActive = shell.isVisible() && org.eclipse.swt.internal.win32.OS.GetForegroundWindow() == shellHandle;
 			break;
+		}
 		case LINUX:
 		case MACOSX:
 		case UNKNOWN:
-		default:
+		default: {
 			break;
+		}
 		}
 		return shellActive;
 	}
@@ -161,7 +195,8 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		window.open();
 	}
 	
-	protected volatile String title;
+	protected volatile String title, effectiveTitle;
+	protected final String originalTitle;
 	protected volatile int shellX = 0, shellY = 0;
 	protected volatile int shellWidth = 0, shellHeight = 0;
 	protected volatile int glx = 0, gly = 0;
@@ -172,7 +207,7 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 	
 	protected volatile long nanoTime = System.nanoTime();
 	protected volatile long lastFrameTime = this.nanoTime;
-	protected volatile double deltaTime = (((this.nanoTime = System.nanoTime()) - this.lastFrameTime) + 0.0D) / 1000000000.0D;
+	protected volatile double ΔTime = (((this.nanoTime = System.nanoTime()) - this.lastFrameTime) + 0.0D) / 1000000000.0D;
 	
 	protected volatile boolean running = false, shellActive = false;
 	protected volatile boolean shellVisible = false;
@@ -183,6 +218,10 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 	protected volatile Display display;
 	protected volatile Shell shell;
 	protected volatile long shellHandle;
+	protected volatile int shellStyle;
+	protected volatile boolean appendTitleIfUIForced = true;
+	protected volatile boolean alwaysOnTopEnabled = true;
+	protected volatile Boolean alwaysOnTopFullscreenOrWindowed = Boolean.TRUE;//TRUE: Fullscreen; FALSE: Windowed; null: (Always)
 	
 	protected volatile String[] lastSetIconImages = null;
 	
@@ -191,11 +230,16 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 	protected volatile GLThread glThread;
 	protected volatile Thread fpsLogThread;
 	protected volatile ControllerManager controllerManager;
+	protected volatile boolean pollControllersAsynchronously = true;
+	protected volatile Thread controllerPollThread = null;
+	protected volatile SoundManager soundManager = null;
 	
 	protected volatile MenuItem mntmVerticalSync;
 	protected volatile MenuItem mntmRenderers;
 	protected volatile MenuItem mntmNoRenderer;
+	protected volatile MenuItem mntmAllowControllerBackground;
 	protected volatile MenuItem mntmRendererOptions;
+	protected volatile MenuItem mntmUpdateTitleIf;
 	
 	protected volatile InputCallback uiCallback;
 	protected volatile Renderer activeRendererToSetOnStartup = null;
@@ -226,6 +270,8 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		this.glThread = null;
 		this.fpsLogThread = null;
 		this.controllerManager = null;
+		this.controllerPollThread = null;
+		this.soundManager = null;
 		
 		this.mntmVerticalSync = this.mntmRenderers = this.mntmRendererOptions = null;
 		
@@ -250,9 +296,10 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 	
 	/** Returns a new {@link GLData} with the default settings for creating a
 	 * {@link Window}.<br>
-	 * DoubleBuffer is enabled, the swap interval is set to 1, the OpenGL
-	 * version is set to 3.3, and the context is set to be forward compatible.
-	 * 
+	 * DoubleBuffer is enabled, the swap interval is set to <tt>1,</tt> the
+	 * OpenGL version is set to <tt>3.3</tt>, and the context is set to be
+	 * forward compatible.
+	 *
 	 * @return A new {@link GLData} with the default settings for creating a
 	 *         {@link Window}. */
 	public static final GLData createDefaultGLData() {
@@ -263,6 +310,96 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		data.minorVersion = 3;
 		data.forwardCompatible = true;
 		return data;
+	}
+	
+	/** Returns a new {@link GLData} with the specified settings for creating a
+	 * {@link Window}.<br>
+	 * DoubleBuffer is enabled by default, and the swap interval is set to
+	 * <tt>1</tt> (vsync enabled).
+	 *
+	 * @param majorVersion The major GL context version to use. Use <tt>0</tt>
+	 *            for "not specified".
+	 * @param minorVersion The minor GL context version to use. If
+	 *            <tt>majorVersion</tt> is <tt>0</tt> this parameter is unused.
+	 * @param forwardCompatible Whether a forward-compatible context should be
+	 *            created. This has only an effect when
+	 *            (<tt>majorVersion</tt>.<tt>minorVersion</tt>) is at least
+	 *            <tt>3</tt>.<tt>2</tt>.
+	 * @return A new {@link GLData} with the specified settings for creating a
+	 *         {@link Window}. */
+	public static final GLData createGLData(int majorVersion, int minorVersion, boolean forwardCompatible) {
+		GLData data = new GLData();
+		data.doubleBuffer = true;
+		data.swapInterval = Integer.valueOf(1);
+		data.majorVersion = majorVersion;
+		data.minorVersion = minorVersion;
+		data.forwardCompatible = forwardCompatible;
+		return data;
+	}
+	
+	/** Returns a new {@link GLData} with the specified settings for creating a
+	 * {@link Window}.<br>
+	 * DoubleBuffer is enabled by default.
+	 *
+	 * @param swapInterval The minimum number of video frames that are displayed
+	 *            before a buffer swap will occur.<br>
+	 *            A video frame period is the time required by the monitor to
+	 *            display a full frame of video data. In the case of an
+	 *            interlaced monitor, this is typically the time required to
+	 *            display both the even and odd fields of a frame of video data.
+	 *            An interval set to a value of <tt>2</tt> means that the color
+	 *            buffers will be swapped at most every other video frame. If
+	 *            <tt>swapInterval</tt> is set to a value of <tt>0</tt>, buffer
+	 *            swaps are not synchronized to a video frame. The interval
+	 *            value is silently clamped to the maximum
+	 *            implementation-dependent value supported before being stored.
+	 *            The swap interval is not part of the render context state. It
+	 *            cannot be pushed or popped. The default swap interval is
+	 *            <tt>1</tt>.
+	 * @param majorVersion The major GL context version to use. Use <tt>0</tt>
+	 *            for "not specified".
+	 * @param minorVersion The minor GL context version to use. If
+	 *            <tt>majorVersion</tt> is <tt>0</tt> this parameter is unused.
+	 * @param forwardCompatible Whether a forward-compatible context should be
+	 *            created. This has only an effect when
+	 *            (<tt>majorVersion</tt>.<tt>minorVersion</tt>) is at least
+	 *            <tt>3</tt>.<tt>2</tt>.
+	 * @return A new {@link GLData} with the specified settings for creating a
+	 *         {@link Window}. */
+	public static final GLData createGLData(Integer swapInterval, int majorVersion, int minorVersion, boolean forwardCompatible) {
+		GLData data = new GLData();
+		data.doubleBuffer = true;
+		data.swapInterval = swapInterval;
+		data.majorVersion = majorVersion;
+		data.minorVersion = minorVersion;
+		data.forwardCompatible = forwardCompatible;
+		return data;
+	}
+	
+	/** Creates a new Window with the specified {@link GLData}, the specified
+	 * viewport size, and the specified framerate.<br>
+	 * <br>
+	 * <b>Note:</b>&nbsp;The thread that creates this Window needs to be the
+	 * thread that {@link #open()}s it, as it will become the main display
+	 * thread.
+	 * 
+	 * @param title The title that this Window will display
+	 * @param width The width of the viewport (this will be the
+	 *            {@link GLCanvas}' width)
+	 * @param height The width of the viewport (this will be the
+	 *            {@link GLCanvas}' height)
+	 * @param framerate The framerate that the {@link GLThread} will run at
+	 * @param data The {@link GLData} that the {@link GLThread} will use when
+	 *            creating the OpenGL context
+	 * @param pollControllersAsynchronously Whether or not the
+	 *            {@link ControllerManager} should poll the controllers on a
+	 *            dedicated thread rather than have this Window's display thread
+	 *            do it
+	 * @param renderer The renderer that this Window's {@link GLThread} will
+	 *            attempt to use to display graphics */
+	public Window(String title, int width, int height, double framerate, GLData data, boolean pollControllersAsynchronously, Renderer renderer) {
+		this(title, width, height, framerate, data, renderer);
+		this.pollControllersAsynchronously = pollControllersAsynchronously;
 	}
 	
 	/** Creates a new Window with the specified {@link GLData}, the specified
@@ -284,7 +421,9 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 	 *            attempt to use to display graphics */
 	public Window(String title, int width, int height, double framerate, GLData data, Renderer renderer) {
 		Thread.currentThread().setPriority(Thread.MAX_PRIORITY - 2);
+		DPIUtil.setUseCairoAutoScale(true);
 		this.title = title == null ? "SWT-LWJGL3 Framework" : title;
+		this.originalTitle = title;
 		this.glTargetWidth = width;
 		this.glTargetHeight = height;
 		this.framerate = framerate != framerate || Double.isInfinite(framerate) ? Window.getDefaultRefreshRate() : framerate;
@@ -295,6 +434,10 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		this.createContents();
 		
 		this.setActiveRenderer(renderer);
+		
+		//this.controllerManager.pollState();
+		
+		instances.add(this);
 	}
 	
 	/** Creates a new Window with the specified {@link GLData}, the specified
@@ -502,9 +645,11 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 			boolean validPath = false;
 			try(InputStream in = Window.class.getResourceAsStream(resourcePath)) {
 				validPath = in != null;
-			} catch(IOException | NullPointerException ex) {
+			} catch(IOException ex) {
 				validPath = false;
 				ex.printStackTrace();
+			} catch(NullPointerException ex) {
+				validPath = false;
 			}
 			list.add(validPath ? SWTResourceManager.getImage(Window.class, resourcePath) : SWTResourceManager.getMissingImage());
 		}
@@ -528,7 +673,7 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 			@Override
 			public void shellClosed(ShellEvent e) {
 				e.doit = false;
-				Window.this.running = false;
+				Window.this.close();//Window.this.running = false;
 			}
 		});
 		this.shell.addControlListener(new ControlListener() {
@@ -585,7 +730,6 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 				Window.this.glHeight = size.y;
 			}
 		});
-		
 		//this.glCanvas.setBackground(this.display.getSystemColor(SWT.COLOR_BLACK));
 		/*this.glCanvas.addKeyListener(new KeyAdapter() {
 			@Override
@@ -596,6 +740,12 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 				}
 			}
 		});*/
+		this.shell.addFocusListener(new FocusAdapter() {
+			@Override
+			public void focusGained(FocusEvent e) {
+				Window.this.glCanvas.forceFocus();
+			}
+		});
 		
 		if(Beans.isDesignTime()) {
 			this.shell.setSize(this.glTargetWidth, this.glTargetHeight);
@@ -617,6 +767,19 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		}, "FPS Log Printer Thread");
 		this.fpsLogThread.setDaemon(true);
 		this.controllerManager = new ControllerManager();
+		/*this.shell.addShellListener(new ShellAdapter() {
+			@Override
+			public void shellActivated(ShellEvent e) {
+				Window.this.controllerManager.setWindowActive(true);
+			}
+			
+			@Override
+			public void shellDeactivated(ShellEvent e) {
+				Window.this.controllerManager.setWindowActive(false);
+			}
+		});*/
+		
+		this.soundManager = new SoundManager();// SoundManager is not a daemon thread; however it will detect when the thread that started it has died, and then it will shut itself down.
 		
 		this.createMenus();
 		
@@ -672,7 +835,7 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 			if(fullScreen) {
 				this.destroyMenus();
 			}
-			SWTUtil.setAlwaysOnTop(this.shell, fullScreen);
+			SWTUtil.setAlwaysOnTop(this.shell, this.alwaysOnTopEnabled && (this.alwaysOnTopFullscreenOrWindowed == null || this.alwaysOnTopFullscreenOrWindowed.booleanValue() == fullScreen));
 			this.shell.setFullScreen(fullScreen);
 			if(!fullScreen) {
 				this.createMenus();
@@ -680,7 +843,8 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 			this.shell.redraw();
 			this.shell.update();
 			this.shell.forceActive();
-			this.shell.forceFocus();
+			//this.shell.forceFocus();
+			this.glCanvas.forceFocus();
 		}
 		this.isFullscreen();
 		return this;
@@ -792,6 +956,44 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		return this.setVSyncEnabled(!this.isVsyncEnabled());
 	}
 	
+	/** Returns whether or not this {@link Window} is currently always on top of
+	 * other windows.<br>
+	 * This method is thread-safe.
+	 * 
+	 * @return Whether or not this Window is currently always on top of other
+	 *         windows
+	 * @see #setAlwaysOnTop(boolean, Boolean) */
+	public boolean isCurrentlyAlwaysOnTop() {
+		return (this.shellStyle & SWT.ON_TOP) != 0;
+	}
+	
+	/** Sets whether or not this {@link Window} is always on top, and when.<br>
+	 * This method is thread-safe.
+	 * 
+	 * @param alwaysOnTop Whether or not this Window is always on top of other
+	 *            windows
+	 * @param fullscreenOrWindowedOnly If {@link Boolean#TRUE TRUE}, this Window
+	 *            is always on top while in fullscreen mode; if
+	 *            {@link Boolean#FALSE FALSE}, this Window is always on top
+	 *            while in windowed mode; if <tt><b>null</b></tt>, this Window
+	 *            is just always on top, period.
+	 * @return This Window */
+	public Window setAlwaysOnTop(boolean alwaysOnTop, Boolean fullscreenOrWindowedOnly) {
+		this.alwaysOnTopEnabled = alwaysOnTop;
+		this.alwaysOnTopFullscreenOrWindowed = this.alwaysOnTopEnabled && fullscreenOrWindowedOnly != null ? Boolean.valueOf(fullscreenOrWindowedOnly.booleanValue()) : null;
+		return this;
+	}
+	
+	/** Sets whether or not this {@link Window} is always on top.<br>
+	 * This method is thread-safe.
+	 * 
+	 * @param alwaysOnTop Whether or not this Window is always on top of other
+	 *            windows
+	 * @return This Window */
+	public Window setAlwaysOnTop(boolean alwaysOnTop) {
+		return this.setAlwaysOnTop(alwaysOnTop, null);
+	}
+	
 	@SuppressWarnings("unused")
 	protected synchronized void createMenus() {
 		
@@ -805,6 +1007,24 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		
 		Menu menu_1 = new Menu(mntmfile);
 		mntmfile.setMenu(menu_1);
+		
+		MenuItem mntmOpenScreenshotsFolder = new MenuItem(menu_1, SWT.NONE);
+		mntmOpenScreenshotsFolder.setText("Open &Screenshots Folder");
+		mntmOpenScreenshotsFolder.addSelectionListener(new SelectionAdapter() {
+			@Override
+			public void widgetSelected(SelectionEvent e) {
+				FileUtil.showFileToUser(ScreenshotHelper.getSaveFolder());
+			}
+		});
+		
+		MenuItem mntmOpenVideosFolder = new MenuItem(menu_1, SWT.NONE);
+		mntmOpenVideosFolder.setText("Open &Videos Folder");
+		mntmOpenVideosFolder.addSelectionListener(new SelectionAdapter() {
+			@Override
+			public void widgetSelected(SelectionEvent e) {
+				FileUtil.showFileToUser(VideoHelper.getSaveFolder());
+			}
+		});
 		
 		new MenuItem(menu_1, SWT.SEPARATOR);
 		
@@ -861,6 +1081,53 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		
 		new MenuItem(menu_2, SWT.SEPARATOR);
 		
+		this.mntmRenderers = new MenuItem(menu_2, SWT.CASCADE);
+		this.mntmRenderers.setText("Applications\t(Alt+Left | Alt+Right)");
+		
+		Menu menu_3 = new Menu(this.mntmRenderers);
+		this.mntmRenderers.setMenu(menu_3);
+		
+		this.mntmNoRenderer = new MenuItem(menu_3, SWT.RADIO);
+		this.mntmNoRenderer.setText("<None>");
+		
+		new MenuItem(menu_2, SWT.SEPARATOR);
+		
+		final MenuItem mntmFullscreen = new MenuItem(menu_2, SWT.CHECK);
+		mntmFullscreen.addSelectionListener(new SelectionAdapter() {
+			@Override
+			public void widgetSelected(SelectionEvent e) {
+				Window.this.toggleFullscreen();
+			}
+		});
+		mntmFullscreen.setText("Fullscreen\tF11");
+		
+		mntmwindow.addArmListener(new ArmListener() {
+			@Override
+			public void widgetArmed(ArmEvent e) {
+				if(!Window.this.shell.isDisposed()) {
+					if(!mntmStartRecording.isDisposed()) {
+						if(Window.this.glThread.isRecordingFinishingUp()) {
+							mntmStartRecording.setEnabled(false);
+							mntmStartRecording.setText("Recording finishing up...");
+							Window.this.glThread.stopRecording((v) -> Boolean.valueOf(Window.this.swtLoop()));
+						}
+						if(!mntmStartRecording.isDisposed()) {
+							mntmStartRecording.setEnabled(!Window.this.glThread.isRecordingStartingUp() && !Window.this.glThread.isRecordingFinishingUp());
+							mntmStartRecording.setSelection(Window.this.glThread.isRecording());
+							mntmStartRecording.setText(mntmStartRecording.getSelection() ? "Stop Recording\tShift+F2" : (Window.this.glThread.isRecordingStartingUp() ? "Recording starting up..." : "Start Recording\tShift+F2"));
+						}
+					}
+					if(!Window.this.mntmVerticalSync.isDisposed()) {
+						Window.this.mntmVerticalSync.setSelection(Window.this.getGLThread().getRefreshRate() == Window.getDefaultRefreshRate());
+					}
+					if(!mntmFullscreen.isDisposed()) {
+						mntmFullscreen.setSelection(Window.this.isFullscreen());// This will probably always return false (because there shouldn't be a menuBar in fullscreen mode), but just in case ...
+					}
+					
+				}
+			}
+		});
+		
 		this.mntmVerticalSync = new MenuItem(menu_2, SWT.CHECK);
 		this.mntmVerticalSync.setText("Vertical Sync\tV");
 		this.mntmVerticalSync.setSelection(this.getGLThread().getRefreshRate() == Window.getDefaultRefreshRate());
@@ -873,15 +1140,6 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 			}
 		});
 		
-		final MenuItem mntmFullscreen = new MenuItem(menu_2, SWT.CHECK);
-		mntmFullscreen.addSelectionListener(new SelectionAdapter() {
-			@Override
-			public void widgetSelected(SelectionEvent e) {
-				Window.this.toggleFullscreen();
-			}
-		});
-		mntmFullscreen.setText("Fullscreen\tF11");
-		
 		new MenuItem(menu_2, SWT.SEPARATOR);
 		
 		MenuItem mntmAlwaysOnTop = new MenuItem(menu_2, SWT.CASCADE);
@@ -892,51 +1150,61 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		
 		MenuItem mntmDisabled = new MenuItem(menu_4, SWT.RADIO);
 		mntmDisabled.setText("Disabled");
-		
-		MenuItem mntmEnabledfullscreen = new MenuItem(menu_4, SWT.RADIO);
-		mntmEnabledfullscreen.setText("Enabled (Fullscreen Only)");
-		
-		MenuItem mntmEnabledwindowedOnly = new MenuItem(menu_4, SWT.RADIO);
-		mntmEnabledwindowedOnly.setText("Enabled (Windowed Only)");
-		
-		MenuItem mntmEnabledalways = new MenuItem(menu_4, SWT.RADIO);
-		mntmEnabledalways.setText("Enabled (Always)");
-		
-		new MenuItem(menu_2, SWT.SEPARATOR);
-		
-		this.mntmRenderers = new MenuItem(menu_2, SWT.CASCADE);
-		this.mntmRenderers.setText("Applications\t(Alt+Left | Alt+Right)");
-		
-		mntmwindow.addArmListener(new ArmListener() {
+		mntmDisabled.setSelection(!this.alwaysOnTopEnabled);
+		mntmDisabled.addSelectionListener(new SelectionAdapter() {
 			@Override
-			public void widgetArmed(ArmEvent e) {
-				if(!Window.this.shell.isDisposed()) {
-					if(!mntmStartRecording.isDisposed()) {
-						if(Window.this.glThread.isRecordingFinishingUp()) {
-							mntmStartRecording.setEnabled(false);
-							mntmStartRecording.setText("Recording finishing up...");
-							Window.this.glThread.stopRecording((v) -> Boolean.valueOf(Window.this.swtLoop()));
-						}
-						mntmStartRecording.setEnabled(!Window.this.glThread.isRecordingStartingUp() && !Window.this.glThread.isRecordingFinishingUp());
-						mntmStartRecording.setSelection(Window.this.glThread.isRecording());
-						mntmStartRecording.setText(mntmStartRecording.getSelection() ? "Stop Recording\tShift+F2" : (Window.this.glThread.isRecordingStartingUp() ? "Recording starting up..." : "Start Recording\tShift+F2"));
-					}
-					if(!Window.this.mntmVerticalSync.isDisposed()) {
-						Window.this.mntmVerticalSync.setSelection(Window.this.getGLThread().getRefreshRate() == Window.getDefaultRefreshRate());
-					}
-					if(!mntmFullscreen.isDisposed()) {
-						mntmFullscreen.setSelection(Window.this.isFullscreen());// This will probably always return false, but just in case ...
-					}
-					
-				}
+			public void widgetSelected(SelectionEvent e) {
+				Window.this.alwaysOnTopEnabled = false;
+				Window.this.alwaysOnTopFullscreenOrWindowed = null;
 			}
 		});
 		
-		Menu menu_3 = new Menu(this.mntmRenderers);
-		this.mntmRenderers.setMenu(menu_3);
+		MenuItem mntmEnabledfullscreen = new MenuItem(menu_4, SWT.RADIO);
+		mntmEnabledfullscreen.setSelection(this.alwaysOnTopEnabled && this.alwaysOnTopFullscreenOrWindowed == Boolean.TRUE);
+		mntmEnabledfullscreen.setText("Enabled (Fullscreen Only)");
+		mntmEnabledfullscreen.addSelectionListener(new SelectionAdapter() {
+			@Override
+			public void widgetSelected(SelectionEvent e) {
+				Window.this.alwaysOnTopEnabled = true;
+				Window.this.alwaysOnTopFullscreenOrWindowed = Boolean.TRUE;
+			}
+		});
 		
-		this.mntmNoRenderer = new MenuItem(menu_3, SWT.RADIO);
-		this.mntmNoRenderer.setText("<None>");
+		MenuItem mntmEnabledwindowedOnly = new MenuItem(menu_4, SWT.RADIO);
+		mntmEnabledwindowedOnly.setSelection(this.alwaysOnTopEnabled && this.alwaysOnTopFullscreenOrWindowed == Boolean.FALSE);
+		mntmEnabledwindowedOnly.setText("Enabled (Windowed Only)");
+		mntmEnabledwindowedOnly.addSelectionListener(new SelectionAdapter() {
+			@Override
+			public void widgetSelected(SelectionEvent e) {
+				Window.this.alwaysOnTopEnabled = true;
+				Window.this.alwaysOnTopFullscreenOrWindowed = Boolean.FALSE;
+			}
+		});
+		
+		MenuItem mntmEnabledalways = new MenuItem(menu_4, SWT.RADIO);
+		mntmEnabledalways.setSelection(this.alwaysOnTopEnabled && this.alwaysOnTopFullscreenOrWindowed == null);
+		mntmEnabledalways.setText("Enabled (Always)");
+		mntmEnabledalways.addSelectionListener(new SelectionAdapter() {
+			@Override
+			public void widgetSelected(SelectionEvent e) {
+				Window.this.alwaysOnTopEnabled = true;
+				Window.this.alwaysOnTopFullscreenOrWindowed = null;
+			}
+		});
+		
+		new MenuItem(menu_2, SWT.SEPARATOR);
+		
+		this.mntmUpdateTitleIf = new MenuItem(menu_2, SWT.CHECK);
+		this.mntmUpdateTitleIf.setToolTipText("When checked, this window's title will be suffixed with either \"(Mouse Captured)\", \"(Always On Top)\", or a combination of both, but only when such actions are currently being performed.");
+		this.mntmUpdateTitleIf.setText("Append title when UI is forced");
+		this.mntmUpdateTitleIf.setSelection(this.appendTitleIfUIForced);
+		this.mntmUpdateTitleIf.addSelectionListener(new SelectionAdapter() {
+			@Override
+			public void widgetSelected(SelectionEvent e) {
+				Window.this.appendTitleIfUIForced = Window.this.mntmUpdateTitleIf.getSelection();
+			}
+		});
+		
 		this.mntmNoRenderer.addSelectionListener(new SelectionAdapter() {
 			@Override
 			public void widgetSelected(SelectionEvent e) {
@@ -958,6 +1226,23 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 			}
 			this.addRendererToCascadeMenu(renderer, name);
 		}
+		
+		MenuItem mntmInput = new MenuItem(menu, SWT.CASCADE);
+		mntmInput.setText("Input");
+		
+		Menu menu_5 = new Menu(mntmInput);
+		mntmInput.setMenu(menu_5);
+		
+		this.mntmAllowControllerBackground = new MenuItem(menu_5, SWT.CHECK);
+		this.mntmAllowControllerBackground.setText("Allow Controller Background Input");
+		this.mntmAllowControllerBackground.setToolTipText("When checked, controllers may still be used even when this window is not the foreground window.\r\nUseful for allowing multiple people to use one computer at the same time :)");
+		this.mntmAllowControllerBackground.setSelection(this.controllerManager.isBackgroundInputAllowed());
+		this.mntmAllowControllerBackground.addSelectionListener(new SelectionAdapter() {
+			@Override
+			public void widgetSelected(SelectionEvent e) {
+				Window.this.controllerManager.setAllowBackgroundInput(Window.this.mntmAllowControllerBackground.getSelection());
+			}
+		});
 		
 		new MenuItem(menu, SWT.SEPARATOR);
 		
@@ -1055,7 +1340,9 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		};
 		
 		addArmListener[0].apply(menu);
-		addArmListener[0].apply(popupMenu);
+		if(justCreatedPopupMenu) {
+			addArmListener[0].apply(popupMenu);
+		}
 		
 	}
 	
@@ -1154,6 +1441,23 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 						}
 					}
 				}
+				
+				final ArmListener armListener = (e) -> {
+					this.lastMenuInteraction = System.currentTimeMillis();
+				};
+				@SuppressWarnings("unchecked")
+				final Function<Menu, Void>[] addArmListener = new Function[1];
+				addArmListener[0] = (m) -> {
+					if(m != null) {
+						for(MenuItem item : m.getItems()) {
+							item.addArmListener(armListener);
+							addArmListener[0].apply(item.getMenu());
+						}
+					}
+					return null;
+				};
+				
+				addArmListener[0].apply(popupMenu);
 			}
 		}
 	}
@@ -1187,7 +1491,7 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		if(menu != null) {
 			this.shell.setMenuBar(null);
 			menu.dispose();
-			this.mntmVerticalSync = this.mntmRenderers = this.mntmNoRenderer = this.mntmRendererOptions = null;
+			this.mntmVerticalSync = this.mntmRenderers = this.mntmNoRenderer = this.mntmRendererOptions = this.mntmUpdateTitleIf = null;
 		}
 	}
 	
@@ -1228,17 +1532,18 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 	private final void updateFrameTime() {
 		this.lastFrameTime = this.nanoTime;
 		this.nanoTime = System.nanoTime();
-		this.deltaTime = ((this.nanoTime - this.lastFrameTime) + 0.0D) / 1000000000.0D;
+		this.ΔTime = ((this.nanoTime - this.lastFrameTime) + 0.0D) / 1000000000.0D;
 	}
 	
-	/** Returns the delta time of the current frame from the last.<br>
+	/** Returns the Δ (delta) time of the current frame from the last.<br>
+	 * Returned values are in microseconds (milliseconds divided by 1000).<br>
 	 * For a framerate of <tt>60.0</tt>, values are typically around
 	 * <tt>0.01666670</tt>.
 	 * 
-	 * @return The delta time of the current frame from the last
+	 * @return The Δ time of the current frame from the last
 	 * @see InputCallback#input(double) */
 	public final double getDeltaTime() {
-		return this.deltaTime;
+		return this.ΔTime;
 	}
 	
 	/** Polls the {@link Mouse#poll() Mouse} and {@link Keyboard#poll()
@@ -1270,7 +1575,7 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		}
 		Renderer activeRenderer = this.getActiveRenderer();
 		
-		final double deltaTime = this.deltaTime;
+		final double deltaTime = this.ΔTime;
 		final Double dt = Double.valueOf(deltaTime);
 		long startTime = System.currentTimeMillis();
 		List<InputCallback> inputListeners = this.getAvailableInputCallbacks();
@@ -1323,12 +1628,29 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		
 		// XXX Fix for when the cursor is captured and the user right clicks, causing the
 		// cursor to suddenly become visible for a split second in an attempt to bring up the popup menu
-		if(this.isFullscreen() || (Mouse.isCaptured() && !Mouse.isModal())) {
+		if(this.getAvailableMenuProviders().isEmpty() || (Mouse.isCaptured() && !Mouse.isModal())) {
 			this.destroyGLCanvasPopupMenu();
 		} else {
 			this.createGLCanvasPopupMenu();
 		}
 		return this.shouldContinueRunning();
+	}
+	
+	/** Polls all available input devices and then returns whether or not
+	 * polling was successful in addition to whether or not this {@link Window}
+	 * {@link #shouldContinueRunning() should continue running}.
+	 * 
+	 * @return Whether or not polling the various input devices was successful
+	 *         and this Window should continue running */
+	public boolean pollInputDevices() {
+		if(this.controllerManager == null || this.controllerManager.isDisposed()) {
+			this.controllerManager = null;
+			return this.pollKeyboardAndMouse();
+		}
+		if(this.pollControllersAsynchronously) {
+			return this.pollKeyboardAndMouse();
+		}
+		return this.pollKeyboardAndMouse() && this.pollControllers();
 	}
 	
 	/** Inspects the current controller configuration and polls the connected
@@ -1338,6 +1660,9 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 	public boolean pollControllers() {
 		final ControllerManager manager = this.controllerManager;
 		if(manager != null && !manager.isDisposed()) {
+			if(this.pollControllersAsynchronously && this.controllerPollThread != null) {
+				return false;
+			}
 			return manager.pollControllers();
 		}
 		return false;
@@ -1359,9 +1684,62 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		return new ArrayList<>();
 	}
 	
+	/** Returns the {@link ControllerManager} that this {@link Window} is
+	 * currently using.<br>
+	 * This method is thread-safe.
+	 * 
+	 * @return This Window's ControllerManager (may be <tt><b>null</b></tt>) */
+	public ControllerManager getControllerManager() {
+		if(this.controllerManager != null && this.controllerManager.isDisposed()) {
+			this.controllerManager = null;
+		}
+		return this.controllerManager;
+	}
+	
+	protected void updateTitle() {
+		MenuItem mntmUpdateTitleIf = this.mntmUpdateTitleIf;
+		if(mntmUpdateTitleIf != null && !mntmUpdateTitleIf.isDisposed()) {
+			SWTUtil.setSelection(mntmUpdateTitleIf, this.appendTitleIfUIForced);
+		}
+		
+		String extraTitle = "";
+		if(this.appendTitleIfUIForced) {
+			boolean captured = Mouse.isCaptured();
+			boolean alwaysOnTop = this.isCurrentlyAlwaysOnTop();
+			
+			extraTitle = extraTitle.concat(alwaysOnTop ? (extraTitle.isEmpty() ? "" : ", ").concat("Always On Top") : "");
+			extraTitle = extraTitle.concat(captured ? (extraTitle.isEmpty() ? "" : ", ").concat("Mouse Captured") : "");
+		}
+		if(!this.running) {
+			boolean glThreadRunning = this.glThread == null ? false : this.glThread.isRunning();
+			String shutdownTitle = (glThreadRunning ? "Waiting on GLThread" : "").concat(extraTitle.isEmpty() ? "" : "; ").concat(extraTitle);
+			
+			extraTitle = "Shutting down: ".concat(shutdownTitle);
+		}
+		
+		this.effectiveTitle = this.title.concat(extraTitle.isEmpty() ? "" : String.format(" (%s)", extraTitle));
+		SWTUtil.setTitle(this.shell, this.effectiveTitle);
+	}
+	
 	protected void updateUI() {
-		this.shellActive = Window.isShellActive(this.shell);
-		this.shellVisible = this.shell.isVisible();
+		if(this.isFullscreen()) {
+			if(!Window.isShellActive(this.shell)) {//if(this.display.getActiveShell() != this.shell) {
+				this.shell.forceActive();
+				this.shell.forceFocus();
+			}
+		} else {
+			if(this.shell.getMenuBar() == null) {
+				this.createMenus();
+			}
+		}
+		this.controllerManager.setWindowActive(this.shellActive = Window.isShellActive(this.shell));
+		if(this.shellActive) {
+			this.glCanvas.forceFocus();
+		}
+		SWTUtil.setAlwaysOnTop(this.shell, this.alwaysOnTopEnabled && (this.alwaysOnTopFullscreenOrWindowed == null || this.alwaysOnTopFullscreenOrWindowed.booleanValue() == this.isFullscreen));//SWTUtil.setAlwaysOnTop(this.shell, this.alwaysOnTopEnabled ? (this.alwaysOnTopFullscreenOrWindowed == null ? true : this.alwaysOnTopFullscreenOrWindowed.booleanValue() == this.isFullscreen) : false);
+		this.updateTitle();
+		this.shellStyle = this.shell.getStyle();
+		this.shellVisible = this.shell.isVisible() && !this.shell.getMinimized();
 		
 		Menu rendererMenu = this.mntmRenderers == null || this.mntmRenderers.isDisposed() ? null : this.mntmRenderers.getMenu();
 		if(rendererMenu != null && !rendererMenu.isDisposed()) {
@@ -1412,6 +1790,14 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		return this.running && this.display != null && !this.display.isDisposed() && this.display.getThread().isAlive();
 	}
 	
+	/** @return True if this {@link Window} is currently shutting down (after
+	 *         the end-user has clicked the X or selected &quot;File -&gt;
+	 *         Exit&quot;) and is waiting for the {@link GLThread} to finish
+	 *         executing */
+	public final boolean waitingForGLThreadToShutDown() {
+		return !this.shouldContinueRunning() && !this.shell.isDisposed() && this.glThread != null && this.glThread.isRunning();
+	}
+	
 	/** Maintains the application window, polls the mouse and keyboard, and
 	 * performs various other upkeep tasks.<br>
 	 * <b>Note:</b>&nbsp;This method should only be called by the main display
@@ -1422,11 +1808,11 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		while(this.display.readAndDispatch()) {
 		}
 		CodeUtil.sleep(2L);
-		if(this.shouldContinueRunning()) {
+		if(this.shouldContinueRunning() || (!this.shell.isDisposed() && this.glThread != null && this.glThread.isRunning())) {
 			this.updateUI();
 		}
 		this.updateFrameTime();
-		return this.pollKeyboardAndMouse();
+		return this.pollInputDevices();
 	}
 	
 	/** Has the main display thread execute the given runnable at the nearest
@@ -1455,6 +1841,61 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 	 * @return The {@link GLThread} that this {@link Window} is using */
 	public final GLThread getGLThread() {
 		return this.glThread;
+	}
+	
+	/** Returns the {@link SoundManager} that this {@link Window} is using.<br>
+	 * This method is thread safe.
+	 *
+	 * @return The {@link SoundManager} that this {@link Window} is using */
+	public final SoundManager getSoundManager() {
+		return this.soundManager;
+	}
+	
+	public final boolean areControllersBeingPolledAsynchronously() {
+		return this.pollControllersAsynchronously && this.controllerPollThread != null && this.controllerPollThread.isAlive();
+	}
+	
+	@SuppressWarnings("deprecation")
+	public final Window setPollControllersAsynchronously(boolean pollControllersAsynchronously) {
+		if(pollControllersAsynchronously != this.pollControllersAsynchronously) {
+			this.pollControllersAsynchronously = pollControllersAsynchronously;
+			Thread pollThread = this.controllerPollThread;
+			if(!pollControllersAsynchronously) {
+				if(pollThread != null) {
+					final long startTime = System.currentTimeMillis(),
+							timeout = 3000L;
+					while(pollThread.isAlive()) {
+						if(System.currentTimeMillis() - startTime >= timeout || pollThread.getState() == Thread.State.BLOCKED) {
+							pollThread.stop();
+						}
+					}
+					this.controllerPollThread = null;
+				}
+			} else {
+				if(pollThread == null) {
+					this.controllerPollThread = this.controllerManager.pollContinuously(null, b -> Boolean.valueOf(this.running && this.pollControllersAsynchronously));
+				}
+			}
+		}
+		return this;
+	}
+	
+	public final Thread getControllerPollThread() {
+		return this.controllerPollThread;
+	}
+	
+	public String getTitle() {
+		return this.title;
+	}
+	
+	public String getEffectiveTitle() {
+		String title = this.effectiveTitle;
+		return title == null ? this.title : title;
+	}
+	
+	public Window setTitle(String title) {
+		this.title = title == null ? "" : title;
+		return this;
 	}
 	
 	/** Returns the width of this {@link Window}'s {@link GLCanvas}.<br>
@@ -1669,6 +2110,9 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 			}
 			this.createContents();
 		}
+		if(!instances.contains(this)) {
+			instances.add(this);
+		}
 		this.running = true;
 		
 		try {
@@ -1689,6 +2133,13 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 			while(this.swtLoop() && this.glThread.getState() == Thread.State.NEW) {
 			}
 			this.fpsLogThread.start();
+			if(this.pollControllersAsynchronously && this.controllerManager != null && !this.controllerManager.isDisposed()) {
+				this.controllerPollThread = this.controllerManager.pollContinuously(null, b -> Boolean.valueOf(this.running && this.pollControllersAsynchronously));
+			}
+			this.soundManager.startRunning();
+			for(Renderer failedRenderer : this.glThread.initializeRenderers(this.getAvailableRenderers(), true)) {
+				this.unregisterRenderer(failedRenderer);
+			}
 			
 			while(this.swtLoop()) {
 				/*if(Mouse.getButtonDown(1)) {
@@ -1722,11 +2173,15 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 			this.glThread.setRenderer(null);
 			this.glThread.stopRunning(true);
 			return;
+		} catch(Throwable ex) {
+			ex.printStackTrace();
 		} finally {
 			this.running = false;
 			this.shell.dispose();
 			SWTResourceManager.dispose();
 			this.display.dispose();
+			
+			this.soundManager.stopRunning();
 			
 			/*for(Game game : this.games) {
 				this.unregisterGame(game);
@@ -1741,6 +2196,8 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 				this.unregisterMenuProvider(provider);
 			}*/
 			this.unregisterInputCallback(this.uiCallback);
+			
+			instances.remove(this);
 		}
 	}
 	
@@ -1800,6 +2257,9 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 	 * This Window may be re-opened after closing by simply calling
 	 * {@link #open()} again. */
 	public void close() {
+		if(this.waitingForGLThreadToShutDown()) {
+			this.glThread.stop();
+		}
 		this.running = false;
 	}
 	
@@ -1906,6 +2366,9 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 			}
 			registeredAnywhere |= Mouse.registerInputCallback(game);
 			registeredAnywhere |= Keyboard.registerInputCallback(game);
+			if(this.controllerManager != null && !this.controllerManager.isDisposed()) {
+				registeredAnywhere |= this.controllerManager.registerInputCallback(game);
+			}
 			if(game instanceof MenuProvider && !this.menuProviders.contains((MenuProvider) game)) {
 				registeredAnywhere |= this.menuProviders.add((MenuProvider) game);
 			}
@@ -1938,6 +2401,9 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 			}
 			unregisteredAnywhere |= Mouse.unregisterInputCallback(game);
 			unregisteredAnywhere |= Keyboard.unregisterInputCallback(game);
+			if(this.controllerManager != null && !this.controllerManager.isDisposed()) {
+				unregisteredAnywhere |= this.controllerManager.unregisterInputCallback(game);
+			}
 			if(game instanceof MenuProvider && this.menuProviders.contains((MenuProvider) game)) {
 				while(this.menuProviders.remove((MenuProvider) game)) {
 					unregisteredAnywhere |= true;
@@ -1996,6 +2462,9 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 			}
 			registeredAnywhere |= Mouse.registerInputCallback(inputCallback);
 			registeredAnywhere |= Keyboard.registerInputCallback(inputCallback);
+			if(this.controllerManager != null && !this.controllerManager.isDisposed()) {
+				registeredAnywhere |= this.controllerManager.registerInputCallback(inputCallback);
+			}
 			return registeredAnywhere;
 		}
 		return false;
@@ -2025,6 +2494,9 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 			}
 			unregisteredAnywhere |= Mouse.unregisterInputCallback(inputCallback);
 			unregisteredAnywhere |= Keyboard.unregisterInputCallback(inputCallback);
+			if(this.controllerManager != null && !this.controllerManager.isDisposed()) {
+				unregisteredAnywhere |= this.controllerManager.unregisterInputCallback(inputCallback);
+			}
 			return unregisteredAnywhere;
 		}
 		return false;
@@ -2072,6 +2544,14 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		return handled;
 	}
 	
+	/** Checks and returns whether or not the specified {@link Renderer} is
+	 * registered with this {@link Window}.<br>
+	 * This method is thread-safe.
+	 * 
+	 * @param renderer The Renderer to check
+	 * @return Whether or not the Renderer is registered with this Window
+	 * @see #registerRenderer(Renderer)
+	 * @see #unregisterRenderer(Renderer) */
 	public final boolean isRendererRegistered(Renderer renderer) {
 		if(renderer instanceof Game) {
 			while(this.renderers.remove(renderer)) {
@@ -2084,6 +2564,15 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		return false;
 	}
 	
+	/** Registers the specified {@link Renderer} with this {@link Window} if it
+	 * wasn't already.<br>
+	 * This method is thread-safe.
+	 * 
+	 * @param renderer The Renderer to register
+	 * @return <tt>true</tt> if the Renderer was just registered; <tt>false</tt>
+	 *         otherwise
+	 * @see #isRendererRegistered(Renderer)
+	 * @see #unregisterRenderer(Renderer) */
 	public final boolean registerRenderer(Renderer renderer) {
 		if(renderer instanceof Game) {
 			while(this.renderers.remove(renderer)) {
@@ -2110,6 +2599,15 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		return false;
 	}
 	
+	/** Unregisters the specified {@link Renderer} from this {@link Window} if
+	 * it was previously registered.<br>
+	 * This method is thread-safe.
+	 * 
+	 * @param renderer The Renderer to unregister
+	 * @return <tt>true</tt> if the Renderer was just unregistered;
+	 *         <tt>false</tt> otherwise
+	 * @see #isRendererRegistered(Renderer)
+	 * @see #registerRenderer(Renderer) */
 	public final boolean unregisterRenderer(final Renderer renderer) {
 		final boolean wasRendererRegistered = this.isRendererRegistered(renderer);
 		final boolean wasActiveRenderer = this.getActiveRenderer() == renderer;
@@ -2137,6 +2635,14 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		}
 	}
 	
+	/** Checks and returns whether or not the specified {@link MenuProvider} is
+	 * registered with this {@link Window}.<br>
+	 * This method is thread-safe.
+	 * 
+	 * @param provider The MenuProvider to check
+	 * @return Whether or not the MenuProvider is registered with this Window
+	 * @see #registerMenuProvider(MenuProvider)
+	 * @see #unregisterMenuProvider(MenuProvider) */
 	public final boolean isMenuProviderRegistered(MenuProvider provider) {
 		if(provider instanceof Renderer) {
 			while(this.menuProviders.remove(provider)) {
@@ -2146,6 +2652,15 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		return provider == null ? false : this.menuProviders.contains(provider);
 	}
 	
+	/** Registers the specified {@link MenuProvider} with this {@link Window} if
+	 * it wasn't already.<br>
+	 * This method is thread-safe.
+	 * 
+	 * @param provider The MenuProvider to register
+	 * @return <tt>true</tt> if the MenuProvider was just registered;
+	 *         <tt>false</tt> otherwise
+	 * @see #isMenuProviderRegistered(MenuProvider)
+	 * @see #unregisterMenuProvider(MenuProvider) */
 	public final boolean registerMenuProvider(MenuProvider provider) {
 		if(provider instanceof Renderer) {
 			while(this.menuProviders.remove(provider)) {
@@ -2158,6 +2673,15 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		return false;
 	}
 	
+	/** Unregisters the specified {@link MenuProvider} from this {@link Window}
+	 * if it was previously registered.<br>
+	 * This method is thread-safe.
+	 * 
+	 * @param provider The MenuProvider to unregister
+	 * @return <tt>true</tt> if the MenuProvider was just unregistered;
+	 *         <tt>false</tt> otherwise
+	 * @see #isMenuProviderRegistered(MenuProvider)
+	 * @see #registerMenuProvider(MenuProvider) */
 	public final boolean unregisterMenuProvider(MenuProvider provider) {
 		if(provider instanceof Renderer) {
 			while(this.menuProviders.remove(provider)) {
@@ -2258,15 +2782,18 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 			}
 			return rtrn[0].booleanValue();
 		}
-		if(this.getActiveRenderer() == renderer) {
-			new Throwable().printStackTrace();
+		Renderer originalRenderer = this.getActiveRenderer();
+		if(originalRenderer == renderer) {
 			return true;
 		}
 		boolean createMenuBar = this.shell.getMenuBar() != null;
 		this.destroyMenus();
 		
-		if(this.glThread.setRenderer(renderer, false)) {
-			if(createMenuBar) {
+		//String title = this.title;
+		this.setTitle(this.originalTitle);
+		
+		if(this.glThread.setRenderer(renderer, true)) {
+			if(createMenuBar && !this.isFullscreen()) {
 				this.createMenus();
 			}
 			if(renderer != null) {
@@ -2274,6 +2801,7 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 			}
 			return true;
 		}
+		//this.setTitle(title);
 		return false;
 	}
 	
@@ -2474,4 +3002,71 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		return list;
 	}
 	
+	//==========================================================================================================
+	
+	/** Obtains the {@link Window#getCurrent() current window} and the
+	 * {@link Thread#currentThread()}, then checks and returns the thread's
+	 * relation to the window.
+	 * 
+	 * @return The current thread's relation to the current window, or
+	 *         <tt><b>null</b></tt> if the current window could not be
+	 *         determined
+	 * @see ThreadType#get(Thread, Window)
+	 * @see ThreadType#getCurrent(Window) */
+	public static final ThreadType getCurrentThreadType() {
+		return ThreadType.get(Thread.currentThread(), Window.getCurrent());
+	}
+	
+	/** Obtains the {@link Window#getCurrent() current window}, then checks and
+	 * returns the given thread's relation to the window.
+	 *
+	 * @param thread The thread whose relation to the current window will be
+	 *            checked and returned
+	 * @return The current thread's relation to the current window, or
+	 *         <tt><b>null</b></tt> if either the given thread was
+	 *         <tt><b>null</b></tt>, or the current window could not be
+	 *         determined
+	 * @see ThreadType#get(Thread, Window)
+	 * @see ThreadType#getCurrent(Window) */
+	public static final ThreadType getCurrentThreadType(Thread thread) {
+		return ThreadType.get(thread, Window.getCurrent());
+	}
+	
+	/** Obtains the {@link Thread#currentThread()}, then checks and returns its
+	 * relation to the given window.
+	 *
+	 * @param window The window that will be used when checking the current
+	 *            thread's relation to it
+	 * @return The current thread's relation to the current window, or
+	 *         <tt><b>null</b></tt> if the current window could not be
+	 *         determined
+	 * @see ThreadType#get(Thread, Window)
+	 * @see ThreadType#getCurrent(Window) */
+	public static final ThreadType getCurrentThreadType(Window window) {
+		return ThreadType.get(Thread.currentThread(), window);
+	}
+	
+	/** Obtains the {@link Thread#currentThread()}, then checks and returns its
+	 * relation to this window.
+	 *
+	 * @return The current thread's relation to this window (should never be
+	 *         <tt><b>null</b></tt>)
+	 * @see ThreadType#get(Thread, Window)
+	 * @see ThreadType#getCurrent(Window) */
+	public final ThreadType getThreadType() {
+		return ThreadType.get(Thread.currentThread(), this);
+	}
+	
+	/** Checks and returns the given thread's relation to this window.
+	 *
+	 * @param thread The thread whose relation to this window will be checked
+	 *            and returned
+	 * @return The current thread's relation to this window, or
+	 *         <tt><b>null</b></tt> if the given thread was <tt><b>null</b></tt>
+	 * @see ThreadType#get(Thread, Window)
+	 * @see ThreadType#getCurrent(Window) */
+	public final ThreadType getThreadType(Thread thread) {
+		return ThreadType.get(thread, this);
+	}
+	//
 }

@@ -16,5 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  * 
  *******************************************************************************/
-/** @author Brian_Entei */
+/** Package containing general-use utility classes.
+ *
+ * @since 1.0
+ * @author Brian_Entei */
 package com.gmail.br45entei.util;

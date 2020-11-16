@@ -1,6 +1,6 @@
 /*******************************************************************************
  * 
- * Copyright (C) 2020 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2020 Brian_Entei (br45entei@gmail.com)
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,6 +18,9 @@
  *******************************************************************************/
 package com.gmail.br45entei.game.ui;
 
+import com.gmail.br45entei.thread.ThreadType;
+import com.gmail.br45entei.thread.UsedBy;
+
 import org.eclipse.swt.widgets.Menu;
 import org.eclipse.swt.widgets.MenuItem;
 import org.lwjgl.opengl.swt.GLCanvas;
@@ -34,9 +37,11 @@ public interface MenuProvider {
 	
 	/** Called to retrieve the name of the {@link MenuItem} within the
 	 * primary MenuBar that this provider will populate.
-	 * 
+	 *
 	 * @return The name of the primary {@link MenuItem} that this provider
-	 *         will populate */
+	 *         will populate
+	 * @see ThreadType#UNSPECIFIED */
+	@UsedBy(ThreadType.UNSPECIFIED)
 	public String getMenuName();
 	
 	/** Called when a new {@link Menu MenuBar} is being created for the main
@@ -44,17 +49,21 @@ public interface MenuProvider {
 	 * This allows you to use the provided menu to add your own
 	 * {@link org.eclipse.swt.widgets.MenuItem menu items} which can perform
 	 * various tasks when clicked.
-	 * 
+	 *
 	 * @param menu The {@link Menu MenuBar} that you can populate with your
-	 *            own {@link org.eclipse.swt.widgets.MenuItem menu items} */
+	 *            own {@link org.eclipse.swt.widgets.MenuItem menu items}
+	 * @see ThreadType#UI */
+	@UsedBy(ThreadType.UI)
 	public void onMenuBarCreation(Menu menu);
 	
 	/** Called when the main {@link Window}'s existing {@link Menu MenuBar}
 	 * is about to be disposed.<br>
 	 * This gives you the opportunity to free up any system resources and
 	 * perform any necessary tasks before the menu is destroyed.
-	 * 
-	 * @param menu The {@link Menu MenuBar} that is about to be disposed */
+	 *
+	 * @param menu The {@link Menu MenuBar} that is about to be disposed
+	 * @see ThreadType#UI */
+	@UsedBy(ThreadType.UI)
 	public void onMenuBarDeletion(Menu menu);
 	
 	/** Called when a new {@link Menu PopupMenu} is being created for the
@@ -62,10 +71,11 @@ public interface MenuProvider {
 	 * This allows you to use the provided menu to add your own
 	 * {@link org.eclipse.swt.widgets.MenuItem menu items} which can perform
 	 * various tasks when clicked.
-	 * 
-	 * @param menu The {@link Menu PopupMenu} that you can populate with
-	 *            your
-	 *            own {@link org.eclipse.swt.widgets.MenuItem menu items} */
+	 *
+	 * @param menu The {@link Menu PopupMenu} that you can populate with your
+	 *            own {@link org.eclipse.swt.widgets.MenuItem menu items}
+	 * @see ThreadType#UI */
+	@UsedBy(ThreadType.UI)
 	public void onPopupMenuCreation(Menu menu);
 	
 	/** Called when the main {@link Window}'s {@link GLCanvas}' existing
@@ -73,24 +83,30 @@ public interface MenuProvider {
 	 * disposed.<br>
 	 * This gives you the opportunity to free up any system resources and
 	 * perform any necessary tasks before the menu is destroyed.
-	 * 
-	 * @param menu The {@link Menu PopupMenu} that is about to be
-	 *            disposed */
+	 *
+	 * @param menu The {@link Menu PopupMenu} that is about to be disposed
+	 * @see ThreadType#UI */
+	@UsedBy(ThreadType.UI)
 	public void onPopupMenuDeletion(Menu menu);
 	
 	/** Called by the {@link Window}'s display thread once per 'tick' to allow
-	 * {@link MenuProvider}s to update their menu items when necessary. */
+	 * {@link MenuProvider}s to update their menu items when necessary.
+	 *
+	 * @see ThreadType#UI */
+	@UsedBy(ThreadType.UI)
 	public void updateMenuItems();
 	
 	/** Gives this provider a chance to handle any exceptions that it might
 	 * throw.<br>
 	 * If the exception is not handled, this provider is removed from the
 	 * listeners queue to prevent future unhandled exceptions.
-	 * 
+	 *
 	 * @param ex The exception that this provider threw
 	 * @param method This provider's method that threw the error
 	 * @param params The method parameters (if any) that were passed in
-	 * @return Whether or not this provider has handled the exception */
+	 * @return Whether or not this provider has handled the exception
+	 * @see ThreadType#UI */
+	@UsedBy(ThreadType.UI)
 	public boolean handleException(Throwable ex, String method, Object... params);
 	
 }

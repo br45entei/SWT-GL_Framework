@@ -1,6 +1,6 @@
 /*******************************************************************************
  * 
- * Copyright (C) 2020 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2020 Brian_Entei (br45entei@gmail.com)
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,6 +18,8 @@
  *******************************************************************************/
 package com.gmail.br45entei.game.graphics;
 
+import com.gmail.br45entei.thread.SecureRandomProvider;
+
 import java.security.SecureRandom;
 
 /** Class used to provide a random color that changes a little bit each time it
@@ -27,22 +29,24 @@ import java.security.SecureRandom;
  * @author Brian_Entei */
 public class RandomRotationGenerator {
 	
-	private final SecureRandom random = new SecureRandom();
+	private final SecureRandom random;
 	private volatile float maxIncrement = 1.2f;
 	private volatile float yaw = 0.0f, pitch = 0.0f, roll = 0.0f;
 	private volatile boolean yawWait = false;
 	private volatile boolean pitchWait = false;
 	private volatile boolean rollWait = false;
 	
+	/** Constructs a new RandomRotationGenerator using the default settings. */
+	public RandomRotationGenerator() {
+		this.random = SecureRandomProvider.getSecureRandom();
+	}
+	
 	/** @param maxIncrement The maximum amount of change per frame for each
 	 *            rotation<br>
 	 *            &nbsp;&nbsp;&nbsp;&nbsp;<b>Default:</b>&nbsp;<tt>1.2f</tt> */
 	public RandomRotationGenerator(float maxIncrement) {
+		this();
 		this.maxIncrement = maxIncrement;
-	}
-	
-	/** Constructs a new RandomRotationGenerator using the default settings. */
-	public RandomRotationGenerator() {
 	}
 	
 	/** @param update Whether or not the rotation should be updated for the next

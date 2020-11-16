@@ -1,6 +1,6 @@
 /*******************************************************************************
  * 
- * Copyright (C) 2020 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2020 Brian_Entei (br45entei@gmail.com)
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,8 +20,11 @@ package com.gmail.br45entei.game.input;
 
 import com.gmail.br45entei.util.CodeUtil;
 import com.gmail.br45entei.util.Platform;
+import com.gmail.br45entei.util.ReflectionUtil;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
@@ -137,6 +140,9 @@ public class Keyboard {
 		pollKeyboardAsynchronously = asynchronous;
 	}
 	
+	private static Class<?> win32OS;
+	private static Method win32OSGetKeyState;
+	
 	/** Polls the keyboard using the {@link #setKeyboardPollMode(boolean) poll
 	 * mode}.<br>
 	 * <b>Note:</b>&nbsp;This function will block if it is called outside of the
@@ -154,10 +160,35 @@ public class Keyboard {
 				if(canvas.isDisposed()) {
 					return false;
 				}
+				if(win32OS == null) {
+					win32OS = ReflectionUtil.getClass("org.eclipse.swt.internal.win32.OS");
+					if(win32OS == null) {
+						System.err.println("Failed to poll Keyboard: Failed to locate required class \"org.eclipse.swt.internal.win32.OS\"!");
+						System.err.flush();
+						return false;
+					}
+				}
+				if(win32OSGetKeyState == null) {
+					win32OSGetKeyState = ReflectionUtil.getMethod(win32OS, "GetKeyState", Integer.TYPE);
+					if(win32OSGetKeyState == null) {
+						System.err.println("Failed to poll Keyboard: Failed to locate required method \"org.eclipse.swt.internal.win32.OS.GetKeyState(int nVirtKey)\"!");
+						System.err.flush();
+						return false;
+					}
+				}
 				boolean active = pollKeyboardAsynchronously ? true : (canvas.getDisplay().getActiveShell() == canvas.getShell() && canvas.getShell().isVisible());
 				for(int i = 0; i < keyboardButtonStates.length; i++) {
 					lastKeyboardButtonStates[i] = keyboardButtonStates[i];
-					keyboardButtonStates[i] = active ? org.eclipse.swt.internal.win32.OS.GetKeyState(i) < 0 : false;
+					short keyState;
+					try {
+						keyState = ((Short) win32OSGetKeyState.invoke(null, Integer.valueOf(i))).shortValue();
+					} catch(IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
+						System.err.println("Failed to poll Keyboard: Invoking required method \"org.eclipse.swt.internal.win32.OS.GetKeyState(int nVirtKey)\" threw an exception:");
+						e.printStackTrace(System.err);
+						System.err.flush();
+						return false;
+					}
+					keyboardButtonStates[i] = active ? keyState/*org.eclipse.swt.internal.win32.OS.GetKeyState(i)*/ < 0 : false;
 				}
 				break;
 			case LINUX:
@@ -180,7 +211,7 @@ public class Keyboard {
 						try {
 							listener.onKeyDown(button);
 						} catch(Throwable ex) {
-							if(!handleListenerException(listener, ex, "onKeyDown", Integer.valueOf(button))) {
+							if(!handleListenerException(listener, ex, "onKeyDown", Keys.getNameForKey(button))) {
 								continue;
 							}
 						}
@@ -196,7 +227,7 @@ public class Keyboard {
 							try {
 								listener.onKeyHeld(button);
 							} catch(Throwable ex) {
-								if(!handleListenerException(listener, ex, "onKeyHeld", Integer.valueOf(button))) {
+								if(!handleListenerException(listener, ex, "onKeyHeld", Keys.getNameForKey(button))) {
 									continue;
 								}
 							}
@@ -209,7 +240,7 @@ public class Keyboard {
 						try {
 							listener.onKeyUp(button);
 						} catch(Throwable ex) {
-							if(!handleListenerException(listener, ex, "onKeyUp", Integer.valueOf(button))) {
+							if(!handleListenerException(listener, ex, "onKeyUp", Keys.getNameForKey(button))) {
 								continue;
 							}
 						}
@@ -572,8 +603,7 @@ public class Keyboard {
 				if(!field.getName().startsWith("VK_") || field.getType() != int.class) {
 					continue;
 				}
-				@SuppressWarnings("deprecation")
-				final boolean wasAccessible = field.isAccessible();
+				final boolean wasAccessible = field.canAccess(null);
 				field.setAccessible(true);
 				try {
 					Object obj = field.get(null);
@@ -589,6 +619,7 @@ public class Keyboard {
 					field.setAccessible(wasAccessible);
 				}
 			}
+			//keyDefinitions.put(Integer.valueOf(0xD2/*Keys.VK_RESERVED_15*/), "VK_DWM_FOCUS");
 			/*if(debug) {
 				List<Integer> keys = new ArrayList<>(keyDefinitions.keySet());
 				Collections.sort(keys);

@@ -1,6 +1,6 @@
 /*******************************************************************************
  * 
- * Copyright (C) 2020 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2020 Brian_Entei (br45entei@gmail.com)
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,15 +18,13 @@
  *******************************************************************************/
 package com.gmail.br45entei.game.math;
 
-import com.gmail.br45entei.util.MathUtil;
-
 import org.lwjgl.util.vector.ReadableVector2f;
 
 /** @author Brian_Entei */
 public class Vector2d {
 	
-	private double	x;
-	private double	y;
+	private double x;
+	private double y;
 	
 	/** Default constructor */
 	public Vector2d() {

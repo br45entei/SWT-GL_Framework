@@ -1,16 +1,23 @@
 package com.gmail.br45entei.util;
 
-/** This class contains modified code (as of 06/06/2020 05:47 PM CST) copied
- * from {@link org.lwjgl.system.Platform} because using any class from LWJGL
- * before the native libraries are loaded in causes an
+/** The platforms supported by LWJGL.<br>
+ * <br>
+ * <b>Note:</b>&nbsp;This class contains modified code (as of 06/06/2020 05:47
+ * PM CST) copied from {@link org.lwjgl.system.Platform} because using any class
+ * from LWJGL before the native libraries are loaded in causes an
  * {@link UnsatisfiedLinkError}, resulting in the libraries not being loaded
  * properly.
- * 
- * @author LWJGL3-3.2.3 (Ripped from Platform.java) */
+ *
+ * @since 1.0
+ * @author LWJGL3-3.2.3 (Unascribed; Ripped from Platform.java) */
 public enum Platform {
+	/** Represents Windows operating systems */
 	WINDOWS,
+	/** Represents Linux/Unix operating systems */
 	LINUX,
+	/** Represents MacOS operating systems */
 	MACOSX,
+	/** Represents an unknown operating system */
 	UNKNOWN;
 	
 	private static final Platform current;
@@ -28,6 +35,8 @@ public enum Platform {
 		}
 	}
 	
+	/** @return The {@link Platform} (or <em>operating system</em>) that the
+	 *         computer executing this code is running */
 	public static final Platform get() {
 		return current;
 	}

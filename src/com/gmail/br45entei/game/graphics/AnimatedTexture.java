@@ -1,6 +1,6 @@
 /*******************************************************************************
  * 
- * Copyright (C) 2020 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2020 Brian_Entei (br45entei@gmail.com)
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -60,35 +60,74 @@ public class AnimatedTexture {
 	 * 
 	 * @param textures The textures that will make up this animated texture */
 	public AnimatedTexture(Texture... textures) {
-		this(Window.getDefaultRefreshRate(), textures);
+		this(1000.0 / Window.getDefaultRefreshRate(), textures);
 	}
 	
-	private void advanceNextTexture() {
+	/** Selects the next Texture for rendering in this AnimatedTexture's list of
+	 * textures.<br>
+	 * If the end of the list is reached, the first Texture is selected.
+	 * 
+	 * @return This AnimatedTexture */
+	public AnimatedTexture advanceToNextTexture() {
 		if(this.texIndex + 1 < this.textures.size()) {
 			this.texIndex++;
 		} else {
 			this.texIndex = 0;
 		}
+		return this;
 	}
 	
-	private void checkNextTexture(double deltaTime) {
+	/** Uses the given deltaTime to see if this AnimatedTexture will
+	 * {@link #advanceToNextTexture()} if the <tt>deltaTime</tt> is passed to
+	 * {@link #update(double)}.
+	 * 
+	 * @param deltaTime The amount of time that has passed from the current
+	 *            frame to the last (usually in microseconds, or milliseconds /
+	 *            1000)
+	 * @return Whether or not this AnimatedTexture will
+	 *         {@link #advanceToNextTexture()} if the <tt>deltaTime</tt> is
+	 *         passed to {@link #update(double)} */
+	public boolean willAdvanceToNextTexture(double deltaTime) {
+		return (this.frameRenderCount + (deltaTime * 1000.0)) >= this.millisBetweenChanges;
+	}
+	
+	/** Adds the deltaTime to this AnimatedTexture's internal counter, and then
+	 * checks to see if it needs to {@link #advanceToNextTexture()}.
+	 * 
+	 * @param deltaTime The amount of time that has passed from the current
+	 *            frame to the last (usually in microseconds, or milliseconds /
+	 *            1000) */
+	public void update(double deltaTime) {
 		this.frameRenderCount += deltaTime * 1000.0;
 		if(this.frameRenderCount >= this.millisBetweenChanges) {
-			this.frameRenderCount = 0;
-			this.advanceNextTexture();
+			do {
+				this.frameRenderCount -= this.millisBetweenChanges;
+				this.advanceToNextTexture();
+			} while(this.frameRenderCount > this.millisBetweenChanges);
+			//this.frameRenderCount = 0;
 		}
 	}
 	
-	/** @param deltaTime The amount of time that has passed from the current
+	/** Binds this AnimatedTexture's currently selected Texture
+	 * 
+	 * @return This AnimatedTexture */
+	public AnimatedTexture bind() {
+		if(this.texIndex >= 0 && this.texIndex < this.textures.size()) {
+			this.textures.get(this.texIndex).bind();
+		}
+		return this;
+	}
+	
+	/** Calls {@link #update(double)} and then {@link #bind()}.
+	 * 
+	 * @param deltaTime The amount of time that has passed from the current
 	 *            frame to the last (usually in microseconds, or milliseconds /
 	 *            1000)
 	 * @return This AnimatedTexture */
 	public AnimatedTexture bind(double deltaTime) {
-		this.checkNextTexture(deltaTime);
+		this.update(deltaTime);
 		
-		if(this.texIndex >= 0 && this.texIndex < this.textures.size()) {
-			this.textures.get(this.texIndex).bind();
-		}
+		this.bind();
 		return this;
 	}
 	
@@ -168,7 +207,7 @@ public class AnimatedTexture {
 	/** Removes the Texture at the specified index from this AnimatedTexture's
 	 * internal list of textures.
 	 * 
-	 * @param index The index of the Texture to remove (any Textures at indices
+	 * @param index The index of the Texture to remove (any textures at indices
 	 *            greater than this are shifted down to the previous index and
 	 *            so forth)
 	 * @return The Texture that was previously at the specified index, or
@@ -180,9 +219,9 @@ public class AnimatedTexture {
 		return null;
 	}
 	
-	/** Adds the given texture to the end of the existing list of textures.
+	/** Adds the given Texture to the end of the existing list of textures.
 	 * 
-	 * @param texture The texture to insert
+	 * @param texture The Texture to insert
 	 * @return True, as specified by {@link Collection#add(Object)} */
 	public boolean addTexture(Texture texture) {
 		return this.addTexture(this.textures.size(), texture);

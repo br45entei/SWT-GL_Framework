@@ -1,6 +1,6 @@
 /*******************************************************************************
  * 
- * Copyright (C) 2020 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2020 Brian_Entei (br45entei@gmail.com)
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -42,6 +42,8 @@ import org.eclipse.swt.SWT;
 import org.eclipse.swt.SWTException;
 import org.eclipse.swt.events.ControlEvent;
 import org.eclipse.swt.events.ControlListener;
+import org.eclipse.swt.events.FocusEvent;
+import org.eclipse.swt.events.FocusListener;
 import org.eclipse.swt.events.MouseAdapter;
 import org.eclipse.swt.events.MouseEvent;
 import org.eclipse.swt.events.MouseListener;
@@ -88,15 +90,52 @@ public class Mouse {
 	protected static volatile boolean captured = false;
 	protected static volatile boolean modal = false;
 	protected static volatile boolean movingCursor = false;
-	protected static volatile int captureX, captureY, deltaX, deltaY, lastFreeX,
-			lastFreeY;
+	protected static volatile int captureX, captureY;
+	protected static volatile int ΔX, ΔY;
+	protected static volatile int lastFreeX, lastFreeY;
+	protected static volatile int wheelΔX, wheelΔY;
+	protected static volatile int lastWheelΔX, lastWheelΔY;
 	protected static volatile Canvas cursorCanvas;
 	protected static final org.eclipse.swt.graphics.Rectangle cursorCanvasBounds = new org.eclipse.swt.graphics.Rectangle(0, 0, 800, 600);
+	protected static volatile boolean cursorCanvasFocus = false;
+	protected static volatile long cursorCanvasFocusGainedTime = 0L;
+	protected static volatile long cursorCanvasFocusLostTime = 0L;
 	protected static volatile Cursor currentCursor, invisibleCursor;
 	
 	private static volatile long captureTime = -1L, releaseTime = 0L;
 	
-	protected static final boolean[] mouseDownStates = new boolean[Math.max(3, MouseInfo.getNumberOfButtons())];
+	/** @return True if the cursor-canvas has had user-focus for the past 150
+	 *         milliseconds or more */
+	public static final boolean shouldIListenToClickEvents() {
+		return cursorCanvasFocus && System.currentTimeMillis() - cursorCanvasFocusGainedTime >= 150L &&//
+				(Mouse.captured ? Mouse.getTimeSinceCaptured() : Mouse.getTimeSinceReleased()) >= 150L;
+	}
+	
+	/** @return The time, in milliseconds, since the cursor-canvas gained
+	 *         user-focus, or <tt>-1L</tt> if the canvas does not currently have
+	 *         user-focus */
+	public static final long getTimeSinceCanvasGainedFocus() {
+		return cursorCanvasFocus ? System.currentTimeMillis() - cursorCanvasFocusGainedTime : -1L;
+	}
+	
+	/** @return The time, in milliseconds, since the cursor-canvas lost
+	 *         user-focus, or <tt>-1L</tt> if the canvas currently has
+	 *         user-focus */
+	public static final long getTimeSinceCanvasLostFocus() {
+		return cursorCanvasFocus ? -1L : System.currentTimeMillis() - cursorCanvasFocusLostTime;
+	}
+	
+	/** Returns the number of buttons on the mouse. On systems without a mouse,
+	 * returns {@code -1}. The number of buttons is obtained from the AWT
+	 * Toolkit by requesting the {@code "awt.mouse.numButtons"} desktop property
+	 * which is set by the underlying native platform.
+	 * 
+	 * @return The number of buttons on the mouse */
+	public static final int getNumberOfButtons() {
+		return MouseInfo.getNumberOfButtons();
+	}
+	
+	protected static final boolean[] mouseDownStates = new boolean[Math.max(3, Mouse.getNumberOfButtons())];
 	protected static final boolean[] lastMouseDownStates = new boolean[mouseDownStates.length];
 	protected static final boolean[] currentMouseDownStates = new boolean[mouseDownStates.length];
 	
@@ -209,23 +248,29 @@ public class Mouse {
 		Point topLeft = getCursorCanvasLocation();
 		Point center = getCursorCanvasCenter();
 		boolean shellActive = false;
+		int dx = 0;
+		int dy = 0;
 		
 		if(canvas != null && !canvas.isDisposed() && canvas.getDisplay().getThread() == Thread.currentThread()) {
 			shellActive = Window.isShellActive(canvas.getShell());
 			if(captured && !modal && !movingCursor) {
 				if(shellActive) {
 					setLocation(center);
-					deltaX += mLoc.x - center.x;
-					deltaY += mLoc.y - center.y;
+					dx = mLoc.x - center.x;
+					dy = mLoc.y - center.y;
+					ΔX += dx;
+					ΔY += dy;
 				}
 			} else if(!captured || modal) {
-				deltaX += mLoc.x - lastFreeX;
-				deltaY += mLoc.y - lastFreeY;
+				dx += mLoc.x - lastFreeX;
+				dy += mLoc.y - lastFreeY;
+				ΔX += dx;
+				ΔY += dy;
 				lastFreeX = mLoc.x;
 				lastFreeY = mLoc.y;
 			}
 		} else {
-			deltaX = deltaY = 0;
+			ΔX = ΔY = 0;
 		}
 		
 		if(shellActive) {
@@ -302,8 +347,8 @@ public class Mouse {
 				
 			}
 			
-			int deltaX = Mouse.deltaX;
-			int deltaY = Mouse.deltaY;
+			int deltaX = dx;
+			int deltaY = dy;
 			Integer DeltaX = Integer.valueOf(deltaX);
 			Integer DeltaY = Integer.valueOf(deltaY);
 			
@@ -325,6 +370,36 @@ public class Mouse {
 					} catch(Throwable ex) {
 						if(!handleListenerException(listener, ex, "onMouseMoved", DeltaX, DeltaY, oldX, oldY, newX, newY)) {
 							continue;
+						}
+					}
+				}
+			}
+			
+			int wheelDX = Mouse.wheelΔX - Mouse.lastWheelΔX;
+			int wheelDY = Mouse.wheelΔY - Mouse.lastWheelΔY;
+			Mouse.lastWheelΔX = Mouse.wheelΔX;
+			Mouse.lastWheelΔY = Mouse.wheelΔY;
+			Integer WDX = Integer.valueOf(wheelDX);
+			Integer WDY = Integer.valueOf(wheelDY);
+			
+			if(wheelDX != 0 || wheelDY != 0) {// XXX onMouseScroll
+				for(InputCallback listener : listeners) {
+					if(wheelDX != 0) {
+						try {
+							listener.onMouseScroll(false, wheelDX);
+						} catch(Throwable ex) {
+							if(!handleListenerException(listener, ex, "onMouseScroll", Boolean.FALSE, WDX)) {
+								continue;
+							}
+						}
+					}
+					if(wheelDY != 0) {
+						try {
+							listener.onMouseScroll(true, wheelDY);
+						} catch(Throwable ex) {
+							if(!handleListenerException(listener, ex, "onMouseScroll", Boolean.TRUE, WDY)) {
+								continue;
+							}
 						}
 					}
 				}
@@ -368,52 +443,102 @@ public class Mouse {
 		return !mouseDownStates[button - 1] && lastMouseDownStates[button - 1];
 	}
 	
-	/** Returns a point containing the delta x and y of the system cursor
+	/** Returns a point containing the Δ (delta) x and y of the system cursor
 	 * from the last time {@link Mouse#poll()} was called.
 	 * 
-	 * @param reset Whether or not the delta x and y should be reset to 0
+	 * @param reset Whether or not the Δ x and y should be reset to 0
 	 *            afterwards
-	 * @return The point containing the delta x and y */
-	public static final Point getDXY(boolean reset) {
-		Point dxy = new Point(deltaX, deltaY);
+	 * @return The point containing the Δ x and y */
+	public static final Point getΔXY(boolean reset) {
+		Point dxy = new Point(ΔX, ΔY);
 		if(reset) {
-			deltaX = deltaY = 0;
+			ΔX = ΔY = 0;
 		}
 		return dxy;
 	}
 	
-	/** Returns a point containing the delta x and y of the system cursor
+	/** Returns a point containing the Δ (delta) x and y of the system cursor
 	 * from the last time {@link Mouse#poll()} was called.<br>
-	 * <b>Note:</b>&nbsp;The delta x and y are reset to 0 after calling this
+	 * <b>Note:</b>&nbsp;The Δ x and y are reset to 0 after calling this
 	 * method.
 	 * 
-	 * @return The point containing the delta x and y */
-	public static final Point getDXY() {
-		return getDXY(true);
+	 * @return The point containing the Δ x and y */
+	public static final Point getΔXY() {
+		return getΔXY(true);
 	}
 	
-	/** Returns a point containing the delta x and y of the system cursor
+	/** Returns a point containing the Δ (delta) x and y of the system cursor
 	 * from the last time {@link Mouse#poll()} was called.
 	 * 
-	 * @param reset Whether or not the delta x and y should be reset to 0
+	 * @param reset Whether or not the Δ x and y should be reset to 0
 	 *            afterwards
-	 * @return The point containing the delta x and y */
-	public static final org.eclipse.swt.graphics.Point getDXYSWT(boolean reset) {
-		org.eclipse.swt.graphics.Point dxy = new org.eclipse.swt.graphics.Point(deltaX, deltaY);
+	 * @return The point containing the Δ x and y */
+	public static final org.eclipse.swt.graphics.Point getΔXYSWT(boolean reset) {
+		org.eclipse.swt.graphics.Point dxy = new org.eclipse.swt.graphics.Point(ΔX, ΔY);
 		if(reset) {
-			deltaX = deltaY = 0;
+			ΔX = ΔY = 0;
 		}
 		return dxy;
 	}
 	
-	/** Returns a point containing the delta x and y of the system cursor
+	/** Returns a point containing the Δ (delta) x and y of the system cursor
 	 * from the last time {@link Mouse#poll()} was called.<br>
-	 * <b>Note:</b>&nbsp;The delta x and y are reset to 0 after calling this
+	 * <b>Note:</b>&nbsp;The Δ x and y are reset to 0 after calling this
 	 * method.
 	 * 
-	 * @return The point containing the delta x and y */
-	public static final org.eclipse.swt.graphics.Point getDXYSWT() {
-		return getDXYSWT(true);
+	 * @return The point containing the Δ x and y */
+	public static final org.eclipse.swt.graphics.Point getΔXYSWT() {
+		return getΔXYSWT(true);
+	}
+	
+	/** Returns a point containing the Δ (delta) x and y of the mouse's
+	 * scrollwheel from the last time {@link Mouse#poll()} was called.
+	 * 
+	 * @param reset Whether or not the Δ x and y should be reset to 0
+	 *            afterwards
+	 * @return The point containing the scrollwheel's Δ x and y */
+	public static final Point getWheelΔXY(boolean reset) {
+		Point dxy = new Point(wheelΔX, wheelΔY);
+		if(reset) {
+			wheelΔX = wheelΔY = 0;
+		}
+		return dxy;
+	}
+	
+	/** Returns a point containing the Δ (delta) x and y of the mouse's
+	 * scrollwheel from the last time {@link Mouse#poll()} was called.<br>
+	 * <b>Note:</b>&nbsp;The Δ x and y are reset to 0 after calling this
+	 * method.
+	 * 
+	 * @return The point containing the scrollwheel's Δ x and y */
+	public static final Point getWheelΔXY() {
+		return getWheelΔXY(true);
+	}
+	
+	/** Returns a point containing the Δ (delta) x and y of the mouse's
+	 * scrollwheel
+	 * from the last time {@link Mouse#poll()} was called.
+	 * 
+	 * @param reset Whether or not the Δ x and y should be reset to 0
+	 *            afterwards
+	 * @return The point containing the scrollwheel's Δ x and y */
+	public static final org.eclipse.swt.graphics.Point getWheelΔXYSWT(boolean reset) {
+		org.eclipse.swt.graphics.Point Δxy = new org.eclipse.swt.graphics.Point(wheelΔX, wheelΔY);
+		if(reset) {
+			wheelΔX = wheelΔY = 0;
+		}
+		return Δxy;
+	}
+	
+	/** Returns a point containing the Δ (delta) x and y of the mouse's
+	 * scrollwheel
+	 * from the last time {@link Mouse#poll()} was called.<br>
+	 * <b>Note:</b>&nbsp;The Δ x and y are reset to 0 after calling this
+	 * method.
+	 * 
+	 * @return The point containing the scrollwheel's Δ x and y */
+	public static final org.eclipse.swt.graphics.Point getWheelΔXYSWT() {
+		return getWheelΔXYSWT(true);
 	}
 	
 	/** Returns whether or not the system cursor is 'captured' within the cursor
@@ -488,6 +613,20 @@ public class Mouse {
 	
 	public static final long getTimeSinceReleased() {
 		return Mouse.releaseTime == -1L ? -1L : System.currentTimeMillis() - Mouse.releaseTime;
+	}
+	
+	/** @return The location of the system cursor relative to the top left of
+	 *         the cursor-canvas */
+	public static final Point getLocationRelativeToCanvas() {
+		Point mLoc = getLocation();
+		return new Point((mLoc.x - cursorCanvasBounds.x) + 1, mLoc.y - cursorCanvasBounds.y);
+	}
+	
+	/** @return The location of the system cursor relative to the bottom left of
+	 *         the cursor-canvas */
+	public static final Point getLocationRelativeToCanvasOpenGL() {
+		Point mLoc = getLocation();
+		return new Point((mLoc.x - cursorCanvasBounds.x) + 1, cursorCanvasBounds.height - (mLoc.y - cursorCanvasBounds.y));
 	}
 	
 	/** Returns whether or not the system cursor is currently able to move
@@ -584,37 +723,39 @@ public class Mouse {
 			MouseWheelListener mouseVerticalWheelListener = new MouseWheelListener() {
 				@Override
 				public void mouseScrolled(MouseEvent e) {
-					//TODO implement InputCallback.onMouseScroll(...) here!
+					//lastWheelDY = 0;
+					wheelΔY += e.count;//wheelDY = e.count;
 				}
 			};
 			MouseWheelListener mouseHorizontalWheelListener = new MouseWheelListener() {
 				@Override
 				public void mouseScrolled(MouseEvent e) {
-					//TODO implement InputCallback.onMouseScroll(...) here!
+					//lastWheelDX = 0;
+					wheelΔX += e.count;//wheelDX = e.count;
 				}
 			};
 			canvas.addListener(SWT.MouseVerticalWheel, new TypedListener(mouseVerticalWheelListener));
 			canvas.addListener(SWT.MouseHorizontalWheel, new TypedListener(mouseHorizontalWheelListener));
 			list.add(mouseVerticalWheelListener);
+			list.add(mouseHorizontalWheelListener);
 			
-			ControlListener controlListener = new ControlListener() {
+			FocusListener focusListener = new FocusListener() {
 				@Override
-				public void controlResized(ControlEvent e) {
-					if(cursorCanvas == null || e.widget != cursorCanvas) {
-						return;
-					}
-					org.eclipse.swt.graphics.Point location = cursorCanvas.getDisplay().map(cursorCanvas, null, 0, 0);
-					org.eclipse.swt.graphics.Point size = cursorCanvas.getSize();
-					cursorCanvasBounds.x = location.x;
-					cursorCanvasBounds.y = location.y;
-					cursorCanvasBounds.width = size.x;
-					cursorCanvasBounds.height = size.y;
-					
-					if(captured && !modal) {
-						setLocation(getCursorCanvasCenter());
-					}
+				public void focusLost(FocusEvent e) {
+					cursorCanvasFocus = false;
+					cursorCanvasFocusLostTime = System.currentTimeMillis();
 				}
 				
+				@Override
+				public void focusGained(FocusEvent e) {
+					cursorCanvasFocusGainedTime = System.currentTimeMillis();
+					cursorCanvasFocus = true;
+				}
+			};
+			canvas.addFocusListener(focusListener);
+			list.add(focusListener);
+			
+			ControlListener controlListener = new ControlListener() {
 				@Override
 				public void controlMoved(ControlEvent e) {
 					if(cursorCanvas == null || e.widget != cursorCanvas.getShell()) {
@@ -630,6 +771,11 @@ public class Mouse {
 					if(captured && !modal) {
 						setLocation(getCursorCanvasCenter());
 					}
+				}
+				
+				@Override
+				public void controlResized(ControlEvent e) {
+					this.controlMoved(e);
 				}
 			};
 			canvas.addControlListener(controlListener);
@@ -716,7 +862,7 @@ public class Mouse {
 				robot.mouseMove(x, y);
 			} finally {
 				movingCursor = false;
-				deltaX = deltaY = 0;
+				ΔX = ΔY = 0;
 			}
 		}
 	}

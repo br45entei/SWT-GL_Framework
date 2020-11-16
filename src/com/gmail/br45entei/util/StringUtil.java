@@ -18,6 +18,8 @@
  *******************************************************************************/
 package com.gmail.br45entei.util;
 
+import com.gmail.br45entei.game.math.MathUtil;
+
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.security.SecureRandom;
@@ -615,8 +617,23 @@ public class StringUtil {
 	
 	/** @param str The text to edit
 	 * @return The given text with its first letter capitalized */
-	public static final String captializeFirstLetter(String str) {
+	public static final String capitalizeFirstLetter(String str) {
 		return str.substring(0, 1).toUpperCase() + str.substring(1);
+	}
+	
+	public static final String capitalizeFirstLetterOfEachWord(final String str, final char separator, final char separatorReplacement) {
+		StringBuilder sb = new StringBuilder();
+		String sep = Character.toString(separatorReplacement);
+		String[] words = str.split(Pattern.quote(Character.toString(separator)));
+		for(int i = 0; i < words.length; i++) {
+			String word = StringUtil.capitalizeFirstLetter(words[i].toLowerCase());
+			sb.append(word).append(i + 1 == words.length ? "" : sep);
+		}
+		return sb.toString();
+	}
+	
+	public static final String capitalizeFirstLetterOfEachWord(String str, char separator) {
+		return capitalizeFirstLetterOfEachWord(str, separator, separator);
 	}
 	
 	//======================================================================================

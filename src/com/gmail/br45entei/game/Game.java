@@ -1,6 +1,6 @@
 /*******************************************************************************
  * 
- * Copyright (C) 2020 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2020 Brian_Entei (br45entei@gmail.com)
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,11 +19,12 @@
 package com.gmail.br45entei.game;
 
 import com.badlogic.gdx.controllers.Controller;
+import com.gmail.br45entei.game.graphics.GLThread.InitializationProgress;
 import com.gmail.br45entei.game.graphics.Renderer;
 import com.gmail.br45entei.game.input.InputCallback;
 import com.gmail.br45entei.game.ui.MenuProvider;
-
-import java.util.Objects;
+import com.gmail.br45entei.thread.ThreadType;
+import com.gmail.br45entei.thread.UsedBy;
 
 import org.eclipse.swt.graphics.Rectangle;
 
@@ -43,12 +44,14 @@ import org.eclipse.swt.graphics.Rectangle;
  *
  * @since 1.0
  * @author Brian_Entei */
+@UsedBy({ThreadType.UI, ThreadType.OpenGL, ThreadType.CONTROLLER})
 public interface Game extends Renderer, InputCallback {
 	
 	/** GameAdapter is a helper interface which extends {@link Game} and
 	 * implements all of its defined methods, except for {@link #getName()},
-	 * {@link #isInitialized()}, {@link #initialize()}, and
-	 * {@link #onCleanup()}.<br>
+	 * {@link #isInitialized()}, {@link #initialize(InitializationProgress)},
+	 * {@link #onCleanup()}, {@link #isInputInitialized()},
+	 * {@link #inputInit()}, and {@link #inputCleanup()}.<br>
 	 * <br>
 	 * Classes implementing this interface may <em>optionally</em> override any
 	 * of the methods defined by {@link Game} <em>except</em> for the above
@@ -132,9 +135,29 @@ public interface Game extends Renderer, InputCallback {
 		default public void onControllerDisconnected(Controller controller) {
 		}
 		
-		//=============================================================================================
+		@Override
+		default void onControllerButtonDown(Controller controller, int button) {
+		}
 		
 		@Override
+		default void onControllerButtonRepeat(Controller controller, int button) {
+		}
+		
+		@Override
+		default void onControllerButtonUp(Controller controller, int button) {
+		}
+		
+		@Override
+		default void onControllerButtonDoubleTapped(Controller controller, int button) {
+		}
+		
+		@Override
+		default void onControllerAxisChanged(Controller controller, int axis, float oldValue, float newValue) {
+		}
+		
+		//=============================================================================================
+		
+		/*@Override
 		default public boolean handleException(Throwable ex, String method, Object... params) {
 			StringBuilder sb = new StringBuilder();
 			for(int i = 0; i < params.length; i++) {
@@ -156,7 +179,7 @@ public interface Game extends Renderer, InputCallback {
 			System.err.println(String.format("The game \"%s\" threw an exception while executing method %s(%s)!", this.getName(), method, parameters));
 			System.err.flush();
 			return false;
-		}
+		}*/
 		
 	}
 	

@@ -1,3 +1,21 @@
+/*******************************************************************************
+ * 
+ * Copyright © 2020 Brian_Entei (br45entei@gmail.com)
+ * 
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * 
+ *******************************************************************************/
 package com.gmail.br45entei.audio;
 
 import com.gmail.br45entei.lwjgl.natives.LWJGL_Natives;
@@ -78,8 +96,8 @@ import static org.lwjgl.system.MemoryStack.stackPop;
 import static org.lwjgl.system.MemoryStack.stackPush;
 import static org.lwjgl.system.libc.LibCStdlib.free;
 
-@SuppressWarnings("javadoc")
-/** @author Brian_Entei */
+/** @since 1.0
+ * @author Brian_Entei */
 public class SoundManager extends Thread {
 	
 	/** @return An ArrayList containing all of the package names(or folder
@@ -283,23 +301,33 @@ public class SoundManager extends Thread {
 		return sound;
 	}
 	
-	public static final ByteBuffer getData(InputStream in) throws IOException {
+	public static final ByteBuffer getData(InputStream in, boolean closeStream) throws IOException {
 		if(in == null) {
 			throw new IOException(new NullPointerException("Inputstream cannot be null!"));
 		}
-		ByteArrayOutputStream baos = new ByteArrayOutputStream();
-		int read;
-		byte[] buf = new byte[4096];
-		while((read = in.read(buf)) != -1) {
-			baos.write(buf, 0, read);
+		try {
+			ByteArrayOutputStream baos = new ByteArrayOutputStream();
+			int read;
+			byte[] buf = new byte[4096];
+			while((read = in.read(buf)) != -1) {
+				baos.write(buf, 0, read);
+			}
+			byte[] data = baos.toByteArray();
+			baos = null;
+			return ByteBuffer.allocateDirect(data.length).order(ByteOrder.nativeOrder()).put(data).rewind();
+		} finally {
+			if(closeStream) {
+				try {
+					in.close();
+				} catch(IOException ex) {
+					ex.printStackTrace();
+				}
+			}
 		}
-		byte[] data = baos.toByteArray();
-		baos = null;
-		return ByteBuffer.allocateDirect(data.length).order(ByteOrder.nativeOrder()).put(data).rewind();
 	}
 	
 	public static final ShortBuffer stb_vorbis_decode_stream(InputStream in, IntBuffer channels, IntBuffer sampleRate) throws IOException {
-		ShortBuffer decoded = stb_vorbis_decode_memory(getData(in), channels, sampleRate);
+		ShortBuffer decoded = stb_vorbis_decode_memory(getData(in, true), channels, sampleRate);
 		System.gc();
 		return decoded;
 	}
@@ -320,6 +348,10 @@ public class SoundManager extends Thread {
 	protected volatile Thread caller;
 	protected volatile Throwable trouble = null;
 	
+	/** Returns and clears any exception that has been thrown by this
+	 * {@link SoundManager}.
+	 * 
+	 * @return Any exception that has been thrown by this SoundManager */
 	public final Throwable getTrouble() {
 		Throwable trouble = this.trouble;
 		this.trouble = null;
@@ -332,7 +364,7 @@ public class SoundManager extends Thread {
 		this.startRunning();
 	}
 	
-	/** Starts a new sound manager.
+	/** Starts this new sound manager.
 	 * 
 	 * @return This sound manager */
 	public final SoundManager startRunning() {
@@ -344,7 +376,7 @@ public class SoundManager extends Thread {
 	
 	@Override
 	public final void run() {
-		initializeAL();
+		this.initializeAL();
 		this.running = true;
 		for(String sound : getAllSoundResourcePathsFromSoundPackage()) {
 			System.out.println(sound);
@@ -353,11 +385,11 @@ public class SoundManager extends Thread {
 			System.out.println(music);
 		}
 		while(this.running && this.caller.isAlive()) {
-			updateAL();
+			this.updateAL();
 			CodeUtil.sleep(10L);
 		}
 		this.running = false;
-		destroyAL();
+		this.destroyAL();
 	}
 	
 	public final void stopRunning() {
@@ -595,6 +627,7 @@ public class SoundManager extends Thread {
 			this.format = -1;
 		}
 		
+		@SuppressWarnings("resource")
 		public Sound(File file) throws IOException {
 			this(new Source(fromFile(file), FilenameUtils.normalize(file.getAbsolutePath())));
 		}
@@ -687,7 +720,7 @@ public class SoundManager extends Thread {
 					decoder.removePCMProcessor(fData);
 					fData = null;
 					System.gc();
-					throw new IllegalArgumentException(String.format("Unsupported bits per sample: %s", Integer.toString(this.bitsPerSample, 10)));
+					throw new IllegalArgumentException(String.format("Unsupported bits per sample: %s", Integer.toString(this.bitsPerSample)));
 				}
 				this.format = this.channels == 1 ? (this.bitsPerSample == 16 ? AL_FORMAT_MONO16 : AL_FORMAT_MONO8) : (this.bitsPerSample == 16 ? AL_FORMAT_STEREO16 : AL_FORMAT_STEREO8);
 				this.stereo = this.format == AL_FORMAT_STEREO16 || this.format == AL_FORMAT_STEREO8;
@@ -1007,6 +1040,7 @@ public class SoundManager extends Thread {
 		public volatile ByteBuffer buffer;
 		public final String formatExt;
 		
+		@SuppressWarnings("resource")
 		public Source(URL url) throws IOException {
 			this(url.openStream(), url.toString());
 		}
@@ -1020,12 +1054,13 @@ public class SoundManager extends Thread {
 			}
 		}
 		
+		@SuppressWarnings("resource")
 		public Source(String resourcePath) throws IOException {
 			this(isURL(resourcePath) ? new URL(resourcePath).openStream() : Sound.class.getResourceAsStream(Sound.fullPath(resourcePath)), isURL(resourcePath) ? resourcePath : Sound.fullPath(resourcePath));
 		}
 		
 		public Source(InputStream in, String sourcePath) throws IOException {
-			this(getData(in), sourcePath);
+			this(getData(in, true), sourcePath);
 		}
 		
 		public Source(ByteBuffer buffer, String sourcePath) {

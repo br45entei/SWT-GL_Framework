@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  * 
  *******************************************************************************/
-/** @since 1.0
+/** Package containing thread-related classes.
+ *
+ * @since 1.0
  * @author Brian_Entei */
 package com.gmail.br45entei.thread;

@@ -428,9 +428,9 @@ public class FontRender {
 			char c = s.charAt(i);
 			if(c < charBegin || c > charEnd) c = '?';
 			Glyph g = font.glyphs[c - charBegin];
-			double sW = g.w + (g.w * 0.3);
+			double w = Math.round(g.w - (g.w * 0.15));
 			if(c == '\b') {
-				sizeWidth -= sW * scaleX;
+				sizeWidth -= w * scaleX;
 				if(sizeWidth < smallestWidth) {
 					smallestWidth = sizeWidth;
 				} else if(sizeWidth > largestWidth) {
@@ -444,21 +444,21 @@ public class FontRender {
 				}
 				sizeWidth = 0;
 			} else if(c == '\n') {
-				sizeHeight += font.getLineHeight() * scaleY;
+				sizeHeight += Math.round(font.getLineHeightRender()) * scaleY;
 				if(sizeHeight < smallestHeight) {
 					smallestHeight = sizeHeight;
 				} else if(sizeHeight > largestHeight) {
 					largestHeight = sizeHeight;
 				}
 			} else if(c == '\t') {
-				sizeWidth += sW * scaleX;
+				sizeWidth += w * scaleX;
 				if(sizeWidth < smallestWidth) {
 					smallestWidth = sizeWidth;
 				} else if(sizeWidth > largestWidth) {
 					largestWidth = sizeWidth;
 				}
 			} else {
-				sizeWidth += sW * scaleX;
+				sizeWidth += w * scaleX;
 				if(sizeWidth < smallestWidth) {
 					smallestWidth = sizeWidth;
 				} else if(sizeWidth > largestWidth) {
@@ -466,7 +466,7 @@ public class FontRender {
 				}
 			}
 		}
-		return new GLFontBounds(x, y, smallestWidth * 0.7, smallestHeight * 0.7, largestWidth * 0.7, largestHeight * 0.7);//Wonder why it needs to be multiplied by 0.7 ...
+		return new GLFontBounds(x, y, smallestWidth, smallestHeight, largestWidth, largestHeight);
 	}
 	
 	public static GLFontBounds drawString(GLFont font, CharSequence s, double x, double y, double red, double green, double blue, double alpha) {
@@ -507,19 +507,18 @@ public class FontRender {
 			char c = s.charAt(i);
 			if(c < charBegin || c > charEnd) c = '?';
 			Glyph g = font.glyphs[c - charBegin];
-			double w = g.w - (g.w * 0.15);
-			double sW = g.w + (g.w * 0.3);
+			double w = Math.round(g.w - (g.w * 0.15));
 			if(c == '\b') {
-				GL11.glTranslated(-Math.round(w), 0, 0);
-				lineWidth -= Math.round(w);
-				sizeWidth -= sW;
+				GL11.glTranslated(-w, 0, 0);
+				lineWidth -= w;
+				sizeWidth -= w;
 				if(sizeWidth < smallestWidth) {
 					smallestWidth = sizeWidth;
 				} else if(sizeWidth > largestWidth) {
 					largestWidth = sizeWidth;
 				}
 			} else if(c == '\r') {
-				GL11.glTranslated(-Math.round(lineWidth), 0, 0);
+				GL11.glTranslated(-lineWidth, 0, 0);
 				if(sizeWidth < smallestWidth) {
 					smallestWidth = sizeWidth;
 				} else if(sizeWidth > largestWidth) {
@@ -528,18 +527,19 @@ public class FontRender {
 				lineWidth = 0;
 				sizeWidth = 0;
 			} else if(c == '\n') {
-				GL11.glTranslated(0, Math.round(font.getLineHeightRender()), 0);
-				lineHeight += Math.round(font.getLineHeightRender());
-				sizeHeight += font.getLineHeight();
+				double h = Math.round(font.getLineHeightRender());
+				GL11.glTranslated(0, h, 0);
+				lineHeight += h;
+				sizeHeight += h;
 				if(sizeHeight < smallestHeight) {
 					smallestHeight = sizeHeight;
 				} else if(sizeHeight > largestHeight) {
 					largestHeight = sizeHeight;
 				}
 			} else if(c == '\t') {
-				GL11.glTranslated(Math.round(w), 0, 0);
-				lineWidth += Math.round(w);
-				sizeWidth += sW;
+				GL11.glTranslated(w, 0, 0);
+				lineWidth += w;
+				sizeWidth += w;
 				if(sizeWidth < smallestWidth) {
 					smallestWidth = sizeWidth;
 				} else if(sizeWidth > largestWidth) {
@@ -547,9 +547,9 @@ public class FontRender {
 				}
 			} else {
 				renderGlyph(font, g);
-				GL11.glTranslated(Math.round(w), 0, 0);
-				lineWidth += Math.round(w);
-				sizeWidth += sW;
+				GL11.glTranslated(w, 0, 0);
+				lineWidth += w;
+				sizeWidth += w;
 				if(sizeWidth < smallestWidth) {
 					smallestWidth = sizeWidth;
 				} else if(sizeWidth > largestWidth) {
@@ -566,7 +566,7 @@ public class FontRender {
 		GL11.glDisable(GL11.GL_BLEND);
 		GLUtil.glPopBlendMode();
 		GLUtil.glPopCullMode();
-		return new GLFontBounds(x, y, smallestWidth * 0.7, smallestHeight, largestWidth * 0.7, largestHeight);//Wonder why it needs to be multiplied by 0.7 ...
+		return new GLFontBounds(x, y, smallestWidth, smallestHeight, largestWidth, largestHeight);
 	}
 	
 	private static ColorModel glColorModel = new ComponentColorModel(ColorSpace.getInstance(ColorSpace.CS_sRGB), new int[] {8, 8, 8, 0}, false, false, Transparency.OPAQUE, DataBuffer.TYPE_BYTE);

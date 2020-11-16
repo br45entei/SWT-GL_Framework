@@ -1,6 +1,6 @@
 /*******************************************************************************
  * 
- * Copyright (C) 2020 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2020 Brian_Entei (br45entei@gmail.com)
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,16 +18,22 @@
  *******************************************************************************/
 package com.gmail.br45entei.game.graphics;
 
+import com.gmail.br45entei.game.graphics.FontRender.GLFont;
 import com.gmail.br45entei.game.ui.Window;
+import com.gmail.br45entei.thread.FrequencyTimer;
+import com.gmail.br45entei.thread.FrequencyTimer.TimerCallback;
 import com.gmail.br45entei.thread.ScreenshotHelper;
 import com.gmail.br45entei.thread.VideoHelper;
+import com.gmail.br45entei.thread.ΔTimer;
 import com.gmail.br45entei.util.CodeUtil;
-import com.gmail.br45entei.util.FrequencyTimer;
-import com.gmail.br45entei.util.FrequencyTimer.TimerCallback;
 import com.gmail.br45entei.util.StringUtil;
 
 import java.io.PrintStream;
-import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.RejectedExecutionException;
@@ -41,6 +47,8 @@ import org.lwjgl.opengl.GL30;
 import org.lwjgl.opengl.GLCapabilities;
 import org.lwjgl.opengl.swt.GLCanvas;
 import org.lwjgl.opengl.swt.GLData;
+import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector4f;
 
 /** This class is the main OpenGL thread.
  *
@@ -48,7 +56,7 @@ import org.lwjgl.opengl.swt.GLData;
  * @author Brian_Entei */
 public final class GLThread extends Thread {
 	
-	protected final Window window;
+	protected volatile Window window;
 	protected final GLCanvas glCanvas;
 	protected volatile GLCapabilities glCaps;
 	protected final boolean[] state = {false};
@@ -62,9 +70,7 @@ public final class GLThread extends Thread {
 	protected volatile double lastSetPeriod = this.timer.getTargetPeriodInMilliseconds();
 	protected final ConcurrentLinkedDeque<String> fpsLog = new ConcurrentLinkedDeque<>();
 	
-	protected volatile long nanoTime = System.nanoTime();
-	protected volatile long lastFrameTime = this.nanoTime;
-	protected volatile double deltaTime = (((this.nanoTime = System.nanoTime()) - this.lastFrameTime) + 0.0D) / 1000000000.0D;
+	private volatile ΔTimer δTimer;
 	
 	protected volatile Renderer renderer = null;//Renderer.colorDemo;
 	protected volatile int lastWidth, lastHeight;
@@ -87,12 +93,11 @@ public final class GLThread extends Thread {
 		this.setDaemon(true);
 		this.setPriority(Thread.MAX_PRIORITY);
 		
-		this.window = window;
+		Window current = Window.getCurrent();
+		this.window = window == null ? (current == null ? Window.getWindow() : current) : window;
 		this.glCanvas = glCanvas;
-		this.screenshotHelper.start();
-		this.videoHelper.start();
 		
-		this.fpsLog.addFirst(new BigDecimal(this.deltaTime).toPlainString());
+		//this.fpsLog.addFirst(new BigDecimal(this.ΔTime).toPlainString());
 		this.timer.setCallback(new TimerCallback() {
 			@Override
 			public void onTick() {
@@ -119,6 +124,8 @@ public final class GLThread extends Thread {
 	public final synchronized void start() {
 		this.shouldBeRunning = true;
 		super.start();
+		this.screenshotHelper.start();
+		this.videoHelper.start();
 	}
 	
 	/** @return True if this {@link GLThread} is currently running */
@@ -145,11 +152,19 @@ public final class GLThread extends Thread {
 		this.shouldBeRunning = false;
 		if(waitFor && Thread.currentThread() != this) {
 			Display display;
+			Window window;
 			while(this.state[0]) {
 				display = Display.getCurrent();
 				if(display != null && !display.isDisposed()) {
-					if(!display.readAndDispatch()) {
-						CodeUtil.sleep(10L);
+					window = this.window == null ? Window.getCurrent() : this.window;
+					if(window != null) {
+						if(!window.swtLoop()) {
+							CodeUtil.sleep(8L);//return;
+						}
+					} else {
+						if(!display.readAndDispatch()) {
+							CodeUtil.sleep(10L);
+						}
 					}
 				} else {
 					CodeUtil.sleep(10L);
@@ -160,6 +175,7 @@ public final class GLThread extends Thread {
 					System.err.flush();
 					System.err.println();
 					System.err.println("Unable to wait for the GLThread to terminate...");
+					//this.stop();// No need to do this, GLThread is a daemon thread.
 					break;
 				}
 			}
@@ -168,9 +184,13 @@ public final class GLThread extends Thread {
 	
 	/** Has this {@link GLThread} execute the given runnable at the nearest
 	 * opportunity.<br>
-	 * Tasks should ideally take no more than a couple milliseconds to execute,
-	 * as tasks that take longer will slow down the render loop, resulting in
-	 * fewer frames per second.
+	 * The new task will be executed at the end of a rendered frame of graphics,
+	 * after the color buffers are swapped (which is technically the beginning
+	 * of the next frame).<br>
+	 * <br>
+	 * <b>Note:</b>&nbsp;Tasks should ideally take no more than a couple
+	 * milliseconds to execute, as tasks that take longer will slow down the
+	 * render loop, resulting in fewer frames per second.
 	 * 
 	 * @param runnable The runnable to run
 	 * @return <tt>false</tt> if the code was enqueued; <tt>true</tt> if the
@@ -197,7 +217,7 @@ public final class GLThread extends Thread {
 	}
 	
 	/** Saves a screenshot of the last rendered frame to file.<br>
-	 * This method is thread safe.
+	 * This method is thread-safe.
 	 * 
 	 * @return This GLThread */
 	public final GLThread takeScreenshot() {
@@ -208,7 +228,7 @@ public final class GLThread extends Thread {
 	}
 	
 	/** Saves a screenshot of the last rendered frame to file.<br>
-	 * This method is thread safe.
+	 * This method is thread-safe.
 	 * 
 	 * @param x The x coordinate marking the leftmost edge of the desired
 	 *            screenshot
@@ -431,7 +451,8 @@ public final class GLThread extends Thread {
 		return this;
 	}
 	
-	/** Tells this {@link GLThread} to stop recording video frames.<br>
+	/** Tells this {@link GLThread} to stop recording video frames, and causes
+	 * the currently executing thread to sleep until it has done so.<br>
 	 * This method is thread-safe, but may <b>not</b> be called by the GLThread.
 	 * 
 	 * @param waitCode A function that will be called while the method is
@@ -490,7 +511,7 @@ public final class GLThread extends Thread {
 	
 	/** Returns the GLCapabilities that were returned by
 	 * {@link GL#createCapabilities(boolean)}<br>
-	 * This method is thread safe.
+	 * This method is thread-safe.
 	 * 
 	 * @return The GLCapabilities that were returned by
 	 *         {@link GL#createCapabilities(boolean)} */
@@ -499,7 +520,7 @@ public final class GLThread extends Thread {
 	}
 	
 	/** Returns the GLData that describes the current OpenGL context.<br>
-	 * This method is thread safe.
+	 * This method is thread-safe.
 	 * 
 	 * @return The GLData that describes the current OpenGL context */
 	public final GLData getGLData() {
@@ -546,13 +567,18 @@ public final class GLThread extends Thread {
 			System.err.print(String.format("Renderer \"%s\" threw an exception while executing method %s(%s): ", name, method, parameters));
 			ex.printStackTrace(System.err);
 			System.err.flush();
+			if(ex instanceof ThreadDeath) {
+				ThreadDeath death = new ThreadDeath();
+				death.addSuppressed(ex);
+				throw death;
+			}
 		}
 		return handled;
 	}
 	
 	/** Returns the {@link Renderer renderer} that this GLThread is currently
 	 * using to display graphics.<br>
-	 * This method is thread safe.
+	 * This method is thread-safe.
 	 * 
 	 * @return The {@link Renderer renderer} that this GLThread is currently
 	 *         using to display graphics */
@@ -562,7 +588,7 @@ public final class GLThread extends Thread {
 	
 	/** Sets the renderer that this {@link GLThread} will attempt to use to
 	 * display graphics.<br>
-	 * This method is thread safe.
+	 * This method is thread-safe.
 	 * 
 	 * @param renderer The {@link Renderer renderer} that this GLThread will
 	 *            attempt to use to display graphics
@@ -590,6 +616,7 @@ public final class GLThread extends Thread {
 			};
 			this.tasksToRun.add(task);
 			Display display;
+			Window window;
 			long now, taskRemovalTime = 0L;
 			while(this.isRunning() && rtrn[0] == null) {
 				if(!this.tasksToRun.contains(task)) {
@@ -604,8 +631,16 @@ public final class GLThread extends Thread {
 				}
 				display = readAndDispatch ? Display.getCurrent() : null;
 				if(display != null) {
-					if(!display.readAndDispatch()) {
-						CodeUtil.sleep(10L);
+					window = this.window == null ? Window.getCurrent() : this.window;
+					if(window != null) {
+						if(!window.swtLoop()) {
+							this.stopRunning(true);
+							return false;
+						}
+					} else {
+						if(!display.readAndDispatch()) {
+							CodeUtil.sleep(10L);
+						}
 					}
 				} else {
 					CodeUtil.sleep(10L);
@@ -613,15 +648,17 @@ public final class GLThread extends Thread {
 			}
 			return rtrn[0].booleanValue();
 		}
+		if(this.glCanvas.isDisposed()) {
+			return false;
+		}
+		
 		//System.out.println(String.format("GLThread.setRenderer(%s, %s);", (renderer == null ? "null" : renderer.getName()), Boolean.toString(readAndDispatch)));
 		
 		// (Run Tasks) We're technically in a running task right now (see above code logic),
 		// but we'll go ahead and update the deltaTime and then start another 'new frame' here:
 		
 		// (Update) Update the deltaTime
-		long nanoTime = System.nanoTime();
-		long lastFrameTime = nanoTime;
-		double deltaTime = (((nanoTime = System.nanoTime()) - lastFrameTime) + 0.0D) / 1000000000.0D;
+		this.δTimer.getΔTime(true);
 		
 		try {
 			// (Display) Clear any previous renderer's back buffer
@@ -640,21 +677,26 @@ public final class GLThread extends Thread {
 				try {
 					initialized = renderer.isInitialized();
 				} catch(Throwable ex) {
-					handleRendererException(oldRenderer, ex, "isInitialized");
+					handleRendererException(renderer, ex, "isInitialized");
 					return false;
 				}
 				if(!initialized) {
+					RendererInitializationProgress rip = new RendererInitializationProgress(this, Arrays.asList(renderer));
 					try {
-						renderer.initialize();
-					} catch(Throwable ex) {
-						handleRendererException(oldRenderer, ex, "initialize");
-						return false;
-					}
-					try {
-						initialized = renderer.isInitialized();
-					} catch(Throwable ex) {
-						handleRendererException(oldRenderer, ex, "isInitialized");
-						return false;
+						try {
+							renderer.initialize(rip);
+						} catch(Throwable ex) {
+							handleRendererException(renderer, ex, "initialize");
+							return false;
+						}
+						try {
+							initialized = renderer.isInitialized();
+						} catch(Throwable ex) {
+							handleRendererException(renderer, ex, "isInitialized");
+							return false;
+						}
+					} finally {
+						rip.dispose();
 					}
 				}
 				if(!initialized) {
@@ -663,7 +705,7 @@ public final class GLThread extends Thread {
 				try {
 					renderer.onSelected();
 				} catch(Throwable ex) {
-					handleRendererException(oldRenderer, ex, "onSelected");
+					handleRendererException(renderer, ex, "onSelected");
 					return false;
 				}
 				
@@ -672,15 +714,13 @@ public final class GLThread extends Thread {
 				try {
 					renderer.onViewportChanged(oldViewport, newViewport);
 				} catch(Throwable ex) {
-					handleRendererException(oldRenderer, ex, "onViewportChanged", oldViewport, newViewport);
+					handleRendererException(renderer, ex, "onViewportChanged", oldViewport, newViewport);
 					return false;
 				}
 			}
 			
 			// (Update) Update the deltaTime
-			nanoTime = System.nanoTime();
-			lastFrameTime = nanoTime;
-			deltaTime = (((nanoTime = System.nanoTime()) - lastFrameTime) + 0.0D) / 1000000000.0D;
+			final double ΔTime = this.δTimer.getΔTime(true);
 			
 			// Advance to the 'next frame'
 			
@@ -691,9 +731,9 @@ public final class GLThread extends Thread {
 			// (Display) ... and then render if applicable:
 			if(renderer != null) {
 				try {
-					renderer.render(deltaTime);
+					renderer.render(ΔTime);
 				} catch(Throwable ex) {
-					handleRendererException(oldRenderer, ex, "render", Double.valueOf(deltaTime));
+					handleRendererException(renderer, ex, "render", Double.valueOf(ΔTime));
 					return false;
 				}
 			}
@@ -716,16 +756,12 @@ public final class GLThread extends Thread {
 			return true;
 		} finally {
 			// (Update) The deltaTime will be updated soon since we're technically in a running task right now
-			
-			this.nanoTime = nanoTime;
-			this.lastFrameTime = lastFrameTime;
-			this.deltaTime = deltaTime;
 		}
 	}
 	
 	/** Sets the renderer that this {@link GLThread} will attempt to use to
 	 * display graphics.<br>
-	 * This method is thread safe.
+	 * This method is thread-safe.
 	 * 
 	 * @param renderer The {@link Renderer renderer} that this GLThread will
 	 *            attempt to use to display graphics
@@ -735,20 +771,32 @@ public final class GLThread extends Thread {
 		return this.setRenderer(renderer, true);
 	}
 	
-	/** Returns the delta time of the current frame from the last.<br>
+	/** Returns the Δ (delta) time of the current frame from the last.<br>
+	 * Returned values are in microseconds (milliseconds divided by 1000).<br>
 	 * For a framerate of <tt>60.0</tt>, values are typically around
 	 * <tt>0.01666670</tt>.
 	 * 
-	 * @return The delta time of the current frame from the last
+	 * @return The Δ time of the current frame from the last
 	 * @see Renderer#render(double) */
 	public final double getDeltaTime() {
-		return this.deltaTime;
+		return this.δTimer.getΔTime(false);
+	}
+	
+	/** Returns the Δ (delta) time of the last frame from the one before it.<br>
+	 * Returned values are in microseconds (milliseconds divided by 1000).<br>
+	 * For a framerate of <tt>60.0</tt>, values are typically around
+	 * <tt>0.01666670</tt>.
+	 * 
+	 * @return The Δ time of the last frame from the one before it
+	 * @see Renderer#render(double) */
+	public final double getLastDeltaTime() {
+		return this.δTimer.getLastΔTime();
 	}
 	
 	//===========================================================================================================================
 	
 	/** Returns whether or not vertical sync is enabled.<br>
-	 * This method is thread safe.
+	 * This method is thread-safe.
 	 * 
 	 * @return Whether or not vertical sync is enabled */
 	public final boolean isVsyncEnabled() {
@@ -756,7 +804,7 @@ public final class GLThread extends Thread {
 	}
 	
 	/** Sets whether or not vertical sync is enabled.<br>
-	 * This method is thread safe.
+	 * This method is thread-safe.
 	 * 
 	 * @param vsync Whether or not vertical sync will be enabled
 	 * @return This GLThread */
@@ -768,7 +816,7 @@ public final class GLThread extends Thread {
 	/** Returns the current target framerate per period.<br>
 	 * The period defaults to a second, but may be different if
 	 * {@link #setFPS(double, double)} has been used.<br>
-	 * This method is thread safe.
+	 * This method is thread-safe.
 	 * 
 	 * @return The current target framerate. */
 	public final double getTargetFPS() {
@@ -788,7 +836,7 @@ public final class GLThread extends Thread {
 	
 	/** Sets the target frame rate that this GLThread will attempt to run
 	 * at.<br>
-	 * This method is thread safe.
+	 * This method is thread-safe.
 	 * 
 	 * @param framerate The frames per period to set
 	 * @param period The length of time after which the frame count will reset
@@ -803,7 +851,7 @@ public final class GLThread extends Thread {
 	
 	/** Sets the target frames per second that this GLThread will attempt to run
 	 * at.<br>
-	 * This method is thread safe.
+	 * This method is thread-safe.
 	 * 
 	 * @param framerate The frames per second to set
 	 * @return This GLThread */
@@ -812,35 +860,35 @@ public final class GLThread extends Thread {
 	}
 	
 	/** @return The current frame number being rendered<br>
-	 *         This method is thread safe. */
+	 *         This method is thread-safe. */
 	public final long getFrameID() {
 		return this.timer.getCurrentFrameCount();
 	}
 	
 	/** @return The total FPS (Frames Per Second) that was rendered in the last
 	 *         second<br>
-	 *         This method is thread safe. */
+	 *         This method is thread-safe. */
 	public final long getLastFPS() {
 		return this.timer.getLastFrameCount();
 	}
 	
 	/** @return The current average number of frames per second being
 	 *         rendered<br>
-	 *         This method is thread safe. */
+	 *         This method is thread-safe. */
 	public final double getCurrentAverageFPS() {
 		return 1000.0 / this.timer.getAverageMillisecondsPerFrame();
 	}
 	
 	/** @return The average number of frames per second that was rendered in the
 	 *         last second<br>
-	 *         This method is thread safe. */
+	 *         This method is thread-safe. */
 	public final double getLastAverageFPS() {
 		return 1000.0 / this.timer.getLastAverageMillisecondsPerFrame();
 	}
 	
 	/** Returns whether or not FPS logging is enabled.<br>
 	 * While enabled, this thread generates an FPS log every second.<br>
-	 * This method is thread safe.
+	 * This method is thread-safe.
 	 * 
 	 * @return Whether or not FPS logging is enabled */
 	public final boolean isFPSLoggingEnabled() {
@@ -849,7 +897,7 @@ public final class GLThread extends Thread {
 	
 	/** Sets whether or not FPS logging will be enabled.<br>
 	 * While enabled, this thread generates an FPS log every second.<br>
-	 * This method is thread safe.
+	 * This method is thread-safe.
 	 * 
 	 * @param logFPS Whether or not FPS logging should be enabled
 	 * @return This GLThread */
@@ -861,7 +909,7 @@ public final class GLThread extends Thread {
 	/** Prints the latest FPS log(s) to the given PrintStream.<br>
 	 * One new log is created every second that this GLThread runs as long as
 	 * {@link #setLogFPS(boolean) setLogFPS(false);} was never called.<br>
-	 * This method is thread safe.
+	 * This method is thread-safe.
 	 * 
 	 * @param pr The PrintStream to print the log to
 	 * @return This GLThread */
@@ -877,7 +925,7 @@ public final class GLThread extends Thread {
 	/** Prints the latest FPS log(s) to the standard output stream.<br>
 	 * One new log is created every second that this GLThread runs as long as
 	 * {@link #setLogFPS(boolean) setLogFPS(false);} was never called.<br>
-	 * This method is thread safe.
+	 * This method is thread-safe.
 	 * 
 	 * @return This GLThread */
 	public final GLThread printFPSLog() {
@@ -887,6 +935,10 @@ public final class GLThread extends Thread {
 	//===========================================================================================================================
 	
 	protected final void _swapBuffers() {
+		if(this.glCanvas.isDisposed()) {//if(!this.shouldBeRunning()) {
+			return;
+		}
+		
 		boolean isRecording = this.isRecordingStartingUp() || this.isRecording();
 		if(this.timer.getTargetFrequency() != this.lastSetFrequency || this.timer.getTargetPeriodInMilliseconds() != this.lastSetPeriod) {
 			if(!isRecording && (!this.isVsyncAvailable || !this.vsync)) {
@@ -925,7 +977,15 @@ public final class GLThread extends Thread {
 		}
 		
 		synchronized(this) {
-			this.glCanvas.swapBuffers();
+			try {
+				this.glCanvas.swapBuffers();
+			} catch(NullPointerException ex) {
+				System.err.println("Failed to swap the front and back color buffers!");
+				ex.printStackTrace(System.err);
+				System.err.flush();
+				this.shouldBeRunning = false;
+				return;
+			}
 		}
 		if(!this.isVsyncAvailable || !this.vsync) {
 			this.timer.frequencySleep();
@@ -949,30 +1009,54 @@ public final class GLThread extends Thread {
 	
 	private volatile boolean recordedAFrame = false;
 	
-	protected final void runTasks() {
+	protected final void runTasks(boolean postSwapBuffers) {
 		this.recordedAFrame = false;
-		Runnable task;
-		while((task = this.tasksToRun.pollFirst()) != null) {
+		//Runnable task;
+		//while((task = this.tasksToRun.peekFirst()) != null) {
+		for(Runnable task : this.tasksToRun) {
+			if(postSwapBuffers) {
+				if(task instanceof PreSwapBuffersTask) {
+					continue;
+				}
+			} else {
+				if(task instanceof PostSwapBuffersTask) {
+					continue;
+				}
+			}
+			if(task instanceof PolledTask) {
+				while(this.tasksToRun.remove(task)) {
+				}
+			}
 			try {
 				task.run();
 			} catch(Throwable ex) {
 				System.err.print("A GLThread async task threw an exception: ");
 				ex.printStackTrace(System.err);
 				System.err.flush();
+				if(ex instanceof ThreadDeath) {
+					ThreadDeath death = new ThreadDeath();
+					death.addSuppressed(ex);
+					throw death;
+				}
+			} finally {
+				this.tasksToRun.remove(task);
 			}
 		}
-		if(!this.recordedAFrame && this.isRecording() && !this.isRecordingFinishingUp()) {
-			this.videoHelper.recordFrame(this.recordingViewport);
+		if(postSwapBuffers) {
+			if(!this.recordedAFrame && this.isRecording() && !this.isRecordingFinishingUp()) {
+				this.videoHelper.recordFrame(this.recordingViewport);
+			}
 		}
 	}
 	
-	protected final void updateFrameTime() {
-		this.lastFrameTime = this.nanoTime;
-		this.nanoTime = System.nanoTime();
-		this.deltaTime = ((this.nanoTime - this.lastFrameTime) + 0.0D) / 1000000000.0D;
-	}
-	
-	protected final void _display() {
+	private final void _display() {
+		if(this.window == null) {
+			this.window = Window.getCurrent();
+			/*if(this.window == null) {
+				this.window = Window.getWindow();
+			}*/
+		}
+		
 		Renderer renderer = this.renderer;
 		if(renderer != null) {
 			boolean initialized;
@@ -985,27 +1069,30 @@ public final class GLThread extends Thread {
 				}
 				initialized = true;
 			}
-			try {
-				if(!initialized) {
-					renderer.initialize();
-				}
-			} catch(Throwable ex) {
-				boolean handled = false;
+			if(!initialized) {
+				RendererInitializationProgress rip = new RendererInitializationProgress(this, Arrays.asList(renderer));
 				try {
-					handled = renderer.handleException(ex, "initialize");
-				} catch(Throwable ex1) {
-					ex.addSuppressed(ex1);
-					handled = false;
-				}
-				if(!handled) {
-					ex.printStackTrace();
-					this.renderer = null;
-					return;
+					renderer.initialize(rip);
+				} catch(Throwable ex) {
+					boolean handled = false;
+					try {
+						handled = renderer.handleException(ex, "initialize");
+					} catch(Throwable ex1) {
+						ex.addSuppressed(ex1);
+						handled = false;
+					}
+					if(!handled) {
+						ex.printStackTrace();
+						this.renderer = null;
+						return;
+					}
+				} finally {
+					rip.dispose();
 				}
 			}
 			
-			int width = Window.getWindow().getWidth();
-			int height = Window.getWindow().getHeight();
+			int width = this.window.getWidth();
+			int height = this.window.getHeight();
 			if(this.lastWidth != width || this.lastHeight != height) {
 				Rectangle oldViewport = new Rectangle(0, 0, this.lastWidth, this.lastHeight);
 				Rectangle newViewport = new Rectangle(0, 0, this.lastWidth = width, this.lastHeight = height);
@@ -1027,12 +1114,13 @@ public final class GLThread extends Thread {
 				}
 			}
 			
+			double δTime = this.δTimer.getΔTime(true);
 			try {
-				renderer.render(this.deltaTime);
+				renderer.render(δTime);
 			} catch(Throwable ex) {
 				boolean handled = false;
 				try {
-					handled = renderer.handleException(ex, "render", Double.valueOf(this.deltaTime));
+					handled = renderer.handleException(ex, "render", Double.valueOf(δTime));
 				} catch(Throwable ex1) {
 					ex.addSuppressed(ex1);
 					handled = false;
@@ -1049,26 +1137,149 @@ public final class GLThread extends Thread {
 	
 	/** Renders the next frame of graphics by calling
 	 * {@link Renderer#render(double) renderer.render(deltaTime)}.<br>
-	 * This method is <b>not</b> thread safe.
+	 * This method is <b>not</b> thread-safe.
 	 * 
 	 * @return This GLThread
 	 * @throws IllegalStateException Thrown if this method is called by any
 	 *             other thread other than this {@link GLThread} */
 	public GLThread display() {
 		if(Thread.currentThread() != this) {
-			throw new IllegalStateException("GLThread.display() may only be called from within the GLThread itself!");
+			throw new IllegalStateException("GLThread.display() may only be called by the GLThread itself!");
 		}
 		this._display();
 		return this;
 	}
 	
+	/** Returns the {@link FrequencyTimer} that this {@link GLThread} uses when
+	 * vsync is disabled.<br>
+	 * This method is thread-safe.<br>
+	 * Vsync is automatically enabled (if supported) when the target frequency
+	 * matches the primary montior's {@link Window#getDefaultRefreshRate()
+	 * default refresh rate}
+	 * 
+	 * @deprecated Use {@link #setFPS(double, double)} and/or
+	 *             {@link #setVsyncEnabled(boolean)} instead.
+	 * @return The FrequencyTimer that this GLThread uses when vsync is
+	 *         disabled */
+	@Deprecated
+	public FrequencyTimer getFrequencyTimer() {
+		return this.timer;
+	}
+	
+	public Collection<Renderer> initializeRenderers(Collection<Renderer> renderers, boolean readAndDispatch) {
+		if(!this.isAlive()) {
+			return null;
+		}
+		//Don't initialize the active renderer, _display() will do that for us!
+		renderers.remove(this.renderer);
+		
+		if(Thread.currentThread() != this) {
+			@SuppressWarnings("unchecked")
+			final Collection<Renderer>[] rtrn = new Collection[] {null};
+			PolledTask task = () -> {
+				rtrn[0] = this.initializeRenderers(renderers, false);
+			};
+			this.tasksToRun.add(task);
+			Window window;
+			Display display;
+			//long now, taskRemovalTime = 0L;
+			while(this.isRunning() && rtrn[0] == null) {
+				/*if(!this.tasksToRun.contains(task)) {
+					now = System.currentTimeMillis();
+					if(taskRemovalTime == 0L) {
+						taskRemovalTime = now;
+					} else {
+						if(now - taskRemovalTime >= 500L) {
+							return new ArrayList<>();
+						}
+					}
+				}*/
+				display = readAndDispatch ? Display.getCurrent() : null;
+				if(display != null) {
+					window = this.window == null ? Window.getCurrent() : this.window;
+					if(window != null) {
+						if(!window.swtLoop()) {
+							return new ArrayList<>();
+						}
+					} else {
+						if(!display.readAndDispatch()) {
+							CodeUtil.sleep(10L);
+						}
+					}
+				} else {
+					CodeUtil.sleep(10L);
+				}
+			}
+			return rtrn[0];
+		}
+		
+		Collection<Renderer> failedRenderers = new ArrayList<>();
+		
+		final RendererInitializationProgress rip = new RendererInitializationProgress(this, renderers);// Totally didn't make that the initials for this class on purpose! lmao
+		try {
+			for(Renderer renderer : renderers) {
+				if(!this.shouldBeRunning()) {
+					failedRenderers.add(renderer);
+					continue;
+				}
+				rip.setRendererBeingInitialized(renderer);
+				boolean initialized;
+				try {
+					initialized = renderer.isInitialized();
+				} catch(Throwable ex) {
+					handleRendererException(renderer, ex, "isInitialized");
+					failedRenderers.add(renderer);
+					rip.remove(renderer);
+					continue;
+				}
+				if(!initialized) {
+					try {
+						renderer.initialize(rip);
+					} catch(Throwable ex) {
+						handleRendererException(renderer, ex, "initialize");
+						failedRenderers.add(renderer);
+						rip.remove(renderer);
+						continue;
+					}
+					try {
+						initialized = renderer.isInitialized();
+					} catch(Throwable ex) {
+						handleRendererException(renderer, ex, "isInitialized");
+						failedRenderers.add(renderer);
+						rip.remove(renderer);
+						continue;
+					}
+				}
+				if(!initialized) {
+					failedRenderers.add(renderer);
+					rip.remove(renderer);
+					continue;
+				}
+				rip.markRendererInitialized(renderer);
+				rip.setRendererBeingInitialized(null);
+			}
+			return failedRenderers;
+		} finally {
+			rip.dispose();
+		}
+	}
+	
+	public Collection<Renderer> initializeRenderers(Collection<Renderer> renderers) {
+		return this.initializeRenderers(renderers, true);
+	}
+	
 	/** {@inheritDoc} */
 	@Override
 	public void run() {
+		this.δTimer = ΔTimer.getΔTimer();
 		this.state[0] = true;
 		try {
 			this.glCanvas.setCurrent();
 			this.glCaps = GL.createCapabilities(this.glCanvas.getGLData().forwardCompatible);
+			
+			if(this.glCaps == null || !this.glCanvas.isCurrent()) {
+				throw new IllegalStateException("Failed to set the canvas context as current and create the OpenGL Capabilities!");
+			}
 			
 			try {
 				this.isVsyncAvailable = this.glCanvas.glSwapInterval(this.vsync ? 1 : 0);
@@ -1126,16 +1337,18 @@ public final class GLThread extends Thread {
 			System.out.println("GL 4.5.0: ".concat(Boolean.toString(GLUtil.isGL45Available())));
 			System.out.println("GL 4.6.0: ".concat(Boolean.toString(GLUtil.isGL46Available())));
 			
-			this.nanoTime = System.nanoTime();
-			this.updateFrameTime();
+			//this.nanoTime = System.nanoTime();
+			//this.updateFrameTime();
 			
-			while(this.shouldBeRunning()) {
-				this._display();
-				this._swapBuffers();
-				this.runTasks();
-				this.updateFrameTime();
+			while(this.glDisplayLoop()) {
 			}
 			
+		} catch(Throwable ex) {
+			if(ex instanceof ThreadDeath) {
+				throw ex;
+			}
+			ex.printStackTrace(System.err);
+			System.err.flush();
 		} finally {
 			this.state[0] = false;
 			
@@ -1157,6 +1370,463 @@ public final class GLThread extends Thread {
 		}
 	}
 	
+	public boolean glDisplayLoop() {
+		if(this.shouldBeRunning()) {
+			this._display();
+			this.runTasks(false);
+			this._swapBuffers();
+			this.runTasks(true);
+		}
+		return this.shouldBeRunning();
+	}
+	
 	//===========================================================================================================================
+	
+	/** @since 1.0
+	 * @author Brian_Entei */
+	public static abstract class InitializationProgress {
+		
+		protected InitializationProgress() {
+		}
+		
+		/** @return The renderer that is currently being initialized by the
+		 *         {@link GLThread} */
+		public abstract Renderer getRendererBeingInitialized();
+		
+		/** @return The progress towards getting the current Renderer
+		 *         initialized */
+		public abstract float getProgress();
+		
+		/** @param percentage The new progress (between <tt>0.0f</tt> and
+		 *            <tt>1.0f</tt> inclusive) to set towards getting the
+		 *            current Renderer initialized */
+		public abstract void setProgress(float percentage);
+		
+		public abstract String getBackgroundImage();
+		
+		public abstract boolean setBackgroundImage(String resourcePath);
+		
+		public abstract String getStatusMessage();
+		
+		public abstract void setStatusMessage(String msg);
+		
+		public abstract void set(float progressPercentage, String statusMessage);
+		
+		public abstract void set(float progressPercentage, String statusMessage, String backgroundImage);
+		
+	}
+	
+	private static final class RendererInitializationProgress extends InitializationProgress {
+		
+		private final GLThread glThread;
+		private final boolean wasVsyncEnabled;
+		
+		private final Map<Renderer, Float> rendererProgress = new HashMap<>();
+		private final Map<Renderer, String> rendererBackgroundImages = new HashMap<>();
+		private final Map<Renderer, String> rendererStatusMessages = new HashMap<>();
+		private volatile Renderer currentRenderer = null;
+		
+		private volatile boolean finishedInitializing = true;// XXX This is true to start with so that the method calls in the constructor don't cause glDrawProgressScene to render prematurely
+		
+		private volatile GLFont font;
+		private volatile String text = "Initializing Renderers, Please Wait...";
+		private final double[] textBounds;
+		private volatile double x, y;
+		
+		private volatile Texture background = null;
+		private volatile Vector4f backgroundColorHue = null;
+		private volatile boolean flipBackgroundHorizontally = false;
+		private volatile boolean flipBackgroundVertically = false;
+		
+		private volatile float overallProgress = 0.0f;
+		private volatile int numInitialized = 0;
+		
+		public RendererInitializationProgress(GLThread glThread, Collection<Renderer> renderers) {
+			super();
+			this.glThread = glThread;
+			this.wasVsyncEnabled = this.glThread.window == null ? this.glThread.isVsyncEnabled() : this.glThread.window.isVsyncEnabled();
+			if(this.glThread.window != null) {
+				this.glThread.window.setVSyncEnabled(false);
+			} else {
+				this.glThread.setVsyncEnabled(false);
+			}
+			
+			for(Renderer renderer : renderers) {
+				this.setRendererBeingInitialized(renderer);
+				this.setProgress(0.0f);
+			}
+			this.setRendererBeingInitialized(null);
+			
+			if(!this.glThread.getGLData().forwardCompatible) {
+				this.font = FontRender.createFont("Consolas", 12, false, false, true, true);
+				GL11.glClearColor(0, 0, 0, 1);
+				GL11.glClear(GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT);
+				GL11.glMatrixMode(GL11.GL_PROJECTION);
+				GL11.glLoadMatrixd(GLUtil.getOrthographicMatrixd(0, 0, this.glThread.lastWidth, this.glThread.lastHeight, 0.01, 1000.0));
+				GL11.glMatrixMode(GL11.GL_MODELVIEW);
+				GL11.glLoadIdentity();
+				GL11.glEnable(GL11.GL_TEXTURE_2D);
+				GL11.glDisable(GL11.GL_DEPTH_TEST);
+				this.textBounds = FontRender.sizeOf(this.font, this.text, 0, 0).getBounds();
+				this.x = (this.glThread.lastWidth - this.textBounds[2]) / 2.0;
+				this.y = (this.glThread.lastHeight - this.textBounds[3]) / 2.0;
+				FontRender.drawString(this.font, this.text, this.x, this.y, 1, 1, 1, 1);
+			} else {
+				this.textBounds = new double[4];
+			}
+			
+			this.finishedInitializing = false;
+		}
+		
+		public float dispose() {
+			float progress = this.getOverallProgress();
+			this.finishedInitializing = true;
+			this.rendererProgress.clear();
+			this.rendererBackgroundImages.clear();
+			this.rendererStatusMessages.clear();
+			this.currentRenderer = null;
+			this.text = null;
+			for(int i = 0; i < this.textBounds.length; i++) {
+				this.textBounds[i] = 0;
+			}
+			if(this.font != null) {
+				this.font.destroy();
+				this.font = null;
+			}
+			if(this.background != null) {
+				this.background.dispose();
+				this.background = null;
+			}
+			this.backgroundColorHue = null;
+			this.flipBackgroundHorizontally = this.flipBackgroundVertically = false;
+			
+			if(this.glThread.window != null) {
+				this.glThread.window.setVSyncEnabled(this.wasVsyncEnabled);
+			} else {
+				this.glThread.setVsyncEnabled(this.wasVsyncEnabled);
+			}
+			return progress;
+		}
+		
+		public void remove(Renderer failedRenderer) {
+			if(this.currentRenderer == failedRenderer) {
+				this.currentRenderer = null;
+			}
+			this.rendererProgress.remove(failedRenderer);
+			this.rendererBackgroundImages.remove(failedRenderer);
+			this.rendererStatusMessages.remove(failedRenderer);
+			
+			this.glDrawProgressScene();
+		}
+		
+		@Override
+		public Renderer getRendererBeingInitialized() {
+			return this.currentRenderer;
+		}
+		
+		public void markRendererInitialized(Renderer renderer) {
+			this.rendererProgress.put(renderer, Float.valueOf(1.0f));
+			
+			if(this.glThread.window != null) {
+				this.glThread.window.setVSyncEnabled(this.wasVsyncEnabled);
+			} else {
+				this.glThread.setVsyncEnabled(this.wasVsyncEnabled);
+			}
+		}
+		
+		public void setRendererBeingInitialized(Renderer renderer) {
+			this.currentRenderer = renderer;
+			if(this.background != null) {
+				this.background.dispose();
+				this.background = null;
+			}
+			this.backgroundColorHue = null;
+			this.flipBackgroundHorizontally = this.flipBackgroundVertically = false;
+			
+			this.glDrawProgressScene();
+		}
+		
+		public int getNumInitialized() {
+			if(this.finishedInitializing) {
+				return this.numInitialized;
+			}
+			int numInitialized = 0;
+			for(Float progress : this.rendererProgress.values()) {
+				if(progress != null && progress.floatValue() == 1.0f) {
+					numInitialized++;
+				}
+			}
+			return this.numInitialized = numInitialized;
+		}
+		
+		public float getOverallProgress() {
+			if(this.finishedInitializing) {
+				return this.overallProgress;
+			}
+			float numRenderers = this.rendererProgress.size();
+			float percentage = 0.0f;
+			for(Float progress : this.rendererProgress.values()) {
+				percentage += progress.floatValue();
+			}
+			return this.overallProgress = (percentage / numRenderers);
+		}
+		
+		@Override
+		public float getProgress() {
+			Float progress = this.rendererProgress.get(this.currentRenderer);
+			if(progress == null) {
+				progress = Float.valueOf(0.0f);
+				this.rendererProgress.put(this.currentRenderer, progress);
+			}
+			return progress.floatValue();
+		}
+		
+		@Override
+		public void setProgress(float percentage) {
+			percentage = (percentage != percentage || Float.isInfinite(percentage) ? 0.0f : percentage);
+			Float progress = Float.valueOf(percentage);
+			Float oldProgress = this.rendererProgress.put(this.currentRenderer, progress);
+			if(oldProgress == null || oldProgress.floatValue() != percentage) {
+				this.glDrawProgressScene();
+			}
+		}
+		
+		@Override
+		public String getBackgroundImage() {
+			return this.rendererBackgroundImages.get(this.currentRenderer);
+		}
+		
+		@Override
+		public boolean setBackgroundImage(String resourcePath) {
+			boolean exists = TextureLoader.doesResourceExist(resourcePath);
+			if(!exists) {
+				resourcePath = null;
+			}
+			String oldBackgroundImage = this.rendererBackgroundImages.put(this.currentRenderer, resourcePath);
+			if(oldBackgroundImage == null || !oldBackgroundImage.equals(resourcePath)) {
+				this.glDrawProgressScene();
+			}
+			return exists;
+		}
+		
+		@Override
+		public String getStatusMessage() {
+			return this.rendererStatusMessages.get(this.currentRenderer);
+		}
+		
+		@Override
+		public void setStatusMessage(String msg) {
+			String oldMsg = this.rendererStatusMessages.put(this.currentRenderer, msg);
+			if(oldMsg == null || !oldMsg.equals(msg)) {
+				this.glDrawProgressScene();
+			}
+		}
+		
+		private void glDrawProgressScene() {
+			if(!this.finishedInitializing) {
+				try {
+					final int width = this.glThread.window.getWidth();
+					final int height = this.glThread.window.getHeight();
+					
+					this.x = (width / 2.0f) - (this.textBounds[2] / 2.0f);
+					this.y = ((height / 2.0f) - (this.textBounds[3] / 2.0f)) - 50.0f;
+					final double lineHeight = this.textBounds[3];
+					
+					this.text = String.format("Initializing Renderers (%s/%s), Please Wait...", Integer.toString(Math.min(this.rendererProgress.size(), this.getNumInitialized() + 1)), Integer.toString(this.rendererProgress.size()));
+					final float progress = this.getProgress();
+					final float overallProgress = this.getOverallProgress();
+					final double[] progBounds = {//@formatter:off
+							width * 0.25f,
+							(height - this.y) - (lineHeight + 50.0f),
+							width * 0.5f,
+							50.0f
+					};//@formatter:on
+					final double[] progBar = {//@formatter:off
+							progBounds[0] + 10,
+							progBounds[1] + 10,
+							(progBounds[2] - 20) * progress,
+							(progBounds[3] - 20) / 2.0f
+					};//@formatter:on
+					final double[] overallProgBar = {//@formatter:off
+							progBounds[0] + 10,
+							progBounds[1] + 25,
+							(progBounds[2] - 20) * overallProgress,
+							(progBounds[3] - 20) / 2.0f
+					};//@formatter:on
+					
+					final String msg = this.getStatusMessage();
+					final double msgX, msgY;
+					if(this.font != null && msg != null) {
+						double[] textBounds = FontRender.sizeOf(this.font, msg, 0, 0).getBounds();
+						msgX = (width / 2.0) - (textBounds[2] / 2.0);
+						msgY = progBounds[1];//msgY = (height / 2.0) - (textBounds[3] / 2.0);
+					} else {
+						msgX = 0.0f;
+						msgY = 0.0f;
+					}
+					
+					String backgroundPath = this.getBackgroundImage();
+					if(this.background == null && backgroundPath != null) {
+						this.background = TextureLoader.createTexture(backgroundPath, //
+								GL11.GL_TEXTURE_2D, // target
+								GL11.GL_RGBA,       // dst pixel format
+								GL11.GL_NEAREST,    // min filter
+								GL11.GL_LINEAR);   // max filter);
+					}
+					final Texture background = this.background;
+					if(background != null) {
+						this.backgroundColorHue = this.backgroundColorHue == null ? new Vector4f(1, 1, 1, 0) : this.backgroundColorHue;
+					}
+					
+					final Runnable drawTask = () -> {
+						if(this.glThread.lastWidth != width || this.glThread.lastHeight != height) {
+							GL11.glViewport(0, 0, width, height);
+						}
+						GL11.glClearColor(0, 0, 0, 1);
+						GL11.glClear(GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT);
+						if(!this.glThread.glCaps.forwardCompatible) {
+							GL11.glMatrixMode(GL11.GL_PROJECTION);
+							GL11.glLoadMatrixd(GLUtil.getOrthographicMatrixd(0, 0, width, height, 0.01, 1000.0));
+							GL11.glMatrixMode(GL11.GL_MODELVIEW);
+							GL11.glLoadIdentity();
+						}
+						
+						if(background != null) {
+							GL11.glEnable(background.getTarget());
+							GLUtil.glRenderQuad(background, new Vector2f(width, height), this.backgroundColorHue, this.flipBackgroundHorizontally, this.flipBackgroundVertically);
+							GL11.glBindTexture(background.getTarget(), 0);
+							GL11.glDisable(background.getTarget());
+						}
+						if(this.font != null && !this.glThread.glCaps.forwardCompatible) {
+							FontRender.drawString(this.font, this.text, this.x, height - this.y, 1, 1, 1, 1);
+							
+							GLUtil.glPushColor();
+							GLUtil.glColord(1.0f / 3.0f, 1.0f / 3.0f, 1.0f / 3.0f, 0.0f);
+							GLUtil.glDrawRect2d(progBounds);
+							GLUtil.glColord(0.0f, 198.0f / 255.0f, 0.0f, 0.0f);
+							GLUtil.glDrawRect2d(progBar);
+							GLUtil.glDrawRect2d(overallProgBar);
+							GLUtil.glPopColor();
+							
+							if(msg != null) {
+								FontRender.drawString(this.font, msg, msgX, msgY, 1, 1, 1, 1);
+							}
+						}
+					};
+					final Runnable swapTask = () -> {
+						drawTask.run();
+						if(this.glThread.window != null) {
+							this.glThread.window.setVSyncEnabled(false);
+						} else {
+							this.glThread.setVsyncEnabled(false);
+						}
+						this.glThread._swapBuffers();
+						if(this.glThread.getGLData().doubleBuffer) {
+							drawTask.run();
+							if(this.glThread.window != null) {
+								this.glThread.window.setVSyncEnabled(false);
+							} else {
+								this.glThread.setVsyncEnabled(false);
+							}
+							this.glThread._swapBuffers();
+						}
+					};
+					this.glThread.asyncExec(() -> {
+						if(!this.finishedInitializing) {
+							swapTask.run();
+						}
+					});
+				} finally {
+					if(Thread.currentThread() == this.glThread) {
+						this.glThread.runTasks(false);
+						this.glThread.runTasks(true);
+					}
+				}
+			}
+		}
+		
+		@Override
+		public void set(float progressPercentage, String statusMessage) {
+			boolean somethingChanged = false;
+			
+			Float oldProgress = this.rendererProgress.put(this.currentRenderer, Float.valueOf(progressPercentage));
+			somethingChanged |= (oldProgress == null || oldProgress.floatValue() != progressPercentage);
+			
+			String oldMsg = this.rendererStatusMessages.put(this.currentRenderer, statusMessage);
+			somethingChanged |= (oldMsg == null || !oldMsg.equals(statusMessage));
+			
+			if(somethingChanged) {
+				this.glDrawProgressScene();
+			}
+		}
+		
+		@Override
+		public void set(float progressPercentage, String statusMessage, String backgroundImage) {
+			boolean somethingChanged = false;
+			
+			Float oldProgress = this.rendererProgress.put(this.currentRenderer, Float.valueOf(progressPercentage));
+			somethingChanged |= (oldProgress == null || oldProgress.floatValue() != progressPercentage);
+			
+			String oldMsg = this.rendererStatusMessages.put(this.currentRenderer, statusMessage);
+			somethingChanged |= (oldMsg == null || !oldMsg.equals(statusMessage));
+			
+			if(!TextureLoader.doesResourceExist(backgroundImage)) {
+				backgroundImage = null;
+			}
+			String oldBackgroundImage = this.rendererBackgroundImages.put(this.currentRenderer, backgroundImage);
+			somethingChanged |= (oldBackgroundImage == null || !oldBackgroundImage.equals(backgroundImage));
+			
+			if(somethingChanged) {
+				this.glDrawProgressScene();
+			}
+		}
+		
+	}
+	
+	//===========================================================================================================================
+	
+	/** A GLThread asynchronous task that will be removed from the tasks queue
+	 * before being run. */
+	@FunctionalInterface
+	public static interface PolledTask extends Runnable {
+	}
+	
+	/** A GLThread asynchronous task that will be run after the scene has been
+	 * drawn, but before the front and back color buffers are swapped.
+	 *
+	 * @since 1.0
+	 * @author Brian_Entei */
+	@FunctionalInterface
+	public static interface PreSwapBuffersTask extends Runnable {
+		
+		/** Identical to {@link PreSwapBuffersTask}, except that this class also
+		 * extends {@link PolledTask}.
+		 *
+		 * @since 1.0
+		 * @author Brian_Entei */
+		@FunctionalInterface
+		public static interface PolledPreSwapBuffersTask extends PreSwapBuffersTask, PolledTask {
+		}
+		
+	}
+	
+	/** A GLThread asynchronous task that will be run after both the scene has
+	 * been drawn and the front and back color buffers have been swapped.
+	 *
+	 * @since 1.0
+	 * @author Brian_Entei */
+	@FunctionalInterface
+	public static interface PostSwapBuffersTask extends Runnable {
+		
+		/** Identical to {@link PostSwapBuffersTask}, except that this class
+		 * also extends {@link PolledTask}.
+		 *
+		 * @since 1.0
+		 * @author Brian_Entei */
+		@FunctionalInterface
+		public static interface PolledPostSwapBuffersTask extends PostSwapBuffersTask, PolledTask {
+		}
+		
+	}
 	
 }

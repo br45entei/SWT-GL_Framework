@@ -47,13 +47,22 @@ public class UICallback implements InputCallback {
 	}
 	
 	@Override
-	public boolean isInitialized() {
+	public boolean isInputInitialized() {
 		return this.initialized;
 	}
 	
 	@Override
-	public void initialize() {
+	public void inputInit() {
+		// ...
+		
 		this.initialized = true;
+	}
+	
+	@Override
+	public void inputCleanup() {
+		// ...
+		
+		this.initialized = false;
 	}
 	
 	@Override
@@ -101,7 +110,7 @@ public class UICallback implements InputCallback {
 		
 		if(button == Mouse.BUTTON_LEFT) {
 			if(System.currentTimeMillis() - this.window.lastMenuInteraction > 480L) {
-				if(!Mouse.isCaptured() && !Mouse.isModal()) {
+				if(!Mouse.isCaptured() && !Mouse.isModal() && Mouse.shouldIListenToClickEvents()) {
 					Mouse.setCaptured(true);
 				}
 			}
@@ -134,7 +143,7 @@ public class UICallback implements InputCallback {
 	
 	@Override
 	public void onKeyDown(int key) {
-		if(this.window.isClosed()) {
+		if(this.window.isClosed() || !Mouse.shouldIListenToClickEvents()) {
 			return;
 		}
 		if(key == Keys.VK_ESCAPE) {
@@ -214,6 +223,62 @@ public class UICallback implements InputCallback {
 	
 	@Override
 	public void onControllerDisconnected(Controller controller) {
+		if(this.window.isClosed()) {
+			return;
+		}
+		
+	}
+	
+	@Override
+	public void onControllerButtonDown(Controller controller, int button) {
+		if(this.window.isClosed()) {
+			return;
+		}
+		
+	}
+	
+	@Override
+	public void onControllerButtonHeld(Controller controller, int button, double deltaTime) {
+		if(this.window.isClosed()) {
+			return;
+		}
+		
+	}
+	
+	@Override
+	public void onControllerButtonRepeat(Controller controller, int button) {
+		if(this.window.isClosed()) {
+			return;
+		}
+		
+	}
+	
+	@Override
+	public void onControllerButtonUp(Controller controller, int button) {
+		if(this.window.isClosed()) {
+			return;
+		}
+		
+	}
+	
+	@Override
+	public void onControllerButtonDoubleTapped(Controller controller, int button) {
+		if(this.window.isClosed()) {
+			return;
+		}
+		
+	}
+	
+	@Override
+	public void onControllerAxisChanged(Controller controller, int axis, float oldValue, float newValue) {
+		if(this.window.isClosed()) {
+			return;
+		}
+		
+	}
+	
+	@Override
+	public void onControllerAxisNonZero(Controller controller, int axis, float value, double deltaTime) {
 		if(this.window.isClosed()) {
 			return;
 		}

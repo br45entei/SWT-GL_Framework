@@ -84,10 +84,14 @@ public class ScreenshotHelper extends Thread {
 			}
 		}
 		while(this.state[0]) {
-			ArrayList<ScreenshotTask> screenshotsToTake = ScreenshotTask.getInstances();
-			for(ScreenshotTask screenshot : screenshotsToTake) {
-				screenshot.run();
-				//slp(10L);
+			try {
+				ArrayList<ScreenshotTask> screenshotsToTake = ScreenshotTask.getInstances();
+				for(ScreenshotTask screenshot : screenshotsToTake) {
+					screenshot.run();
+					//slp(10L);
+				}
+			} catch(OutOfMemoryError ex) {
+				ex.printStackTrace();
 			}
 			//if(screenshotsToTake.isEmpty()) {
 			slp(8L);

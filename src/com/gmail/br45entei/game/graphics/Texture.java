@@ -5,11 +5,11 @@ import com.gmail.br45entei.game.ui.Window;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL15;
-import org.lwjgl.opengl.GL20;
 
-/** A texture to be bound within JOGL. This object is responsible for
- * keeping track of a given OpenGL texture and for calculating the
- * texturing mapping coordinates of the full image.
+/** A texture to be bound within <strike>JOGL</strike> LWJGL. This
+ * object is responsible for keeping track of a given OpenGL
+ * texture and for calculating the texturing mapping coordinates
+ * of the full image.
  * 
  * Since textures need to be powers of 2 the actual texture may be
  * considerably bigger than the source image and hence the texture
@@ -18,9 +18,11 @@ import org.lwjgl.opengl.GL20;
  * <br>
  * <b>Edited by:</b> Brian_Entei
  *
+ * @since 1.0
  * @author Kevin Glass
  * @author Brian Matzon */
 public class Texture {
+	
 	/** The GL target type */
 	protected int target;
 	/** The GL texture ID */
@@ -40,6 +42,8 @@ public class Texture {
 	private float widthRatio;
 	/** The ratio of the height of the image to the texture */
 	private float heightRatio;
+	
+	private volatile boolean isDisposed = false;
 	
 	/** Create a new texture
 	 *
@@ -62,27 +66,36 @@ public class Texture {
 		return this.textureID;
 	}
 	
+	/** @return The GL target type */
+	public int getTarget() {
+		return this.target;
+	}
+	
 	/** @return The file name or resource path name used to load this texture */
 	public final String getTextureName() {
 		return this.name;
 	}
 	
+	/** @return True if this texture is translucent, or has an alpha channel */
 	public final boolean hasAlpha() {
 		return this.hasAlpha;
 	}
 	
 	/** Unbinds any textures of any kind that may be in use */
 	public static final void unbindAllTextures() {
-		GL11.glColor3f(1, 1, 1);
+		/*GL11.glColor3f(1, 1, 1);
 		if(GLUtil.isGL20Available()) {
 			GL20.glUseProgram(0);//disables active shader
-		}
+		}*/
 		if(GLUtil.isGL15Available()) {
 			GL15.glBindBuffer(0, 0);//sets active buffer to null
 		}
 		if(GLUtil.isGL13Available()) {
 			GL13.glActiveTexture(GL13.GL_TEXTURE0);//unbinds sampler slots and sets active texture to default
 		}
+		GL11.glBindTexture(GL11.GL_TEXTURE_1D, 0);
+		GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
+		
 	}
 	
 	/** Binds the GL context to this texture. */
@@ -94,7 +107,10 @@ public class Texture {
 	 * 
 	 * @param samplerSlot The sampler slot to use */
 	public void bind(int samplerSlot) {
-		assert ((samplerSlot >= 0) && (samplerSlot <= 31)) : "Sampler slot out of range(must be >= 0 and <= 31)!";
+		if(samplerSlot < 0 || samplerSlot > 31) {
+			throw new IllegalArgumentException("Sampler slot out of range(must be >= 0 and <= 31)!");
+		}
+		
 		GL13.glActiveTexture(GL13.GL_TEXTURE0 + samplerSlot);
 		GL11.glBindTexture(this.target, this.getID());
 	}
@@ -193,7 +209,14 @@ public class Texture {
 	
 	/** Disposes of this Texture's resources */
 	public final void dispose() {
+		this.isDisposed = true;
 		GL11.glDeleteTextures(this.textureID);
+	}
+	
+	/** @return Whether or not this Texture has been {@link #dispose()
+	 *         disposed}. */
+	public final boolean isDisposed() {
+		return this.isDisposed;
 	}
 	
 }

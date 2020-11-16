@@ -1,6 +1,6 @@
 /*******************************************************************************
  * 
- * Copyright (C) 2020 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2020 Brian_Entei (br45entei@gmail.com)
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -44,7 +44,7 @@ public strictfp class MatrixStack {
 		System.out.println(stack.rotate(-90, 0, -27, RotationOrder.ZXY));
 		System.out.println(stack.transpose());
 		System.out.println(stack.loadMatrix(new double[] {5, 5, 5, 5, 5}));
-		System.out.println(stack.lookAt(new double[] {1, 3, 7}, new double[] {-3, 7, 11}, new double[] {0, 1, 0}));
+		System.out.println(stack.setLookAt(new double[] {1, 3, 7}, new double[] {-3, 7, 11}, new double[] {0, 1, 0}));
 		
 		/* Yaw: (looking around horizontally; left and right head movement)
 		 *           0°
@@ -74,8 +74,8 @@ public strictfp class MatrixStack {
 		 *          180°
 		 */
 		
-		String lookAtTest = stack.lookAt(new double[] {0, 3, 0}, new double[] {4, 3, -4}, new double[] {0, 1, 0}).toString();
-		String modelViewTest = stack.modelView(0, 3, 0, 45, 0, 0).toString();
+		String lookAtTest = stack.setLookAt(new double[] {0, 3, 0}, new double[] {4, 3, -4}, new double[] {0, 1, 0}).toString();
+		String modelViewTest = stack.setModelView(0, 3, 0, 45, 0, 0).toString();
 		System.out.println(lookAtTest);
 		System.out.println(modelViewTest);
 		System.out.println("===================================================");
@@ -83,7 +83,7 @@ public strictfp class MatrixStack {
 			throw new IllegalStateException("The Look-At matrix does not match the equivalent Model-View matrix!");
 		}
 		System.out.println("The Look-At matrix and the Model-View matrix match!");
-		System.out.println(stack.modelView(0, 0, 0, 0, 0, 0));
+		System.out.println(stack.setModelView(0, 0, 0, 0, 0, 0));
 		try {
 			System.out.println(stack.loadMatrix(new double[] {5, 5, 5, 5, 75}, 4, 2));
 			System.out.println("This text should not appear!");
@@ -483,7 +483,7 @@ public strictfp class MatrixStack {
 	 * @param matrix The matrix to multiply
 	 * @return This MatrixStack */
 	public MatrixStack multMatrix4x4(double[] matrix) {
-		return this.multMatrix4x4(matrix, MultiplicationOrder.OLDxNEW);
+		return this.multMatrix4x4(matrix, MultiplicationOrder.NEWxOLD);
 	}
 	
 	/** Multiplies the current matrix in the stack by the given matrix using the
@@ -501,7 +501,7 @@ public strictfp class MatrixStack {
 	 * @param matrix The matrix to multiply
 	 * @return This MatrixStack */
 	public MatrixStack multMatrix4x4(float[] matrix) {
-		return this.multMatrix4x4(matrix, MultiplicationOrder.OLDxNEW);
+		return this.multMatrix4x4(matrix, MultiplicationOrder.NEWxOLD);
 	}
 	
 	/** Translates the current matrix in the stack by the given vector.
@@ -518,7 +518,24 @@ public strictfp class MatrixStack {
 	 * @param xyz The vector to translate the stack by
 	 * @return This MatrixStack */
 	public MatrixStack translate(double[] xyz) {
-		return this.translate(xyz, MultiplicationOrder.OLDxNEW);
+		return this.translate(xyz, MultiplicationOrder.NEWxOLD);
+	}
+	
+	/** Translates the current matrix in the stack by the given vector.
+	 * 
+	 * @param xyz The vector to translate the stack by
+	 * @param order The multiplication order to use
+	 * @return This MatrixStack */
+	public MatrixStack translate(float[] xyz, MultiplicationOrder order) {
+		return this.multMatrix4x4(GLUtil.buildTranslate4x4d(xyz[0], xyz[1], xyz[2]), order);
+	}
+	
+	/** Translates the current matrix in the stack by the given vector.
+	 * 
+	 * @param xyz The vector to translate the stack by
+	 * @return This MatrixStack */
+	public MatrixStack translate(float[] xyz) {
+		return this.translate(xyz, MultiplicationOrder.NEWxOLD);
 	}
 	
 	/** Translates the current matrix in the stack by the given vector.
@@ -539,7 +556,7 @@ public strictfp class MatrixStack {
 	 * @param z The amount to translate the stack by along the Z axis
 	 * @return This MatrixStack */
 	public MatrixStack translate(double x, double y, double z) {
-		return this.translate(x, y, z, MultiplicationOrder.OLDxNEW);
+		return this.translate(x, y, z, MultiplicationOrder.NEWxOLD);
 	}
 	
 	/** Rotates the current matrix in the stack by the given angles.
@@ -605,7 +622,28 @@ public strictfp class MatrixStack {
 	 * @param rotOrder The rotation order to use
 	 * @return This MatrixStack */
 	public MatrixStack rotate(double[] ypr, RotationOrder rotOrder) {
-		return this.rotate(ypr, rotOrder, MultiplicationOrder.OLDxNEW);
+		return this.rotate(ypr, rotOrder, MultiplicationOrder.NEWxOLD);
+	}
+	
+	/** Rotates the current matrix in the stack by the given angles.
+	 * 
+	 * @param ypr The array containing the yaw, pitch, and roll to rotate the
+	 *            stack by
+	 * @param rotOrder The rotation order to use
+	 * @param multOrder The multiplication order to use
+	 * @return This MatrixStack */
+	public MatrixStack rotate(float[] ypr, RotationOrder rotOrder, MultiplicationOrder multOrder) {
+		return this.rotate(ypr[0], ypr[1], ypr[2], rotOrder, multOrder);
+	}
+	
+	/** Rotates the current matrix in the stack by the given angles.
+	 * 
+	 * @param ypr The array containing the yaw, pitch, and roll to rotate the
+	 *            stack by
+	 * @param rotOrder The rotation order to use
+	 * @return This MatrixStack */
+	public MatrixStack rotate(float[] ypr, RotationOrder rotOrder) {
+		return this.rotate(ypr, rotOrder, MultiplicationOrder.NEWxOLD);
 	}
 	
 	/** Rotates the current matrix in the stack by the given angles.
@@ -616,7 +654,7 @@ public strictfp class MatrixStack {
 	 * @param rotOrder The rotation order to use
 	 * @return This MatrixStack */
 	public MatrixStack rotate(double yaw, double pitch, double roll, RotationOrder rotOrder) {
-		return this.rotate(yaw, pitch, roll, rotOrder, MultiplicationOrder.OLDxNEW);
+		return this.rotate(yaw, pitch, roll, rotOrder, MultiplicationOrder.NEWxOLD);
 	}
 	
 	/** Rotates the current matrix in the stack by the given angles.
@@ -626,6 +664,16 @@ public strictfp class MatrixStack {
 	 * @param multOrder The multiplication order to use
 	 * @return This MatrixStack */
 	public MatrixStack rotate(double[] ypr, MultiplicationOrder multOrder) {
+		return this.rotate(ypr, RotationOrder.YXZ, multOrder);
+	}
+	
+	/** Rotates the current matrix in the stack by the given angles.
+	 * 
+	 * @param ypr The array containing the yaw, pitch, and roll to rotate the
+	 *            stack by
+	 * @param multOrder The multiplication order to use
+	 * @return This MatrixStack */
+	public MatrixStack rotate(float[] ypr, MultiplicationOrder multOrder) {
 		return this.rotate(ypr, RotationOrder.YXZ, multOrder);
 	}
 	
@@ -646,7 +694,16 @@ public strictfp class MatrixStack {
 	 *            stack by
 	 * @return This MatrixStack */
 	public MatrixStack rotate(double[] ypr) {
-		return this.rotate(ypr, MultiplicationOrder.OLDxNEW);
+		return this.rotate(ypr, MultiplicationOrder.NEWxOLD);
+	}
+	
+	/** Rotates the current matrix in the stack by the given angles.
+	 * 
+	 * @param ypr The array containing the yaw, pitch, and roll to rotate the
+	 *            stack by
+	 * @return This MatrixStack */
+	public MatrixStack rotate(float[] ypr) {
+		return this.rotate(ypr, MultiplicationOrder.NEWxOLD);
 	}
 	
 	/** Rotates the current matrix in the stack by the given angles.
@@ -656,7 +713,51 @@ public strictfp class MatrixStack {
 	 * @param roll The amount to rotate the stack by around the Z axis
 	 * @return This MatrixStack */
 	public MatrixStack rotate(double yaw, double pitch, double roll) {
-		return this.rotate(yaw, pitch, roll, MultiplicationOrder.OLDxNEW);
+		return this.rotate(yaw, pitch, roll, MultiplicationOrder.NEWxOLD);
+	}
+	
+	/** Scales the current matrix in the stack by the given vector.
+	 * 
+	 * @param x The scale factor for the x axis
+	 * @param y The scale factor for the y axis
+	 * @param z The scale factor for the z axis
+	 * @param order The multiplication order to use
+	 * @return This MatrixStack */
+	public MatrixStack scale(double x, double y, double z, MultiplicationOrder order) {
+		return this.multMatrix4x4(GLUtil.buildScale4x4d(x, y, z), order);
+	}
+	
+	/** Scales the current matrix in the stack by the given vector.
+	 * 
+	 * @param x The scale factor for the x axis
+	 * @param y The scale factor for the y axis
+	 * @param z The scale factor for the z axis
+	 * @return This MatrixStack */
+	public MatrixStack scale(double x, double y, double z) {
+		//this.stack[this.index] = GLUtil.scaleMatrix4x4d(this.stack[this.index], x, y, z);
+		return this.scale(x, y, z, MultiplicationOrder.NEWxOLD);
+	}
+	
+	public double getDeterminantd() {
+		return GLUtil.getDeterminantOfMatrix4x4d(this.stack[this.index]);
+	}
+	
+	public float getDeterminantf() {
+		return (float) this.getDeterminantd();
+	}
+	
+	public MatrixStack adjugate() {
+		this.stack[this.index] = GLUtil.adjugateMatrix4x4d(this.stack[this.index]);
+		return this;
+	}
+	
+	/** Sets the current matrix in the stack to its inverse using
+	 * {@link GLUtil#invertMatrix4x4d(double[])}.
+	 * 
+	 * @return This MatrixStack */
+	public MatrixStack invert() {
+		this.stack[this.index] = GLUtil.invertMatrix4x4d(this.stack[this.index]);
+		return this;
 	}
 	
 	/** Sets the current matrix in the stack to a new look-at matrix using
@@ -668,27 +769,69 @@ public strictfp class MatrixStack {
 	 * @param target The point in space that the viewer will be looking at
 	 * @param up The viewer's up vector
 	 * @return This MatrixStack */
-	public MatrixStack lookAt(double[] eye, double[] target, double[] up) {
-		this.stack[this.index] = GLUtil.lookAtd(eye, target, up);
+	public MatrixStack setLookAt(double[] eye, double[] target, double[] up) {
+		this.stack[this.index] = GLUtil.lookAtMatrix4x4d(eye, target, up);
 		return this;
 	}
 	
-	public MatrixStack setOrthographic(double x, double y, double width, double height, double zNear, double zFar) {
+	/** Sets the current matrix in the stack to a new look-at matrix using
+	 * {@link GLUtil#lookAtd(double[], double[], double[])
+	 * GLUtil.lookAtd(double[], double[], double[])} with the specified
+	 * parameters.
+	 * 
+	 * @param eyeX The viewer position's x coordinate
+	 * @param eyeY The viewer position's y coordinate
+	 * @param eyeZ The viewer position's z coordinate
+	 * @param targetX The x coordinate of the point in space that the viewer
+	 *            will be looking at
+	 * @param targetY The y coordinate of the point in space that the viewer
+	 *            will be looking at
+	 * @param targetZ The z coordinate of the point in space that the viewer
+	 *            will be looking at
+	 * @param upX The x coordinate of the viewer's up vector
+	 * @param upY The y coordinate of the viewer's up vector
+	 * @param upZ The z coordinate of the viewer's up vector
+	 * @return This MatrixStack */
+	public MatrixStack setLookAt(double eyeX, double eyeY, double eyeZ, double targetX, double targetY, double targetZ, double upX, double upY, double upZ) {
+		this.stack[this.index] = GLUtil.lookAtMatrix4x4d(new double[] {eyeX, eyeY, eyeZ}, new double[] {targetX, targetY, targetZ}, new double[] {upX, upY, upZ});
+		return this;
+	}
+	
+	/** Sets the current matrix in the stack to an orthographic matrix created
+	 * using
+	 * {@link GLUtil#getOrthographicMatrixd(double, double, double, double, double, double)}
+	 * with the specified parameters.
+	 * 
+	 * @param x The viewport's horizontal offset (where the rendered scene is
+	 *            positioned going from left to right)
+	 * @param y The viewport's vertical offset (where the rendered scene is
+	 *            positioned going from bottom to top)
+	 * @param width The width of the viewport (the width of the rendered scene)
+	 * @param height The height of the viewport (the height of the rendered
+	 *            scene)
+	 * @param zNear The near-clipping-plane's distance from the 'camera' (this
+	 *            is how close something can render to the 'front' of the screen
+	 *            before it is culled out)
+	 * @param zFar The far-clipping-plane's distance from the 'camera' (this is
+	 *            how far a way something can render from the 'front' of the
+	 *            screen before it is culled out)
+	 * @return This MatrixStack */
+	public MatrixStack setOrthographicProjection(double x, double y, double width, double height, double zNear, double zFar) {
 		this.stack[this.index] = GLUtil.getOrthographicMatrixd(x, y, width, height, zNear, zFar);
 		return this;
 	}
 	
-	public MatrixStack setProjection(double fovy, double width, double height, double zNear, double zFar) {
+	public MatrixStack setPerspectiveProjection(double fovy, double width, double height, double zNear, double zFar) {
 		double aspect = width / height;
 		this.stack[this.index] = GLUtil.getPerspectiveMatrixd(fovy, aspect, zNear, zFar);
 		return this;
 	}
 	
-	public MatrixStack modelView(double[] xyz, double[] ypr) {
+	public MatrixStack setModelView(double[] xyz, double[] ypr) {
 		return this.loadIdentity().rotate(GLUtil.multiply(ypr, -1.0), RotationOrder.ZXY, MultiplicationOrder.NEWxOLD).translate(GLUtil.multiply(xyz, -1.0), MultiplicationOrder.NEWxOLD).transpose();
 	}
 	
-	public MatrixStack modelView(double x, double y, double z, double yaw, double pitch, double roll) {
+	public MatrixStack setModelView(double x, double y, double z, double yaw, double pitch, double roll) {
 		return this.loadIdentity().rotate(-yaw, -pitch, -roll, RotationOrder.ZXY, MultiplicationOrder.NEWxOLD).translate(-x, -y, -z, MultiplicationOrder.NEWxOLD);
 	}
 	
@@ -700,13 +843,13 @@ public strictfp class MatrixStack {
 	 * @see MultiplicationOrder#OLDxNEW
 	 * @see MultiplicationOrder#NEWxOLD */
 	public static enum MultiplicationOrder {
-		/** The default multiplication order, this multiplies the existing
-		 * matrix by the new matrix.
+		/** This multiplies the existing matrix by the new matrix.
 		 * 
 		 * @see MultiplicationOrder#NEWxOLD */
 		OLDxNEW,
-		/** The order used by most camera implementations, this multiplies the
-		 * new matrix by the existing matrix.
+		/** The default multiplication order used by most camera and object
+		 * implementations, this multiplies the new matrix by the existing
+		 * matrix.
 		 * 
 		 * @see MultiplicationOrder#OLDxNEW */
 		NEWxOLD;

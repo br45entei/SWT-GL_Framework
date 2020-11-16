@@ -1,6 +1,6 @@
 /* *****************************************************************************
  * 
- * Copyright (C) 2020 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2020 Brian_Entei (br45entei@gmail.com)
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  * 
  *******************************************************************************/
-/** @since 1.0
+/** Package containing input-related classes and interfaces.
+ *
+ * @since 1.0
  * @author Brian_Entei */
 package com.gmail.br45entei.game.input;

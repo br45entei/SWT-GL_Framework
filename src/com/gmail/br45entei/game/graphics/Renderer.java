@@ -1,6 +1,6 @@
 /*******************************************************************************
  * 
- * Copyright (C) 2020 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2020 Brian_Entei (br45entei@gmail.com)
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,10 +18,12 @@
  *******************************************************************************/
 package com.gmail.br45entei.game.graphics;
 
+import com.gmail.br45entei.game.graphics.GLThread.InitializationProgress;
 import com.gmail.br45entei.game.ui.MenuProvider;
 import com.gmail.br45entei.game.ui.Window;
+import com.gmail.br45entei.thread.ThreadType;
+import com.gmail.br45entei.thread.UsedBy;
 
-import java.security.SecureRandom;
 import java.util.Objects;
 
 import org.eclipse.swt.graphics.Rectangle;
@@ -35,52 +37,89 @@ import org.lwjgl.opengl.GL11;
  * @author Brian_Entei */
 public interface Renderer {
 	
-	/** @return The name of this {@link Renderer} */
+	/** @return The name of this {@link Renderer}
+	 *
+	 * @see ThreadType#UNSPECIFIED */
+	@UsedBy(ThreadType.UNSPECIFIED)
 	public String getName();
 	
-	/** @return Whether or not this {@link Renderer}'s {@link #initialize()}
-	 *         method has been called yet */
+	/** @return Whether or not this {@link Renderer}'s
+	 *         {@link #initialize(InitializationProgress)}
+	 *         method has been called yet
+	 * 		
+	 * @see ThreadType#OpenGL */
+	@UsedBy(ThreadType.OpenGL)
 	public boolean isInitialized();
 	
 	/** Called by the {@link GLThread}'s render loop just before it begins
-	 * to use this {@link Renderer} for the first time. */
-	public void initialize();
+	 * to use this {@link Renderer} for the first time.<br>
+	 * <br>
+	 * After this method has been called, {@link #isInitialized()} should return
+	 * <tt>true</tt> (unless something has failed to initialize of course).
+	 *
+	 * @param progress A {@link InitializationProgress progress tracker} used by
+	 *            the GLThread which allows you to optionally inform the
+	 *            end-user as to the total progress of your renderer's
+	 *            initialization by having it display on-screen
+	 * @see ThreadType#OpenGL */
+	@UsedBy(ThreadType.OpenGL)
+	public void initialize(InitializationProgress progress);
 	
 	/** Called by the {@link GLThread} when this {@link Renderer} has been
-	 * selected for rendering. */
+	 * selected for rendering.
+	 *
+	 * @see ThreadType#OpenGL */
+	@UsedBy(ThreadType.OpenGL)
 	public void onSelected();
 	
 	/** Called by the {@link GLThread} when the {@link Window}'s viewport has
 	 * changed.
-	 * 
+	 *
 	 * @param oldViewport The old viewport
-	 * @param newViewport The new viewport */
+	 * @param newViewport The new viewport
+	 * @see ThreadType#OpenGL */
+	@UsedBy(ThreadType.OpenGL)
 	public void onViewportChanged(Rectangle oldViewport, Rectangle newViewport);
 	
 	/** Called by the {@link GLThread}'s render loop once per frame.
-	 * 
+	 *
 	 * @param deltaTime The delta time of the current frame from the last
 	 *            (with a framerate of <tt>60.0</tt>, this would typically
-	 *            be around <tt>0.0166667</tt>) */
+	 *            be around <tt>0.0166667</tt>)
+	 * @see ThreadType#OpenGL */
+	@UsedBy(ThreadType.OpenGL)
 	public void render(double deltaTime);
 	
 	/** Called by the {@link GLThread} when this {@link Renderer} has been
-	 * unselected for rendering. */
+	 * unselected for rendering.
+	 *
+	 * @see ThreadType#OpenGL */
+	@UsedBy(ThreadType.OpenGL)
 	public void onDeselected();
 	
 	/** Called by the {@link GLThread} when it is about to stop running, and is
-	 * getting ready to destroy the GL context. */
+	 * getting ready to destroy the GL context.<br>
+	 * <br>
+	 * After this method has been called, {@link #isInitialized()} should return
+	 * <tt>false</tt>.
+	 *
+	 * @see ThreadType#OpenGL */
+	@UsedBy(ThreadType.OpenGL)
 	public void onCleanup();
 	
 	/** Gives this renderer a chance to handle any exceptions that it might
 	 * throw.<br>
-	 * If the exception is not handled, this renderer is deselected from the
-	 * {@link GLThread} to prevent future unhandled exceptions.
-	 * 
+	 * If the exception is not handled, the {@link GLThread} un-selects this
+	 * renderer to prevent future unhandled exceptions.
+	 *
 	 * @param ex The exception that this renderer threw
 	 * @param method This renderer's method that threw the error
 	 * @param params The method parameters (if any) that were passed in
-	 * @return Whether or not this renderer has handled the exception */
+	 * @return Whether or not this renderer has handled the exception
+	 * @see ThreadType#UI
+	 * @see ThreadType#OpenGL
+	 * @see ThreadType#CONTROLLER */
+	@UsedBy({ThreadType.UI, ThreadType.OpenGL, ThreadType.CONTROLLER})
 	/*default */public boolean handleException(Throwable ex, String method, Object... params);/* {//@formatter:off
 		StringBuilder sb = new StringBuilder();
 		for(int i = 0; i < params.length; i++) {
@@ -106,20 +145,27 @@ public interface Renderer {
 	//=======================================================================================================================
 	
 	/** A simple OpenGL demo that changes the background color a little bit
-	 * each frame randomly.
+	 * each frame randomly.<br>
+	 * <br>
+	 * <b>Note:</b>&nbsp;This renderer will display rapidly flashing colors when
+	 * vertical-sync is disabled, or on systems without Vsync support.<br>
+	 * If you or someone around you is epileptic, do not use this renderer
+	 * unless you are absolutely sure vertical sync is enabled (with a refresh
+	 * rate of at most 60).
 	 *
 	 * @author Brian_Entei */
 	public static class ColorDemo implements Renderer, MenuProvider {
 		
 		boolean initialized = false;
 		
-		final SecureRandom random = new SecureRandom();// A random source of data to use for our changing canvas color
+		final RandomColorGenerator randomColorGenerator = new RandomColorGenerator();
+		/*final SecureRandom random = new SecureRandom();// A random source of data to use for our changing canvas color
 		final float maxIncrement = 0.05f;// Each color channel will be changed by a random float value between 0 and this number
 		volatile float r = 0.0f, g = this.random.nextFloat(), b = 1.0f;// The three color channels that we'll use to make our GLCanvas change color
 		volatile boolean rUp = true, gUp = this.random.nextBoolean(),
 				bUp = false;// The three booleans that will tell us what each color channel's direction of change is (up/down)
 		volatile boolean ruWait = false, guWait = false, buWait = false;
-		volatile boolean rdWait = false, gdWait = false, bdWait = false;
+		volatile boolean rdWait = false, gdWait = false, bdWait = false;*/
 		
 		@Override
 		public String getName() {
@@ -132,9 +178,10 @@ public interface Renderer {
 		}
 		
 		@Override
-		public void initialize() {
+		public void initialize(InitializationProgress progress) {
 			//...
 			
+			progress.setProgress(1.0f);
 			this.initialized = true;
 		}
 		
@@ -154,10 +201,12 @@ public interface Renderer {
 			}*/
 			
 			//GL11.glViewport(0, 0, Window.getWindow().getWidth(), Window.getWindow().getHeight());// Set the viewport to match the glCanvas' size (and optional offset)
-			GL11.glClearColor(this.r, this.g, this.b, 1);// Set the clear color to a random color that changes a bit every frame
+			float[] rgb = this.randomColorGenerator.getColor();
+			GL11.glClearColor(rgb[0], rgb[1], rgb[2], 1);
+			//GL11.glClearColor(this.r, this.g, this.b, 1);// Set the clear color to a random color that changes a bit every frame
 			GL11.glClear(GL11.GL_COLOR_BUFFER_BIT/* | GL11.GL_DEPTH_BUFFER_BIT*/);// Clear the color buffer, setting it to the clear color above
 			
-			//Update our r/g/b variables for the next frame:
+			/*//Update our r/g/b variables for the next frame:
 			if(!this.rdWait && !this.ruWait) {// If the color channel isn't staying on the same color for a while:
 				this.r += (this.random.nextFloat() * this.maxIncrement) * (this.rUp ? 1.0f : -1.0f);
 			} else {// The color channel is currently 'waiting', so let's have a slightly rarer random chance to let it continue
@@ -230,7 +279,7 @@ public interface Renderer {
 				if(!this.bdWait && !this.buWait && this.random.nextInt(100) == 42) {
 					this.buWait = true;
 				}
-			}
+			}*/
 			
 		}
 		
@@ -295,7 +344,13 @@ public interface Renderer {
 	}
 	
 	/** A simple OpenGL demo that changes the background color a little bit
-	 * each frame randomly. */
+	 * each frame randomly.<br>
+	 * <br>
+	 * <b>Note:</b>&nbsp;This renderer will display rapidly flashing colors when
+	 * vertical-sync is disabled, or on systems without Vsync support.<br>
+	 * If you or someone around you is epileptic, do not use this renderer
+	 * unless you are absolutely sure vertical sync is enabled (with a refresh
+	 * rate of at most 60). */
 	public static final Renderer colorDemo = new ColorDemo();
 	
 }

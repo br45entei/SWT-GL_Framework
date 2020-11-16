@@ -1,3 +1,9 @@
 eclipse.preferences.version=1
+encoding//src/com/gmail/br45entei/game/graphics/GLThread.java=UTF-8
 encoding//src/com/gmail/br45entei/game/graphics/GLUtil.java=UTF-8
+encoding//src/com/gmail/br45entei/game/graphics/YPRCamera.java=UTF-8
+encoding//src/com/gmail/br45entei/game/input/InputCallback.java=UTF-8
 encoding//src/com/gmail/br45entei/game/input/Keyboard.java=UTF-8
+encoding//src/com/gmail/br45entei/game/input/Mouse.java=UTF-8
+encoding//src/com/gmail/br45entei/game/ui/Window.java=UTF-8
+encoding//src/com/gmail/br45entei/thread/\u0394Timer.java=UTF-8
