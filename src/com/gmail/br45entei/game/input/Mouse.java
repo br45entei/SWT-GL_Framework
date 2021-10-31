@@ -1,19 +1,24 @@
 /*******************************************************************************
  * 
- * Copyright © 2020 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2021 Brian_Entei (br45entei@gmail.com)
  * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
  * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
  * 
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  * 
  *******************************************************************************/
 package com.gmail.br45entei.game.input;
@@ -199,7 +204,8 @@ public class Mouse {
 		try {
 			handled = listener.handleException(ex, method, params);
 		} catch(Throwable ex1) {
-			ex.addSuppressed(ex1);
+			ex1.addSuppressed(ex);
+			ex = ex1;
 			handled = false;
 		}
 		if(!handled) {
@@ -329,7 +335,7 @@ public class Mouse {
 						}
 					}
 					
-					if(doubleClick) {
+					if(doubleClick) {// XXX onMouseDoubleClick
 						mouseButtonUpTimes[i] = 0;
 						
 						for(InputCallback listener : listeners) {
@@ -597,6 +603,28 @@ public class Mouse {
 		} else {
 			setLocation(captureX, captureY);
 		}
+		
+		if(captured) {// XXX onMouseCaptured
+			for(InputCallback listener : listeners) {
+				try {
+					listener.onMouseCaptured();
+				} catch(Throwable ex) {
+					if(!handleListenerException(listener, ex, "onMouseCaptured")) {
+						continue;
+					}
+				}
+			}
+		} else {// XXX onMouseReleased
+			for(InputCallback listener : listeners) {
+				try {
+					listener.onMouseReleased();
+				} catch(Throwable ex) {
+					if(!handleListenerException(listener, ex, "onMouseReleased")) {
+						continue;
+					}
+				}
+			}
+		}
 	}
 	
 	public static final long getCaptureTime() {
@@ -627,6 +655,23 @@ public class Mouse {
 	public static final Point getLocationRelativeToCanvasOpenGL() {
 		Point mLoc = getLocation();
 		return new Point((mLoc.x - cursorCanvasBounds.x) + 1, cursorCanvasBounds.height - (mLoc.y - cursorCanvasBounds.y));
+	}
+	
+	/** Returns whether or not the system cursor is currently within the bounds
+	 * of the cursor canvas.
+	 *
+	 * @return Whether or not the system cursor is currently within the bounds
+	 *         of the cursor canvas */
+	public static final boolean isWithinCanvasBounds() {
+		if(captured) {
+			return true;
+		}
+		Point mLoc = getLocationRelativeToCanvas();
+		int x = mLoc.x;
+		int y = mLoc.y;
+		int width = cursorCanvasBounds.width;
+		int height = cursorCanvasBounds.height;
+		return x >= 0 && x < width && y >= 0 && y < height;
 	}
 	
 	/** Returns whether or not the system cursor is currently able to move

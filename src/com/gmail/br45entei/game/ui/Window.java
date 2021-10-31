@@ -1,19 +1,24 @@
 /*******************************************************************************
  * 
- * Copyright © 2020 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2021 Brian_Entei (br45entei@gmail.com)
  * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
  * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
  * 
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  * 
  *******************************************************************************/
 package com.gmail.br45entei.game.ui;
@@ -30,6 +35,7 @@ import com.gmail.br45entei.game.input.Keyboard;
 import com.gmail.br45entei.game.input.Mouse;
 import com.gmail.br45entei.game.ui.swt.RendererMenuItem;
 import com.gmail.br45entei.lwjgl.natives.LWJGL_Natives;
+import com.gmail.br45entei.thread.FrequencyTimer;
 import com.gmail.br45entei.thread.ScreenshotHelper;
 import com.gmail.br45entei.thread.ThreadType;
 import com.gmail.br45entei.thread.VideoHelper;
@@ -42,6 +48,7 @@ import com.gmail.br45entei.util.SWTUtil;
 import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
 import java.beans.Beans;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -85,10 +92,18 @@ import org.lwjgl.opengl.swt.GLData;
  * application window.
  *
  * @since 1.0
- * @author Brian_Entei */
+ * @author Brian_Entei &lt;br45entei&#064;gmail.com&gt; */
 public class Window {// TODO Implement InputCallback.isModal() within the Mouse class
 	
+	public static final boolean DEVELOPMENT_ENVIRONMENT;
+	
 	static {
+		try {
+			DEVELOPMENT_ENVIRONMENT = !new File(Window.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath()).isFile();
+		} catch(Throwable ex) {
+			throw new RuntimeException(ex);
+		}
+		
 		//CodeUtil.setProperty("org.lwjgl.util.Debug", "true");
 		CodeUtil.setProperty("org.lwjgl.util.NoChecks", "false");
 		
@@ -169,7 +184,7 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 	 */
 	public static final boolean isShellActive(Shell shell) {
 		boolean shellActive = shell.getDisplay().getActiveShell() == shell && shell.isVisible();
-		long shellHandle = SWTUtil.getHandle(shell);
+		/*long shellHandle = SWTUtil.getHandle(shell);
 		switch(Platform.get()) {
 		case WINDOWS: {
 			shellActive = shell.isVisible() && org.eclipse.swt.internal.win32.OS.GetForegroundWindow() == shellHandle;
@@ -181,7 +196,7 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		default: {
 			break;
 		}
-		}
+		}*/
 		return shellActive;
 	}
 	
@@ -215,6 +230,8 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 	
 	protected volatile long lastMenuInteraction = 0L;
 	
+	private final FrequencyTimer timer = new FrequencyTimer(120.0, 1000.0);
+	
 	protected volatile Display display;
 	protected volatile Shell shell;
 	protected volatile long shellHandle;
@@ -222,6 +239,7 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 	protected volatile boolean appendTitleIfUIForced = true;
 	protected volatile boolean alwaysOnTopEnabled = true;
 	protected volatile Boolean alwaysOnTopFullscreenOrWindowed = Boolean.TRUE;//TRUE: Fullscreen; FALSE: Windowed; null: (Always)
+	protected volatile boolean hasOpenedYet = false;
 	
 	protected volatile String[] lastSetIconImages = null;
 	
@@ -234,6 +252,7 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 	protected volatile Thread controllerPollThread = null;
 	protected volatile SoundManager soundManager = null;
 	
+	protected volatile boolean updateMenuBar = false;
 	protected volatile MenuItem mntmVerticalSync;
 	protected volatile MenuItem mntmRenderers;
 	protected volatile MenuItem mntmNoRenderer;
@@ -243,6 +262,7 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 	
 	protected volatile InputCallback uiCallback;
 	protected volatile Renderer activeRendererToSetOnStartup = null;
+	protected volatile boolean enableRendererSwitching = true;
 	
 	protected final ConcurrentLinkedDeque<Game> games = new ConcurrentLinkedDeque<>();
 	protected final ConcurrentLinkedDeque<Renderer> renderers = new ConcurrentLinkedDeque<>();
@@ -661,7 +681,7 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		if(this.display.getThread() != Thread.currentThread()) {
 			this.display = new Display();
 		}
-		this.shell = new Shell(this.display, SWT.SHELL_TRIM | SWT.DOUBLE_BUFFERED);// (DOUBLE_BUFFERED is used here for when the shell is in fullscreen mode)
+		this.shell = new Shell(this.display, SWT.SHELL_TRIM | SWT.DOUBLE_BUFFERED | SWT.NO_BACKGROUND);// (DOUBLE_BUFFERED is used here for when the shell is in fullscreen mode)
 		this.shell.setText(this.title);
 		String[] images = this.lastSetIconImages;
 		if(images == null) {
@@ -751,8 +771,7 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 			this.shell.setSize(this.glTargetWidth, this.glTargetHeight);
 			Rectangle clientArea = this.shell.getClientArea();
 			Point size = this.shell.getSize();
-			int xDiff = size.x - clientArea.width,
-					yDiff = size.y - clientArea.height;
+			int xDiff = size.x - clientArea.width, yDiff = size.y - clientArea.height;
 			this.shell.setSize(this.glTargetWidth + xDiff, this.glTargetHeight + yDiff);
 			this.glCanvas.setBounds(this.shell.getClientArea());
 		}
@@ -996,6 +1015,7 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 	
 	@SuppressWarnings("unused")
 	protected synchronized void createMenus() {
+		this.updateMenuBar = false;
 		
 		//==[Main MenuBar]=============================================
 		
@@ -1081,16 +1101,31 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		
 		new MenuItem(menu_2, SWT.SEPARATOR);
 		
-		this.mntmRenderers = new MenuItem(menu_2, SWT.CASCADE);
-		this.mntmRenderers.setText("Applications\t(Alt+Left | Alt+Right)");
-		
-		Menu menu_3 = new Menu(this.mntmRenderers);
-		this.mntmRenderers.setMenu(menu_3);
-		
-		this.mntmNoRenderer = new MenuItem(menu_3, SWT.RADIO);
-		this.mntmNoRenderer.setText("<None>");
-		
-		new MenuItem(menu_2, SWT.SEPARATOR);
+		if(this.enableRendererSwitching) {
+			this.mntmRenderers = new MenuItem(menu_2, SWT.CASCADE);
+			this.mntmRenderers.setText("Applications\t(Alt+Left | Alt+Right)");
+			
+			Menu menu_3 = new Menu(this.mntmRenderers);
+			this.mntmRenderers.setMenu(menu_3);
+			
+			this.mntmNoRenderer = new MenuItem(menu_3, SWT.RADIO);
+			this.mntmNoRenderer.setText("<None>");
+			this.mntmNoRenderer.addSelectionListener(new SelectionAdapter() {
+				@Override
+				public void widgetSelected(SelectionEvent e) {
+					MenuItem item = Window.this.mntmNoRenderer;
+					boolean selection = Window.this.setActiveRenderer(null);
+					if(item != null && !item.isDisposed()) {
+						item.setSelection(selection);
+					}
+				}
+			});
+			
+			new MenuItem(menu_2, SWT.SEPARATOR);
+		} else {
+			this.mntmRenderers = null;
+			this.mntmNoRenderer = null;
+		}
 		
 		final MenuItem mntmFullscreen = new MenuItem(menu_2, SWT.CHECK);
 		mntmFullscreen.addSelectionListener(new SelectionAdapter() {
@@ -1202,17 +1237,6 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 			@Override
 			public void widgetSelected(SelectionEvent e) {
 				Window.this.appendTitleIfUIForced = Window.this.mntmUpdateTitleIf.getSelection();
-			}
-		});
-		
-		this.mntmNoRenderer.addSelectionListener(new SelectionAdapter() {
-			@Override
-			public void widgetSelected(SelectionEvent e) {
-				MenuItem item = Window.this.mntmNoRenderer;
-				boolean selection = Window.this.setActiveRenderer(null);
-				if(item != null && !item.isDisposed()) {
-					item.setSelection(selection);
-				}
 			}
 		});
 		
@@ -1413,6 +1437,27 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 	}
 	
 	protected void createGLCanvasPopupMenu() {
+		// Begin of fix for main window thread constantly blocked by synchronization of GLThread
+		Renderer renderer = this.glThread.getRenderer();
+		if(renderer instanceof MenuProvider) {
+			MenuProvider provider = (MenuProvider) renderer;
+			boolean providesPopupMenu = true;
+			try {
+				providesPopupMenu = provider.providesPopupMenu();
+			} catch(Throwable ex) {
+				if(!Window.handleMenuProviderException(provider, ex, "providesPopupMenu")) {
+					this.glThread.setRenderer(null);
+					this.mntmRendererOptions.dispose();
+					this.mntmRendererOptions = null;
+					return;
+				}
+			}
+			if(!providesPopupMenu) {
+				return;
+			}
+		}
+		// End of fix for main window thread constantly blocked by synchronization of GLThread
+		
 		synchronized(this.glThread) {
 			final Menu popupMenu;
 			final boolean justCreatedPopupMenu;
@@ -1428,7 +1473,7 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 				}
 			}
 			if(justCreatedPopupMenu) {
-				Renderer renderer = this.glThread.getRenderer();
+				//Renderer renderer = this.glThread.getRenderer();
 				if(renderer instanceof MenuProvider) {
 					MenuProvider provider = (MenuProvider) renderer;
 					try {
@@ -1439,6 +1484,8 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 							this.mntmRendererOptions.dispose();
 							this.mntmRendererOptions = null;
 						}
+						//popupMenu.dispose();
+						//return;
 					}
 				}
 				
@@ -1463,20 +1510,35 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 	}
 	
 	protected void destroyGLCanvasPopupMenu() {
-		synchronized(this.glThread) {
-			Menu menu = this.glCanvas.getMenu();
-			if(menu != null) {
+		Menu menu = this.glCanvas.getMenu();
+		if(menu != null) {
+			synchronized(this.glThread) {
 				this.glCanvas.setMenu(null);
 				
 				final Renderer renderer = this.glThread.getRenderer();
 				MenuProvider provider = renderer instanceof MenuProvider ? (MenuProvider) renderer : null;
 				if(provider != null) {
+					boolean providesPopupMenu = true;
+					
 					try {
-						provider.onPopupMenuDeletion(menu);
+						providesPopupMenu = provider.providesPopupMenu();
 					} catch(Throwable ex) {
-						if(!Window.handleMenuProviderException(provider, ex, "onPopupMenuDeletion", menu)) {
+						if(!Window.handleMenuProviderException(provider, ex, "providesPopupMenu")) {
 							this.glThread.setRenderer(null);
-							provider = null;
+							this.mntmRendererOptions.dispose();
+							this.mntmRendererOptions = null;
+							return;
+						}
+					}
+					
+					if(providesPopupMenu) {
+						try {
+							provider.onPopupMenuDeletion(menu);
+						} catch(Throwable ex) {
+							if(!Window.handleMenuProviderException(provider, ex, "onPopupMenuDeletion", menu)) {
+								this.glThread.setRenderer(null);
+								provider = null;
+							}
 						}
 					}
 				}
@@ -1631,7 +1693,9 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		if(this.getAvailableMenuProviders().isEmpty() || (Mouse.isCaptured() && !Mouse.isModal())) {
 			this.destroyGLCanvasPopupMenu();
 		} else {
-			this.createGLCanvasPopupMenu();
+			if(this.glCanvas.getMenu() == null) {
+				this.createGLCanvasPopupMenu();
+			}
 		}
 		return this.shouldContinueRunning();
 	}
@@ -1723,18 +1787,55 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 	
 	protected void updateUI() {
 		if(this.isFullscreen()) {
+			this.updateMenuBar = false;
 			if(!Window.isShellActive(this.shell)) {//if(this.display.getActiveShell() != this.shell) {
-				this.shell.forceActive();
-				this.shell.forceFocus();
+				Shell check = this.display.getActiveShell();
+				if(check != null) {
+					this.setFullscreen(false);
+					check.forceActive();
+					check.forceFocus();
+				} else {
+					this.shell.forceActive();
+					this.shell.forceFocus();
+				}
 			}
 		} else {
 			if(this.shell.getMenuBar() == null) {
 				this.createMenus();
 			}
+			/*if(Mouse.isCaptured()) {
+				if(!Window.isShellActive(this.shell)) {
+					Shell check = this.display.getActiveShell();
+					if(check != null && check != this.shell) {
+						this.shell.setActive();
+						this.shell.setFocus();
+					} else {
+						Mouse.setCaptured(false);
+					}
+				}
+			}*/
+		}
+		if(this.updateMenuBar) {
+			if(this.isFullscreen) {
+				this.updateMenuBar = false;
+			} else {
+				if(this.shell.getMenuBar() == null) {
+					this.createMenus();// this.updateMenuBar is set to false within this method
+				} else {
+					this.destroyMenus();
+					this.createMenus();
+				}
+			}
 		}
 		this.controllerManager.setWindowActive(this.shellActive = Window.isShellActive(this.shell));
 		if(this.shellActive) {
 			this.glCanvas.forceFocus();
+		} else {
+			if(!this.isFullscreen) {
+				if(Mouse.isCaptured()) {
+					Mouse.setCaptured(false);
+				}
+			}
 		}
 		SWTUtil.setAlwaysOnTop(this.shell, this.alwaysOnTopEnabled && (this.alwaysOnTopFullscreenOrWindowed == null || this.alwaysOnTopFullscreenOrWindowed.booleanValue() == this.isFullscreen));//SWTUtil.setAlwaysOnTop(this.shell, this.alwaysOnTopEnabled ? (this.alwaysOnTopFullscreenOrWindowed == null ? true : this.alwaysOnTopFullscreenOrWindowed.booleanValue() == this.isFullscreen) : false);
 		this.updateTitle();
@@ -1785,9 +1886,22 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 	 * {@link Window#isVisible() currently visible}.<br>
 	 * This method is thread-safe.
 	 * 
-	 * @return Whether or not this Window is currently running (open or not) */
+	 * @return Whether or not this Window is currently running (open or not)
+	 * @see #isShuttingDown()
+	 * @see #shouldContinueRunning()
+	 * @see #waitingForGLThreadToShutDown() */
 	public final boolean isRunning() {
 		return this.running && this.display != null && !this.display.isDisposed() && this.display.getThread().isAlive();
+	}
+	
+	/** Returns whether or not this Window is currently in the process of shutting down.<br>
+	 * This method is thread-safe.
+	 * 
+	 * @return Whether or not this Window is currently running (open or not)
+	 * @see #shouldContinueRunning()
+	 * @see #waitingForGLThreadToShutDown() */
+	public final boolean isShuttingDown() {
+		return !this.running && this.display != null && !this.display.isDisposed() && this.display.getThread().isAlive();
 	}
 	
 	/** @return True if this {@link Window} is currently shutting down (after
@@ -1807,12 +1921,16 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 	public boolean swtLoop() {
 		while(this.display.readAndDispatch()) {
 		}
-		CodeUtil.sleep(2L);
+		this.timer.frequencySleep();
 		if(this.shouldContinueRunning() || (!this.shell.isDisposed() && this.glThread != null && this.glThread.isRunning())) {
 			this.updateUI();
 		}
 		this.updateFrameTime();
-		return this.pollInputDevices();
+		this.display.readAndDispatch();
+		if(this.shouldContinueRunning() || (!this.shell.isDisposed() && this.glThread != null && this.glThread.isRunning())) {
+			return this.pollInputDevices();
+		}
+		return false;
 	}
 	
 	/** Has the main display thread execute the given runnable at the nearest
@@ -1862,8 +1980,7 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 			Thread pollThread = this.controllerPollThread;
 			if(!pollControllersAsynchronously) {
 				if(pollThread != null) {
-					final long startTime = System.currentTimeMillis(),
-							timeout = 3000L;
+					final long startTime = System.currentTimeMillis(), timeout = 3000L;
 					while(pollThread.isAlive()) {
 						if(System.currentTimeMillis() - startTime >= timeout || pollThread.getState() == Thread.State.BLOCKED) {
 							pollThread.stop();
@@ -1971,8 +2088,7 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 			this.shell.setSize(width, height);
 			Rectangle clientArea = this.shell.getClientArea();
 			Point size = this.shell.getSize();
-			int xDiff = size.x - clientArea.width,
-					yDiff = size.y - clientArea.height;
+			int xDiff = size.x - clientArea.width, yDiff = size.y - clientArea.height;
 			this.shell.setSize(width + xDiff, height + yDiff);
 			synchronized(this.glThread) {
 				this.glCanvas.setBounds(this.shell.getClientArea());
@@ -2141,6 +2257,7 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 				this.unregisterRenderer(failedRenderer);
 			}
 			
+			this.hasOpenedYet = true;
 			while(this.swtLoop()) {
 				/*if(Mouse.getButtonDown(1)) {
 					System.out.println("Left click!");
@@ -2180,6 +2297,7 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 			this.shell.dispose();
 			SWTResourceManager.dispose();
 			this.display.dispose();
+			this.hasOpenedYet = false;
 			
 			this.soundManager.stopRunning();
 			
@@ -2757,6 +2875,9 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 	 *         addition to not being set as the active renderer, the specified
 	 *         renderer is not registered. */
 	public final boolean setActiveRenderer(Renderer renderer) {
+		if(!this.enableRendererSwitching && this.hasOpenedYet) {
+			return false;
+		}
 		if((this.display == null || this.display.isDisposed()) && renderer != null) {
 			throw new IllegalStateException("Display is disposed!");
 		}
@@ -2789,7 +2910,7 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		boolean createMenuBar = this.shell.getMenuBar() != null;
 		this.destroyMenus();
 		
-		//String title = this.title;
+		String title = this.title;
 		this.setTitle(this.originalTitle);
 		
 		if(this.glThread.setRenderer(renderer, true)) {
@@ -2798,10 +2919,15 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 			}
 			if(renderer != null) {
 				this.registerRenderer(renderer);
+				if(this.title.equals(this.originalTitle)) {
+					this.setTitle(renderer.getName());
+				}
 			}
 			return true;
 		}
-		//this.setTitle(title);
+		if(title != null && !title.trim().isEmpty()) {
+			this.setTitle(title);
+		}
 		return false;
 	}
 	
@@ -2813,6 +2939,20 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 	 *         currently using to display graphics */
 	public final Renderer getActiveRenderer() {
 		return this.glThread.getRenderer();
+	}
+	
+	public boolean getRendererSwitchingEnabled() {
+		return this.enableRendererSwitching;
+	}
+	
+	public Window setRendererSwitchingEnabled(boolean enableRendererSwitching) {
+		final boolean oldEnable = this.enableRendererSwitching;
+		this.enableRendererSwitching = enableRendererSwitching;
+		
+		if(oldEnable != this.enableRendererSwitching) {
+			this.updateMenuBar = true;
+		}
+		return this;
 	}
 	
 	/** Returns a list of all of this {@link Window}'s available renderers, some

@@ -1,19 +1,24 @@
 /*******************************************************************************
  * 
- * Copyright © 2020 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2021 Brian_Entei (br45entei@gmail.com)
  * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
  * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
  * 
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  * 
  *******************************************************************************/
 package com.gmail.br45entei.game.graphics;
@@ -25,6 +30,8 @@ import com.gmail.br45entei.game.ui.Window;
 import com.gmail.br45entei.util.Platform;
 import com.gmail.br45entei.util.StringUtil;
 
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -48,11 +55,16 @@ import static org.lwjgl.system.Checks.checkFunctions;
 /** Utility class containing common graphics library functions.
  *
  * @since 1.0
- * @author Brian_Entei */
+ * @author Brian_Entei &lt;br45entei&#064;gmail.com&gt; */
 @SuppressWarnings("javadoc")
 public class GLUtil {
 	
 	public static final void main(String[] args) {
+		{
+			String[] test = new String[] {"", null, "", null, "", null, "", "", "", "", null, "", GLUtil.class.getName(), "", null};
+			System.out.println("test.length: " + test.length + "; clean.length: " + clean(test).length + ";");
+			System.exit(0);
+		}
 		double[] matrix = GLUtil.getIdentityd();
 		System.out.println(matrix4x4ToStringd(matrix));
 		/*matrix = GLUtil.translateMatrix4x4d(matrix, 0, 0, 0);//27.913, 43.372, 92.046);
@@ -383,6 +395,70 @@ public class GLUtil {
 		return rtrn;
 	}
 	
+	public static final strictfp float[] floor(float[] array) {
+		float[] rtrn = new float[array.length];
+		for(int i = 0; i < rtrn.length; i++) {
+			rtrn[i] = (float) Math.floor(array[i]);
+		}
+		return rtrn;
+	}
+	
+	public static final strictfp float[] ceil(float[] array) {
+		float[] rtrn = new float[array.length];
+		for(int i = 0; i < rtrn.length; i++) {
+			rtrn[i] = (float) Math.ceil(array[i]);
+		}
+		return rtrn;
+	}
+	
+	public static final strictfp double[] floor(double[] array) {
+		double[] rtrn = new double[array.length];
+		for(int i = 0; i < rtrn.length; i++) {
+			rtrn[i] = Math.floor(array[i]);
+		}
+		return rtrn;
+	}
+	
+	public static final strictfp double[] ceil(double[] array) {
+		double[] rtrn = new double[array.length];
+		for(int i = 0; i < rtrn.length; i++) {
+			rtrn[i] = Math.ceil(array[i]);
+		}
+		return rtrn;
+	}
+	
+	public static final strictfp int[] roundToInt(float[] array) {
+		int[] rtrn = new int[array.length];
+		for(int i = 0; i < rtrn.length; i++) {
+			rtrn[i] = Math.round(array[i]);
+		}
+		return rtrn;
+	}
+	
+	public static final strictfp int[] roundToInt(double[] array) {
+		int[] rtrn = new int[array.length];
+		for(int i = 0; i < rtrn.length; i++) {
+			rtrn[i] = (int) Math.round(array[i]);
+		}
+		return rtrn;
+	}
+	
+	public static final strictfp long[] roundToLong(float[] array) {
+		long[] rtrn = new long[array.length];
+		for(int i = 0; i < rtrn.length; i++) {
+			rtrn[i] = Math.round(array[i]);
+		}
+		return rtrn;
+	}
+	
+	public static final strictfp long[] roundToLong(double[] array) {
+		long[] rtrn = new long[array.length];
+		for(int i = 0; i < rtrn.length; i++) {
+			rtrn[i] = Math.round(array[i]);
+		}
+		return rtrn;
+	}
+	
 	public static final strictfp double[] normalize(double x, double y) {
 		double magnitude = Math.sqrt((x * x) + (y * y));
 		return new double[] {x / magnitude, y / magnitude};
@@ -588,6 +664,216 @@ public class GLUtil {
 			sum[i] = array[i];
 		}
 		return sum;
+	}
+	
+	public static final <T> T[] clean(T[] array) {
+		int newLength = 0;
+		for(int i = 0; i < array.length; i++) {
+			T elm = array[i];
+			if(elm != null) {
+				newLength++;
+			}
+		}
+		T[] clean = Arrays.copyOf(array, newLength);
+		for(int i = 0, j = 0; i < array.length; i++) {
+			T elm = array[i];
+			if(elm != null) {
+				clean[j++] = elm;
+			}
+		}
+		return clean;
+	}
+	
+	public static final void boxAdd(Collection<Boolean> collection, boolean... booleans) {
+		for(boolean b : booleans) {
+			collection.add(Boolean.valueOf(b));
+		}
+	}
+	
+	public static final boolean[] unbox(Boolean... booleans) {
+		boolean[] array = new boolean[booleans.length];
+		int i = 0;
+		for(Boolean b : booleans) {
+			array[i++] = b.booleanValue();
+		}
+		return array;
+	}
+	
+	public static final boolean[] unboxBooleans(Collection<Boolean> booleans) {
+		boolean[] array = new boolean[booleans.size()];
+		int i = 0;
+		for(Boolean b : booleans) {
+			array[i++] = b.booleanValue();
+		}
+		return array;
+	}
+	
+	public static final void boxAdd(Collection<Byte> collection, byte... bytes) {
+		for(byte b : bytes) {
+			collection.add(Byte.valueOf(b));
+		}
+	}
+	
+	public static final byte[] unbox(Byte... bytes) {
+		byte[] array = new byte[bytes.length];
+		int i = 0;
+		for(Byte b : bytes) {
+			array[i++] = b.byteValue();
+		}
+		return array;
+	}
+	
+	public static final byte[] unboxBytes(Collection<Byte> bytes) {
+		byte[] array = new byte[bytes.size()];
+		int i = 0;
+		for(Byte b : bytes) {
+			array[i++] = b.byteValue();
+		}
+		return array;
+	}
+	
+	public static final void boxAdd(Collection<Character> collection, char... chars) {
+		for(char c : chars) {
+			collection.add(Character.valueOf(c));
+		}
+	}
+	
+	public static final char[] unbox(Character... chars) {
+		char[] array = new char[chars.length];
+		int i = 0;
+		for(Character c : chars) {
+			array[i++] = c.charValue();
+		}
+		return array;
+	}
+	
+	public static final char[] unboxCharacters(Collection<Character> chars) {
+		char[] array = new char[chars.size()];
+		int i = 0;
+		for(Character c : chars) {
+			array[i++] = c.charValue();
+		}
+		return array;
+	}
+	
+	public static final void boxAdd(Collection<Short> collection, short... shorts) {
+		for(short s : shorts) {
+			collection.add(Short.valueOf(s));
+		}
+	}
+	
+	public static final short[] unbox(Short... shorts) {
+		short[] array = new short[shorts.length];
+		int i = 0;
+		for(Short s : shorts) {
+			array[i++] = s.shortValue();
+		}
+		return array;
+	}
+	
+	public static final short[] unboxShorts(Collection<Short> shorts) {
+		short[] array = new short[shorts.size()];
+		int i = 0;
+		for(Short s : shorts) {
+			array[i++] = s.shortValue();
+		}
+		return array;
+	}
+	
+	public static final void boxAdd(Collection<Integer> collection, int... ints) {
+		for(int i : ints) {
+			collection.add(Integer.valueOf(i));
+		}
+	}
+	
+	public static final int[] unbox(Integer... ints) {
+		int[] array = new int[ints.length];
+		int j = 0;
+		for(Integer i : ints) {
+			array[j++] = i.intValue();
+		}
+		return array;
+	}
+	
+	public static final int[] unboxIntegers(Collection<Integer> ints) {
+		int[] array = new int[ints.size()];
+		int j = 0;
+		for(Integer i : ints) {
+			array[j++] = i.intValue();
+		}
+		return array;
+	}
+	
+	public static final void boxAdd(Collection<Float> collection, float... floats) {
+		for(float f : floats) {
+			collection.add(Float.valueOf(f));
+		}
+	}
+	
+	public static final float[] unbox(Float... floats) {
+		float[] array = new float[floats.length];
+		int i = 0;
+		for(Float f : floats) {
+			array[i++] = f.floatValue();
+		}
+		return array;
+	}
+	
+	public static final float[] unboxFloats(Collection<Float> floats) {
+		float[] array = new float[floats.size()];
+		int i = 0;
+		for(Float f : floats) {
+			array[i++] = f.floatValue();
+		}
+		return array;
+	}
+	
+	public static final void boxAdd(Collection<Long> collection, long... longs) {
+		for(long l : longs) {
+			collection.add(Long.valueOf(l));
+		}
+	}
+	
+	public static final long[] unbox(Long... longs) {
+		long[] array = new long[longs.length];
+		int i = 0;
+		for(Long l : longs) {
+			array[i++] = l.longValue();
+		}
+		return array;
+	}
+	
+	public static final long[] unboxLongs(Collection<Long> longs) {
+		long[] array = new long[longs.size()];
+		int i = 0;
+		for(Long l : longs) {
+			array[i++] = l.longValue();
+		}
+		return array;
+	}
+	
+	public static final void boxAdd(Collection<Double> collection, double... doubles) {
+		for(double d : doubles) {
+			collection.add(Double.valueOf(d));
+		}
+	}
+	
+	public static final double[] unbox(Double... doubles) {
+		double[] array = new double[doubles.length];
+		int i = 0;
+		for(Double d : doubles) {
+			array[i++] = d.doubleValue();
+		}
+		return array;
+	}
+	
+	public static final double[] unboxDoubles(Collection<Double> doubles) {
+		double[] array = new double[doubles.size()];
+		int i = 0;
+		for(Double d : doubles) {
+			array[i++] = d.doubleValue();
+		}
+		return array;
 	}
 	
 	public static final boolean doAnyElementsMatch(boolean[] v, boolean b) {
@@ -1768,7 +2054,7 @@ public class GLUtil {
 	/** Multiply the angleDeg by this number to get radians */
 	protected static final double toRadiansMultiplier = 0.01745329251994329576923690768489;	//3.141592653589793238462643383279502884197 / 180.0;
 	/** Multiply the angleRad by this number to get degrees */
-	protected static final double toDegreesMultiplier = 57.295779513082320876798154814105;	//180 / 3.141592653589793238462643383279502884197;
+	protected static final double toDegreesMultiplier = 57.295779513082320876798154814105;	//180.0 / 3.141592653589793238462643383279502884197;
 	/** Divide the angleDeg by this number to get radians */
 	protected static final double toRadiansDenominator = toDegreesMultiplier;
 	/** Divide the angleRad by this number to get degrees */
@@ -2013,9 +2299,7 @@ public class GLUtil {
 	}
 	
 	public static final strictfp float[] rotateZXYMatrix4x4f(float[] matrix, float angle, float xAxisPitch, float yAxisYaw, float zAxisRoll) {
-		int x = Float.floatToIntBits(xAxisPitch),
-				y = Float.floatToIntBits(yAxisYaw),
-				z = Float.floatToIntBits(zAxisRoll);
+		int x = Float.floatToIntBits(xAxisPitch), y = Float.floatToIntBits(yAxisYaw), z = Float.floatToIntBits(zAxisRoll);
 		float a = (float) (angle * toRadiansMultiplier);
 		float c = (float) Math.cos(a);
 		float s = (float) Math.sin(a);
@@ -2053,9 +2337,7 @@ public class GLUtil {
 	}
 	
 	public static final strictfp double[] rotateZXYMatrix4x4d(double[] matrix, double angle, double xAxisPitch, double yAxisYaw, double zAxisRoll) {
-		long x = Double.doubleToLongBits(xAxisPitch),
-				y = Double.doubleToLongBits(yAxisYaw),
-				z = Double.doubleToLongBits(zAxisRoll);
+		long x = Double.doubleToLongBits(xAxisPitch), y = Double.doubleToLongBits(yAxisYaw), z = Double.doubleToLongBits(zAxisRoll);
 		double a = angle * toRadiansMultiplier;
 		double c = Math.cos(a);
 		double s = Math.sin(a);
@@ -2101,8 +2383,7 @@ public class GLUtil {
 	}
 	
 	public static final strictfp float[] rotateZXYMatrix4x4f(float[] matrix, float yaw, float pitch, float roll) {
-		int p = Float.floatToIntBits(pitch), y = Float.floatToIntBits(yaw),
-				r = Float.floatToIntBits(roll);
+		int p = Float.floatToIntBits(pitch), y = Float.floatToIntBits(yaw), r = Float.floatToIntBits(roll);
 		if(r != posZerof && r != negZerof) {
 			float a = (float) (roll * toRadiansMultiplier);
 			float cos = (float) Math.cos(a);
@@ -2140,9 +2421,7 @@ public class GLUtil {
 	}
 	
 	public static final strictfp double[] rotateZXYMatrix4x4d(double[] matrix, double yaw, double pitch, double roll) {
-		long p = Double.doubleToLongBits(pitch),
-				y = Double.doubleToLongBits(yaw),
-				r = Double.doubleToLongBits(roll);
+		long p = Double.doubleToLongBits(pitch), y = Double.doubleToLongBits(yaw), r = Double.doubleToLongBits(roll);
 		if(r != posZero && r != negZero) {
 			double a = roll * toRadiansMultiplier;
 			double cos = Math.cos(a);
@@ -2188,8 +2467,7 @@ public class GLUtil {
 	}
 	
 	public static final strictfp float[] rotateYXZMatrix4x4f(float[] matrix, float angle, float xAxis, float yAxis, float zAxis) {
-		int x = Float.floatToIntBits(xAxis), y = Float.floatToIntBits(yAxis),
-				z = Float.floatToIntBits(zAxis);
+		int x = Float.floatToIntBits(xAxis), y = Float.floatToIntBits(yAxis), z = Float.floatToIntBits(zAxis);
 		float a = (float) (angle * toRadiansMultiplier);
 		float c = (float) Math.cos(a);
 		float s = (float) Math.sin(a);
@@ -2227,9 +2505,7 @@ public class GLUtil {
 	}
 	
 	public static final strictfp double[] rotateYXZMatrix4x4d(double[] matrix, double angle, double xAxis, double yAxis, double zAxis) {
-		long x = Double.doubleToLongBits(xAxis),
-				y = Double.doubleToLongBits(yAxis),
-				z = Double.doubleToLongBits(zAxis);
+		long x = Double.doubleToLongBits(xAxis), y = Double.doubleToLongBits(yAxis), z = Double.doubleToLongBits(zAxis);
 		double a = angle * toRadiansMultiplier;
 		double c = Math.cos(a);
 		double s = Math.sin(a);
@@ -2267,8 +2543,7 @@ public class GLUtil {
 	}
 	
 	public static final strictfp float[] rotateYXZMatrix4x4f(float[] matrix, float yaw, float pitch, float roll) {
-		int p = Float.floatToIntBits(pitch), y = Float.floatToIntBits(yaw),
-				r = Float.floatToIntBits(roll);
+		int p = Float.floatToIntBits(pitch), y = Float.floatToIntBits(yaw), r = Float.floatToIntBits(roll);
 		if(y != posZerof && y != negZerof) {
 			float a = (float) (yaw * toRadiansMultiplier);
 			float cos = (float) Math.cos(a);
@@ -2306,9 +2581,7 @@ public class GLUtil {
 	}
 	
 	public static final strictfp double[] rotateYXZMatrix4x4d(double[] matrix, double yaw, double pitch, double roll) {
-		long p = Double.doubleToLongBits(pitch),
-				y = Double.doubleToLongBits(yaw),
-				r = Double.doubleToLongBits(roll);
+		long p = Double.doubleToLongBits(pitch), y = Double.doubleToLongBits(yaw), r = Double.doubleToLongBits(roll);
 		if(y != posZero && y != negZero) {
 			double a = yaw * toRadiansMultiplier;
 			double cos = Math.cos(a);
@@ -3054,12 +3327,9 @@ public class GLUtil {
 		
 		//... and use that to create normalized vectors that we can use as the texture coordinates!
 		
-		double nmag1 = Math.sqrt((rx1 * rx1) + (ry1 * ry1)),
-				s1 = (rx1 / nmag1) + sOffset, t1 = (ry1 / nmag1) + tOffset;
-		double nmag2 = Math.sqrt((rx2 * rx2) + (ry2 * ry2)),
-				s2 = (rx2 / nmag2) + sOffset, t2 = (ry2 / nmag2) + tOffset;
-		double nmag3 = Math.sqrt((rx3 * rx3) + (ry3 * ry3)),
-				s3 = (rx3 / nmag3) + sOffset, t3 = (ry3 / nmag3) + tOffset;
+		double nmag1 = Math.sqrt((rx1 * rx1) + (ry1 * ry1)), s1 = (rx1 / nmag1) + sOffset, t1 = (ry1 / nmag1) + tOffset;
+		double nmag2 = Math.sqrt((rx2 * rx2) + (ry2 * ry2)), s2 = (rx2 / nmag2) + sOffset, t2 = (ry2 / nmag2) + tOffset;
+		double nmag3 = Math.sqrt((rx3 * rx3) + (ry3 * ry3)), s3 = (rx3 / nmag3) + sOffset, t3 = (ry3 / nmag3) + tOffset;
 		
 		//==[Now to actually render the triangle :D]==========================================================================
 		

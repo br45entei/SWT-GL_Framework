@@ -1,19 +1,24 @@
 /*******************************************************************************
  * 
- * Copyright © 2020 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2021 Brian_Entei (br45entei@gmail.com)
  * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
  * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
  * 
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  * 
  *******************************************************************************/
 package com.gmail.br45entei.game.graphics;
@@ -183,10 +188,11 @@ public final class GLThread extends Thread {
 	}
 	
 	/** Has this {@link GLThread} execute the given runnable at the nearest
-	 * opportunity.<br>
-	 * The new task will be executed at the end of a rendered frame of graphics,
-	 * after the color buffers are swapped (which is technically the beginning
-	 * of the next frame).<br>
+	 * opportunity. If this GLThread is the {@link Thread#currentThread()
+	 * current thread}, the runnable is executed immediately.<br>
+	 * Otherwise, the new task will be executed at the end of a rendered frame
+	 * of graphics, after the color buffers are swapped (which is technically
+	 * the beginning of the next frame).<br>
 	 * <br>
 	 * <b>Note:</b>&nbsp;Tasks should ideally take no more than a couple
 	 * milliseconds to execute, as tasks that take longer will slow down the
@@ -1070,7 +1076,7 @@ public final class GLThread extends Thread {
 				initialized = true;
 			}
 			if(!initialized) {
-				RendererInitializationProgress rip = new RendererInitializationProgress(this, Arrays.asList(renderer));
+				/*RendererInitializationProgress rip = new RendererInitializationProgress(this, Arrays.asList(renderer));
 				try {
 					renderer.initialize(rip);
 				} catch(Throwable ex) {
@@ -1088,7 +1094,8 @@ public final class GLThread extends Thread {
 					}
 				} finally {
 					rip.dispose();
-				}
+				}*/
+				return;
 			}
 			
 			int width = this.window.getWidth();
@@ -1171,7 +1178,7 @@ public final class GLThread extends Thread {
 			return null;
 		}
 		//Don't initialize the active renderer, _display() will do that for us!
-		renderers.remove(this.renderer);
+		//renderers.remove(this.renderer);//Nevermind, there can sometimes be strange side-effects when initializing the main renderer separately from the rest (namely the initialization progress bar thinking there is one more renderer than there actually are)
 		
 		if(Thread.currentThread() != this) {
 			@SuppressWarnings("unchecked")
@@ -1215,8 +1222,18 @@ public final class GLThread extends Thread {
 		
 		Collection<Renderer> failedRenderers = new ArrayList<>();
 		
-		final RendererInitializationProgress rip = new RendererInitializationProgress(this, renderers);// Totally didn't make that the initials for this class on purpose! lmao
+		final InitializationProgress rip = new RendererInitializationProgress(this, renderers);// Totally didn't make that the initials for this class on purpose! lmao
 		try {
+			/*for(Renderer renderer : renderers) {
+				String name = null;
+				try {
+					name = renderer.getName();
+				} catch(Throwable ex) {
+					ex.printStackTrace();
+					name = "<exception thrown>";
+				}
+				System.out.println(String.format("Renderer \"%s\" (%s)", name, renderer.getClass().getName()));
+			}*/
 			for(Renderer renderer : renderers) {
 				if(!this.shouldBeRunning()) {
 					failedRenderers.add(renderer);
@@ -1229,7 +1246,7 @@ public final class GLThread extends Thread {
 				} catch(Throwable ex) {
 					handleRendererException(renderer, ex, "isInitialized");
 					failedRenderers.add(renderer);
-					rip.remove(renderer);
+					rip.removeRenderer(renderer);
 					continue;
 				}
 				if(!initialized) {
@@ -1238,7 +1255,7 @@ public final class GLThread extends Thread {
 					} catch(Throwable ex) {
 						handleRendererException(renderer, ex, "initialize");
 						failedRenderers.add(renderer);
-						rip.remove(renderer);
+						rip.removeRenderer(renderer);
 						continue;
 					}
 					try {
@@ -1246,13 +1263,13 @@ public final class GLThread extends Thread {
 					} catch(Throwable ex) {
 						handleRendererException(renderer, ex, "isInitialized");
 						failedRenderers.add(renderer);
-						rip.remove(renderer);
+						rip.removeRenderer(renderer);
 						continue;
 					}
 				}
 				if(!initialized) {
 					failedRenderers.add(renderer);
-					rip.remove(renderer);
+					rip.removeRenderer(renderer);
 					continue;
 				}
 				rip.markRendererInitialized(renderer);
@@ -1393,6 +1410,12 @@ public final class GLThread extends Thread {
 		 *         {@link GLThread} */
 		public abstract Renderer getRendererBeingInitialized();
 		
+		public abstract void markRendererInitialized(Renderer renderer);
+		
+		public abstract void setRendererBeingInitialized(Renderer renderer);
+		
+		public abstract void removeRenderer(Renderer renderer);
+		
 		/** @return The progress towards getting the current Renderer
 		 *         initialized */
 		public abstract float getProgress();
@@ -1414,12 +1437,20 @@ public final class GLThread extends Thread {
 		
 		public abstract void set(float progressPercentage, String statusMessage, String backgroundImage);
 		
+		public abstract void setVsyncEnabled(boolean vsync);
+		
+		public abstract float dispose();
+		
+		public abstract boolean isDisposed();
+		
 	}
 	
 	private static final class RendererInitializationProgress extends InitializationProgress {
 		
 		private final GLThread glThread;
 		private final boolean wasVsyncEnabled;
+		
+		private volatile boolean enableVsync = false;
 		
 		private final Map<Renderer, Float> rendererProgress = new HashMap<>();
 		private final Map<Renderer, String> rendererBackgroundImages = new HashMap<>();
@@ -1441,14 +1472,16 @@ public final class GLThread extends Thread {
 		private volatile float overallProgress = 0.0f;
 		private volatile int numInitialized = 0;
 		
+		private volatile boolean isDisposed = false;
+		
 		public RendererInitializationProgress(GLThread glThread, Collection<Renderer> renderers) {
 			super();
 			this.glThread = glThread;
 			this.wasVsyncEnabled = this.glThread.window == null ? this.glThread.isVsyncEnabled() : this.glThread.window.isVsyncEnabled();
 			if(this.glThread.window != null) {
-				this.glThread.window.setVSyncEnabled(false);
+				this.glThread.window.setVSyncEnabled(this.enableVsync);
 			} else {
-				this.glThread.setVsyncEnabled(false);
+				this.glThread.setVsyncEnabled(this.enableVsync);
 			}
 			
 			for(Renderer renderer : renderers) {
@@ -1478,8 +1511,14 @@ public final class GLThread extends Thread {
 			this.finishedInitializing = false;
 		}
 		
+		@Override
 		public float dispose() {
-			float progress = this.getOverallProgress();
+			final float progress = this.getOverallProgress();
+			if(this.isDisposed) {
+				return progress;
+			}
+			this.isDisposed = true;
+			
 			this.finishedInitializing = true;
 			this.rendererProgress.clear();
 			this.rendererBackgroundImages.clear();
@@ -1508,15 +1547,9 @@ public final class GLThread extends Thread {
 			return progress;
 		}
 		
-		public void remove(Renderer failedRenderer) {
-			if(this.currentRenderer == failedRenderer) {
-				this.currentRenderer = null;
-			}
-			this.rendererProgress.remove(failedRenderer);
-			this.rendererBackgroundImages.remove(failedRenderer);
-			this.rendererStatusMessages.remove(failedRenderer);
-			
-			this.glDrawProgressScene();
+		@Override
+		public boolean isDisposed() {
+			return this.isDisposed;
 		}
 		
 		@Override
@@ -1524,7 +1557,12 @@ public final class GLThread extends Thread {
 			return this.currentRenderer;
 		}
 		
+		@Override
 		public void markRendererInitialized(Renderer renderer) {
+			if(this.isDisposed) {
+				return;
+			}
+			
 			this.rendererProgress.put(renderer, Float.valueOf(1.0f));
 			
 			if(this.glThread.window != null) {
@@ -1534,7 +1572,12 @@ public final class GLThread extends Thread {
 			}
 		}
 		
+		@Override
 		public void setRendererBeingInitialized(Renderer renderer) {
+			if(this.isDisposed) {
+				return;
+			}
+			
 			this.currentRenderer = renderer;
 			if(this.background != null) {
 				this.background.dispose();
@@ -1542,6 +1585,22 @@ public final class GLThread extends Thread {
 			}
 			this.backgroundColorHue = null;
 			this.flipBackgroundHorizontally = this.flipBackgroundVertically = false;
+			
+			this.glDrawProgressScene();
+		}
+		
+		@Override
+		public void removeRenderer(Renderer failedRenderer) {
+			if(this.isDisposed) {
+				return;
+			}
+			
+			if(this.currentRenderer == failedRenderer) {
+				this.currentRenderer = null;
+			}
+			this.rendererProgress.remove(failedRenderer);
+			this.rendererBackgroundImages.remove(failedRenderer);
+			this.rendererStatusMessages.remove(failedRenderer);
 			
 			this.glDrawProgressScene();
 		}
@@ -1583,6 +1642,10 @@ public final class GLThread extends Thread {
 		
 		@Override
 		public void setProgress(float percentage) {
+			if(this.isDisposed) {
+				return;
+			}
+			
 			percentage = (percentage != percentage || Float.isInfinite(percentage) ? 0.0f : percentage);
 			Float progress = Float.valueOf(percentage);
 			Float oldProgress = this.rendererProgress.put(this.currentRenderer, progress);
@@ -1598,7 +1661,10 @@ public final class GLThread extends Thread {
 		
 		@Override
 		public boolean setBackgroundImage(String resourcePath) {
-			boolean exists = TextureLoader.doesResourceExist(resourcePath);
+			if(this.isDisposed) {
+				return false;
+			}
+			boolean exists = TextureLoader.doesResourceExist(resourcePath, true);
 			if(!exists) {
 				resourcePath = null;
 			}
@@ -1616,6 +1682,9 @@ public final class GLThread extends Thread {
 		
 		@Override
 		public void setStatusMessage(String msg) {
+			if(this.isDisposed) {
+				return;
+			}
 			String oldMsg = this.rendererStatusMessages.put(this.currentRenderer, msg);
 			if(oldMsg == null || !oldMsg.equals(msg)) {
 				this.glDrawProgressScene();
@@ -1623,6 +1692,9 @@ public final class GLThread extends Thread {
 		}
 		
 		private void glDrawProgressScene() {
+			if(this.isDisposed) {
+				return;
+			}
 			if(!this.finishedInitializing) {
 				try {
 					final int width = this.glThread.window.getWidth();
@@ -1667,11 +1739,14 @@ public final class GLThread extends Thread {
 					
 					String backgroundPath = this.getBackgroundImage();
 					if(this.background == null && backgroundPath != null) {
-						this.background = TextureLoader.createTexture(backgroundPath, //
-								GL11.GL_TEXTURE_2D, // target
-								GL11.GL_RGBA,       // dst pixel format
-								GL11.GL_NEAREST,    // min filter
-								GL11.GL_LINEAR);   // max filter);
+						Runnable loadBackground = () -> {
+							this.background = TextureLoader.createTexture(backgroundPath, //
+									GL11.GL_TEXTURE_2D, // target
+									GL11.GL_RGBA,       // dst pixel format
+									GL11.GL_NEAREST,    // min filter
+									GL11.GL_LINEAR);   // max filter);
+						};
+						this.glThread.asyncExec(loadBackground);
 					}
 					final Texture background = this.background;
 					if(background != null) {
@@ -1691,7 +1766,7 @@ public final class GLThread extends Thread {
 							GL11.glLoadIdentity();
 						}
 						
-						if(background != null) {
+						if(background != null && !this.glThread.glCaps.forwardCompatible) {
 							GL11.glEnable(background.getTarget());
 							GLUtil.glRenderQuad(background, new Vector2f(width, height), this.backgroundColorHue, this.flipBackgroundHorizontally, this.flipBackgroundVertically);
 							GL11.glBindTexture(background.getTarget(), 0);
@@ -1716,17 +1791,17 @@ public final class GLThread extends Thread {
 					final Runnable swapTask = () -> {
 						drawTask.run();
 						if(this.glThread.window != null) {
-							this.glThread.window.setVSyncEnabled(false);
+							this.glThread.window.setVSyncEnabled(this.enableVsync);
 						} else {
-							this.glThread.setVsyncEnabled(false);
+							this.glThread.setVsyncEnabled(this.enableVsync);
 						}
 						this.glThread._swapBuffers();
 						if(this.glThread.getGLData().doubleBuffer) {
 							drawTask.run();
 							if(this.glThread.window != null) {
-								this.glThread.window.setVSyncEnabled(false);
+								this.glThread.window.setVSyncEnabled(this.enableVsync);
 							} else {
-								this.glThread.setVsyncEnabled(false);
+								this.glThread.setVsyncEnabled(this.enableVsync);
 							}
 							this.glThread._swapBuffers();
 						}
@@ -1747,6 +1822,10 @@ public final class GLThread extends Thread {
 		
 		@Override
 		public void set(float progressPercentage, String statusMessage) {
+			if(this.isDisposed) {
+				return;
+			}
+			
 			boolean somethingChanged = false;
 			
 			Float oldProgress = this.rendererProgress.put(this.currentRenderer, Float.valueOf(progressPercentage));
@@ -1762,6 +1841,10 @@ public final class GLThread extends Thread {
 		
 		@Override
 		public void set(float progressPercentage, String statusMessage, String backgroundImage) {
+			if(this.isDisposed) {
+				return;
+			}
+			
 			boolean somethingChanged = false;
 			
 			Float oldProgress = this.rendererProgress.put(this.currentRenderer, Float.valueOf(progressPercentage));
@@ -1770,7 +1853,7 @@ public final class GLThread extends Thread {
 			String oldMsg = this.rendererStatusMessages.put(this.currentRenderer, statusMessage);
 			somethingChanged |= (oldMsg == null || !oldMsg.equals(statusMessage));
 			
-			if(!TextureLoader.doesResourceExist(backgroundImage)) {
+			if(!TextureLoader.doesResourceExist(backgroundImage, true)) {
 				backgroundImage = null;
 			}
 			String oldBackgroundImage = this.rendererBackgroundImages.put(this.currentRenderer, backgroundImage);
@@ -1779,6 +1862,15 @@ public final class GLThread extends Thread {
 			if(somethingChanged) {
 				this.glDrawProgressScene();
 			}
+		}
+		
+		@Override
+		public void setVsyncEnabled(boolean vsync) {
+			if(this.isDisposed) {
+				return;
+			}
+			
+			this.enableVsync = vsync;
 		}
 		
 	}

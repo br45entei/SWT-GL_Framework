@@ -1,6 +1,5 @@
 package com.gmail.br45entei.game.graphics;
 
-import com.gmail.br45entei.util.BufferUtil;
 import com.gmail.br45entei.util.ResourceUtil;
 
 import java.awt.Color;
@@ -30,6 +29,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import javax.imageio.ImageIO;
 
+import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL31;
@@ -49,7 +49,7 @@ import org.lwjgl.opengl.GL31;
  * @author Kevin Glass
  * @author Brian Matzon */
 public class TextureLoader {
-	/** (Totally not a Pokémon reference) */
+	/** (Totally not a PokÃ©mon reference) */
 	private static final String missingNo = "/assets/textures/missing.png";
 	
 	protected static volatile int openGLTextureID;
@@ -225,6 +225,16 @@ public class TextureLoader {
 			}
 		}
 		return resourcePath;
+	}
+	
+	/** @param resourcePath The resource path to check
+	 * @param useCache Whether or not the existence (or lack thereof) there
+	 *            source path should be cached, and the cached result returned
+	 *            in future calls to this method.
+	 * @return Whether or not the resource exists(true if an input stream was
+	 *         successfully opened from the resource, false otherwise) */
+	public static final boolean doesResourceExist(String resourcePath, boolean useCache) {
+		return ResourceUtil.doesResourceExist(fullPath(resourcePath), useCache);
 	}
 	
 	/** @param resourcePath The resource path to check
@@ -414,7 +424,7 @@ public class TextureLoader {
 		imageBuffer.order(ByteOrder.nativeOrder());
 		imageBuffer.put(data, 0, data.length);
 		imageBuffer.flip();*/
-		imageBuffer = BufferUtil.wrapDirect(data);
+		imageBuffer = BufferUtils.createByteBuffer(data.length).rewind().put(data).rewind();//BufferUtil.wrapDirect(data);
 		
 		return imageBuffer;
 	}

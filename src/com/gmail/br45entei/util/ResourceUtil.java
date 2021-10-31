@@ -1,3 +1,26 @@
+/*******************************************************************************
+ * 
+ * Copyright © 2021 Brian_Entei (br45entei@gmail.com)
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ * 
+ *******************************************************************************/
 package com.gmail.br45entei.util;
 
 import java.io.BufferedReader;
@@ -20,11 +43,17 @@ import java.security.PrivilegedAction;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
-/** @author Brian_Entei */
+/** @since 1.0
+ * @author Brian_Entei &lt;br45entei&#064;gmail.com&gt; */
 public class ResourceUtil {
+	
+	// Apparently using the concurrent linked deque instead of the hashmap for caching is waaaayy faster
+	private static final ConcurrentLinkedDeque<String> existingResources = new ConcurrentLinkedDeque<>();
+	private static final ConcurrentLinkedDeque<String> nonExistingResources = new ConcurrentLinkedDeque<>();
 	
 	/** @param path The path to the internal resource to load
 	 * @return The resulting InputStream if the resource exists,
@@ -44,6 +73,32 @@ public class ResourceUtil {
 			System.err.println(e);
 			return null;
 		}
+	}
+	
+	public static final String loadResourceAsString(String path, Charset charset, String lineSeparator) {
+		InputStream _in = loadResource(path);
+		if(_in != null) {
+			try(InputStream in = _in) {
+				StringBuilder sb = new StringBuilder();
+				String line;
+				while((line = FileUtil.readLine(in, lineSeparator != null, charset)) != null) {
+					sb.append(line).append(lineSeparator == null ? "" : lineSeparator);
+				}
+				return sb.toString();
+			} catch(Throwable ex) {
+				System.err.print("Failed to load asset: " + path);
+				System.err.println(ex);
+			}
+		}
+		return null;
+	}
+	
+	public static final String loadResourceAsString(String path, Charset charset) {
+		return loadResourceAsString(path, charset, "\r\n");
+	}
+	
+	public static final String loadResourceAsString(String path) {
+		return loadResourceAsString(path, StandardCharsets.UTF_8);
 	}
 	
 	/** @param path The path to the internal resource to load
@@ -234,10 +289,10 @@ public class ResourceUtil {
 						@Override
 						public void close() throws IOException {
 							try {
-								jar.close();
+								stream.close();
 							} catch(IOException ignored) {
 							}
-							stream.close();
+							jar.close();
 						}
 						
 						@Override
@@ -277,17 +332,47 @@ public class ResourceUtil {
 	}
 	
 	/** @param path The resource path to check
+	 * @param useCache Whether or not the existence (or lack thereof) the
+	 *            resource path should be cached, and the cached result returned
+	 *            in future calls to this method.
 	 * @return Whether or not the resource exists(true if an input stream was
 	 *         successfully opened from the resource, false otherwise) */
-	public static final boolean doesResourceExist(String path) {
+	public static final boolean doesResourceExist(String path, boolean useCache) {
 		path = getResourcePathFromShorthand(path);
+		if(useCache) {
+			if(existingResources.contains(path)) {
+				return true;
+			}
+			if(nonExistingResources.contains(path)) {
+				return false;
+			}
+		} else {
+			while(existingResources.remove(path)) {
+			}
+			while(nonExistingResources.remove(path)) {
+			}
+		}
+		
 		try(InputStream closeMe = ResourceUtil.getResourceAsStream(null, path)) {
 			if(closeMe != null) {
+				if(useCache) {
+					existingResources.add(path);
+				}
 				return true;
 			}
 		} catch(IOException ignored) {
 		}
+		if(useCache) {
+			nonExistingResources.add(path);
+		}
 		return false;
+	}
+	
+	/** @param path The resource path to check
+	 * @return Whether or not the resource exists(true if an input stream was
+	 *         successfully opened from the resource, false otherwise) */
+	public static final boolean doesResourceExist(String path) {
+		return doesResourceExist(path, true);
 	}
 	
 	/** @return The path to the current Java Code source(may be null if

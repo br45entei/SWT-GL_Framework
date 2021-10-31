@@ -135,7 +135,7 @@ public class SWTResourceManager {
 	@SuppressWarnings("resource")
 	public static Image getImage(String path) {
 		Image image = m_imageMap.get(path);
-		if (image == null) {
+		if (image == null || image.getDevice().isDisposed()) {
 			try {
 				image = getImage(new FileInputStream(path));
 				m_imageMap.put(path, image);
@@ -159,7 +159,7 @@ public class SWTResourceManager {
 	public static Image getImage(Class<?> clazz, String path) {
 		String key = clazz.getName() + '|' + path;
 		Image image = m_imageMap.get(key);
-		if (image == null) {
+		if (image == null || image.getDevice().isDisposed()) {
 			try {
 				image = getImage(clazz.getResourceAsStream(path));
 				m_imageMap.put(key, image);

@@ -1,3 +1,26 @@
+/*******************************************************************************
+ * 
+ * Copyright © 2021 Brian_Entei (br45entei@gmail.com)
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ * 
+ *******************************************************************************/
 package com.gmail.br45entei.game.graphics;
 
 import com.gmail.br45entei.game.math.Matrix4f;
@@ -13,15 +36,17 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
+import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL20;
+import org.lwjgl.opengl.GL40;
 import org.lwjgl.util.glu.Util;
 
 /** Shader is a class which can load and compile GLSL code which can then be
  * used to render scenes on the GPU.
  *
  * @since 1.0
- * @author Brian_Entei */
+ * @author Brian_Entei &lt;br45entei&#064;gmail.com&gt; */
 public class Shader {
 	
 	private static volatile Shader activeShader = null;
@@ -195,7 +220,8 @@ public class Shader {
 		byte[] stringBytes = seq.toString().getBytes(StandardCharsets.ISO_8859_1);
 		byte[] ntBytes = new byte[stringBytes.length + 1];
 		System.arraycopy(stringBytes, 0, ntBytes, 0, stringBytes.length);
-		return BufferUtil.wrapDirect(ntBytes);
+		ByteBuffer buf = BufferUtils.createByteBuffer(ntBytes.length);
+		return buf.rewind().put(ntBytes).rewind();
 	}
 	
 	public int glGetUniformLocation(String name) {
@@ -448,7 +474,25 @@ public class Shader {
 					GL20.glGetUniformfv(this.shader.program, this.location, val);
 					return this.value = (T) new org.lwjgl.util.vector.Matrix4f().load(BufferUtil.wrap(val));
 				} else if(GLUtil.isGL40Available() && (Double.TYPE.isAssignableFrom(this.dataType) || double[].class.isAssignableFrom(this.dataType))) {
-					// TODO
+					if(double[].class.isAssignableFrom(this.dataType)) {
+						double[] def = (double[]) this.def;
+						double[] val = new double[def.length];
+						switch(def.length) {
+						case 1:
+						case 2:
+						case 3:
+						case 4:
+						case 9:
+						case 16:
+							GL40.glGetUniformdv(this.shader.program, this.location, val);
+							this.value = (T) val;
+							break;
+						default:
+							throw new IllegalArgumentException(String.format("Invalid default [double] array length specified for uniform \"%s\"! Expected 1, 2, 3, 4, 9, or 16; got %s", this.name, Integer.toString(val.length)));
+						}
+						return this.value;
+					}
+					return this.value = (T) Double.valueOf(GL40.glGetUniformd(this.shader.program, this.location));
 				}
 				throw new IllegalArgumentException(String.format("Invalid data type specified for uniform \"%s\"! Expected Integer, Float, int[], or float[]; got %s", this.name, this.dataType.getName()));
 			} finally {
@@ -540,37 +584,57 @@ public class Shader {
 					}
 				} else if(Matrix4f.class.isAssignableFrom(this.dataType)) {
 					Matrix4f val = (Matrix4f) value;
-					FloatBuffer buf = BufferUtil.createDirectFloatBuffer(16);
+					FloatBuffer buf = BufferUtils.createFloatBuffer(16);//BufferUtil.createDirectFloatBuffer(16);
 					val.getMBuffer(buf);
 					GL20.glUniformMatrix4fv(this.location, this.transpose, buf.rewind());
 				} else if(org.lwjgl.util.vector.Matrix4f.class.isAssignableFrom(this.dataType)) {
 					org.lwjgl.util.vector.Matrix4f val = (org.lwjgl.util.vector.Matrix4f) value;
 					float[] m = new float[] {//@formatter:off
-						val.m00,
-						val.m01,
-						val.m02,
-						val.m03,
-						
-						val.m10,
-						val.m11,
-						val.m12,
-						val.m13,
-						
-						val.m20,
-						val.m21,
-						val.m22,
-						val.m23,
-						
-						val.m30,
-						val.m31,
-						val.m32,
-						val.m33
+						val.m00, val.m01, val.m02, val.m03,
+						val.m10, val.m11, val.m12, val.m13,
+						val.m20, val.m21, val.m22, val.m23,
+						val.m30, val.m31, val.m32, val.m33
 					};//@formatter:on
 					GL20.glUniformMatrix4fv(this.location, this.transpose, m);
 				} else if(GLUtil.isGL40Available() && (Double.TYPE.isAssignableFrom(this.dataType) || double[].class.isAssignableFrom(this.dataType))) {
-					// TODO
+					if(double[].class.isAssignableFrom(this.dataType)) {
+						double[] def = (double[]) this.def;
+						double[] val = (double[]) value;
+						if(val.length != def.length) {
+							throw new IllegalArgumentException(String.format("Invalid [double] array length specified for uniform \"%s\"! Expected %s; got %s", this.name, Integer.toString(def.length), Integer.toString(val.length)));
+						}
+						switch(val.length) {
+						case 1:
+							GL40.glUniform1dv(this.location, val);
+							break;
+						case 2:
+							GL40.glUniform2dv(this.location, val);
+							break;
+						case 3:
+							GL40.glUniform3dv(this.location, val);
+							break;
+						case 4:
+							if(this.matrix2x2f) {
+								GL40.glUniformMatrix2dv(this.location, this.transpose, val);
+							} else {
+								GL40.glUniform4dv(this.location, val);
+							}
+							break;
+						case 9:
+							GL40.glUniformMatrix3dv(this.location, this.transpose, val);
+							break;
+						case 16:
+							GL40.glUniformMatrix4dv(this.location, this.transpose, val);
+							break;
+						default:
+							throw new IllegalArgumentException(String.format("Invalid default [double] array length specified for uniform \"%s\"! Expected 1, 2, 3, 4, 9, or 16; got %s", this.name, Integer.toString(val.length)));
+						}
+					} else {
+						Double val = (Double) value;
+						GL40.glUniform1d(this.location, val.doubleValue());
+					}
 				} else {
-					throw new IllegalStateException(String.format("Invalid data type specified for uniform \"%s\"! Expected Integer, Float, int[], or float[]; got %s", this.name, this.dataType.getName()));
+					throw new IllegalStateException(String.format("Invalid/Unimplemented data type specified for uniform \"%s\"! Expected Integer, int[], Float, float[], Double, or double[]; got %s", this.name, this.dataType.getName()));
 				}
 				
 				this.value = value;

@@ -1,14 +1,19 @@
 package com.gmail.br45entei.game.math;
 
+import com.gmail.br45entei.game.graphics.MatrixStack;
+
 import java.nio.FloatBuffer;
 
 import org.lwjgl.util.vector.Vector3f;
 
 /** Matrix class used to compute position, scale, rotations, translations, etc.
  *
+ * @deprecated Use {@link MatrixStack} instead.
+ *
  * @since 1.0
  * @author theBennyBox
  * @author Brian_Entei */
+@Deprecated
 public final strictfp class Matrix4f {
 	private float[][] m;
 	

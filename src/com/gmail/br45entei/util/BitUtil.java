@@ -1,19 +1,24 @@
 /*******************************************************************************
  * 
- * Copyright © 2020 Brian_Entei (br45entei@gmail.com)
+ * Copyright Â© 2021 Brian_Entei (br45entei@gmail.com)
  * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
  * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
  * 
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  * 
  *******************************************************************************/
 package com.gmail.br45entei.util;
@@ -31,7 +36,7 @@ public class BitUtil {
 	}
 	
 	public static final boolean getBitInByte(byte b, int position) {
-		return ((b >> position) & 1) == 1;
+		return ((b >> position) & 1) !=  0;
 	}
 	
 	public static final byte setBitInByte(byte b, int position, boolean bit) {
@@ -39,7 +44,7 @@ public class BitUtil {
 			throw new IndexOutOfBoundsException(position);
 		}
 		if(bit) {
-			b |= 1 << position;// sets the bit at the position to 1
+			b |= (1 << position);// sets the bit at the position to 1
 		} else {
 			b &= ~(1 << position);// sets the bit at the position to 0
 		}
@@ -48,14 +53,14 @@ public class BitUtil {
 	
 	public static final void byteToBits(byte b, boolean[] bits, int offset) {
 		for(int i = 0; i < Math.min(8, bits.length - offset); i++) {
-			bits[i + offset] = ((b >> i) & 1) == 1;
+			bits[i + offset] = ((b >> i) & 1) != 0;
 		}
 	}
 	
 	public static final boolean[] byteToBits(byte b) {
 		boolean[] bits = new boolean[8];
 		for(int i = 0; i < bits.length; i++) {
-			bits[i] = ((b >> i) & 1) == 1;
+			bits[i] = ((b >> i) & 1) != 0;
 		}
 		return bits;
 	}
@@ -66,11 +71,11 @@ public class BitUtil {
 			return b;
 		}
 		final int length = bits.length - offset;
-		for(int bitCounter = 0; bitCounter + offset < Math.min(8, length); bitCounter++) {
-			if(bits[bitCounter + offset]) {
-				b |= 1 << bitCounter;// sets the bit at the position specified by bitCounter to 1
+		for(int position = 0; position + offset < Math.min(8, length); position++) {
+			if(bits[position + offset]) {
+				b |= (1 << position);// sets the bit at the position specified by bitCounter to 1
 			} else {
-				b &= ~(1 << bitCounter);// sets the bit at the position specified by bitCounter to 0
+				b &= ~(1 << position);// sets the bit at the position specified by bitCounter to 0
 			}
 		}
 		return b;
@@ -156,14 +161,18 @@ public class BitUtil {
 	/** Converts the given long value into a byte array.
 	 *
 	 * @param l The long to convert
-	 * @return An array containing the eight bytes of data from the long
-	 * @author <a href="https://stackoverflow.com/a/29132118">Wytze</a> */
+	 * @return An array containing the eight bytes of data from the long */
 	public static byte[] longToBytes(long l) {
-		byte[] result = new byte[Long.BYTES];
-		for(int i = 7; i >= 0; i--) {
-			result[i] = (byte) (l & 0xFF);
-			l >>= Long.BYTES;
-		}
+		byte[] result = new byte[] {//@formatter:off
+				(byte) (l >>> 56),
+				(byte) (l >>> 48),
+				(byte) (l >>> 40),
+				(byte) (l >>> 32),
+				(byte) (l >>> 24),
+				(byte) (l >>> 16),
+				(byte) (l >>>  8),
+				(byte) (l >>>  0)
+		};//@formatter:on
 		return result;
 	}
 	
@@ -177,10 +186,16 @@ public class BitUtil {
 			long l = array[j];
 			index = j * Long.BYTES;
 			
-			for(int i = 7; i >= 0; i--) {
-				result[index + i] = (byte) l;//(l & 0xFF);
-				l >>= Long.BYTES;
-			}
+			//@formatter:off
+			result[index + 0] = (byte) (l >>> 56);
+			result[index + 1] = (byte) (l >>> 48);
+			result[index + 2] = (byte) (l >>> 40);
+			result[index + 3] = (byte) (l >>> 32);
+			result[index + 4] = (byte) (l >>> 24);
+			result[index + 5] = (byte) (l >>> 16);
+			result[index + 6] = (byte) (l >>>  8);
+			result[index + 7] = (byte) (l >>>  0);
+			//@formatter:on
 			
 		}
 		return result;
@@ -199,7 +214,8 @@ public class BitUtil {
 			
 			for(int j = 0; j < Long.BYTES; j++) {
 				result <<= Long.BYTES;
-				result |= bytes[off + j];//(bytes[off + j] & 0xFF);
+				//result |= /*j == 0 ? */bytes[off + j]/* : (bytes[off + j] & 0xFF)*/;
+				result |= (bytes[off + j] & 0xFF);
 			}
 			
 			results[i] = result;
@@ -217,7 +233,8 @@ public class BitUtil {
 		long result = 0;
 		for(int i = offset; i < Math.min(offset + Long.BYTES, bytes.length); i++) {
 			result <<= Long.BYTES;
-			result |= bytes[i];//(bytes[i] & 0xFF);
+			//result |= /*i == offset ? */bytes[i]/* : (bytes[i] & 0xFF)*/;
+			result |= (bytes[i] & 0xFF);
 		}
 		return result;
 	}
