@@ -1,19 +1,24 @@
 /*******************************************************************************
  * 
- * Copyright © 2020 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2021 Brian_Entei (br45entei@gmail.com)
  * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
  * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
  * 
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  * 
  *******************************************************************************/
 package com.gmail.br45entei.game.input;
@@ -21,10 +26,14 @@ package com.gmail.br45entei.game.input;
 import com.gmail.br45entei.util.CodeUtil;
 import com.gmail.br45entei.util.Platform;
 import com.gmail.br45entei.util.ReflectionUtil;
+import com.sun.jna.platform.KeyboardUtils;
+import com.sun.jna.platform.unix.X11;
 
+import java.awt.event.KeyEvent;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
@@ -143,6 +152,54 @@ public class Keyboard {
 	private static Class<?> win32OS;
 	private static Method win32OSGetKeyState;
 	
+	/** Code adapted from the {@link KeyboardUtils} class. */
+	private static final int toX11KeySym(int code, int location) {
+		if(code >= KeyEvent.VK_A && code <= KeyEvent.VK_Z) return X11.XK_a + (code - KeyEvent.VK_A);
+		if(code >= KeyEvent.VK_0 && code <= KeyEvent.VK_9) return X11.XK_0 + (code - KeyEvent.VK_0);
+		if(code == KeyEvent.VK_SHIFT) {
+			if((location & KeyEvent.KEY_LOCATION_RIGHT) != 0) return X11.XK_Shift_R;
+			return X11.XK_Shift_L;
+		}
+		if(code == KeyEvent.VK_CONTROL) {
+			if((location & KeyEvent.KEY_LOCATION_RIGHT) != 0) return X11.XK_Control_R;
+			return X11.XK_Control_L;
+		}
+		if(code == KeyEvent.VK_ALT) {
+			if((location & KeyEvent.KEY_LOCATION_RIGHT) != 0) return X11.XK_Alt_R;
+			return X11.XK_Alt_L;
+		}
+		if(code == KeyEvent.VK_META) {
+			if((location & KeyEvent.KEY_LOCATION_RIGHT) != 0) return X11.XK_Meta_R;
+			return X11.XK_Meta_L;
+		}
+		return code >= 5 && code < 256 ? code : 0;
+	}
+	
+	/*private static final boolean isX11KeyPressed(int keycode, int location) {
+		X11 lib = X11.INSTANCE;
+		X11.Display dpy = lib.XOpenDisplay(null);
+		if(dpy == null) {
+			throw new Error("Can't open X Display");
+		}
+		try {
+			byte[] keys = new byte[32];
+			// Ignore the return value
+			lib.XQueryKeymap(dpy, keys);
+			int keysym = toX11KeySym(keycode, location);
+			for(int code = 5; code < 256; code++) {
+				int idx = code / 8;
+				int shift = code % 8;
+				if((keys[idx] & (1 << shift)) != 0) {
+					int sym = lib.XKeycodeToKeysym(dpy, (byte) code, 0).intValue();
+					if(sym == keysym) return true;
+				}
+			}
+		} finally {
+			lib.XCloseDisplay(dpy);
+		}
+		return false;
+	}*/
+	
 	/** Polls the keyboard using the {@link #setKeyboardPollMode(boolean) poll
 	 * mode}.<br>
 	 * <b>Note:</b>&nbsp;This function will block if it is called outside of the
@@ -154,8 +211,9 @@ public class Keyboard {
 	public static final boolean poll() {
 		Canvas canvas = Mouse.cursorCanvas;
 		if(canvas != null && !canvas.isDisposed() && canvas.getDisplay().getThread() == Thread.currentThread()) {
+			final boolean active = pollKeyboardAsynchronously ? true : (canvas.getDisplay().getActiveShell() == canvas.getShell() && canvas.getShell().isVisible());
 			switch(Platform.get()) {
-			case WINDOWS:
+			case WINDOWS: {
 				canvas.getDisplay().readAndDispatch();
 				if(canvas.isDisposed()) {
 					return false;
@@ -176,7 +234,7 @@ public class Keyboard {
 						return false;
 					}
 				}
-				boolean active = pollKeyboardAsynchronously ? true : (canvas.getDisplay().getActiveShell() == canvas.getShell() && canvas.getShell().isVisible());
+				
 				for(int i = 0; i < keyboardButtonStates.length; i++) {
 					lastKeyboardButtonStates[i] = keyboardButtonStates[i];
 					short keyState;
@@ -191,15 +249,75 @@ public class Keyboard {
 					keyboardButtonStates[i] = active ? keyState/*org.eclipse.swt.internal.win32.OS.GetKeyState(i)*/ < 0 : false;
 				}
 				break;
-			case LINUX:
+			}
+			case LINUX: {
+				// The following code was adapted from JNA's KeyboardUtils class.
+				
+				// KeyboardUtils start
+				
+				X11 lib = X11.INSTANCE;
+				X11.Display dpy = lib.XOpenDisplay(null);
+				if(dpy == null) {
+					//throw new Error("Can't open X Display");
+					System.err.println("Failed to poll Keyboard: Can't open X Display!");
+					System.err.flush();
+					return false;
+				}
+				
+				// KeyboardUtils end
+				
+				try {
+					for(int i = 0; i < keyboardButtonStates.length; i++) {
+						lastKeyboardButtonStates[i] = keyboardButtonStates[i];
+						
+						// KeyboardUtils start
+						
+						byte[] keys = new byte[32];
+						lib.XQueryKeymap(dpy, keys);
+						
+						int keysym = toX11KeySym(i, Keys.getLocationForKey(i));
+						boolean pressed = false;
+						for(int code = 5; code < 256; code++) {
+							int idx = code / 8;
+							int shift = code % 8;
+							if((keys[idx] & (1 << shift)) != 0) {
+								int sym = lib.XKeycodeToKeysym(dpy, (byte) code, 0).intValue();
+								if(sym == keysym) {
+									pressed = true; // Brian_Entei
+									break;
+								}
+							}
+						}
+						
+						//KeyboardUtils end
+						
+						keyboardButtonStates[i] = active ? pressed : false;
+					}
+					
+					// KeyboardUtils start
+					
+				} finally {
+					lib.XCloseDisplay(dpy);
+					dpy = null;
+					
+					//KeyboardUtils end
+					
+				}
+				
+				for(int i = 0; i < keyboardButtonStates.length; i++) {
+					lastKeyboardButtonStates[i] = keyboardButtonStates[i];
+					keyboardButtonStates[i] = active ? KeyboardUtils.isPressed(i) : false;
+				}
+				break;
+			}
+			case MACOSX: {
 				// TODO Find a way to dynamically poll the keyboard as is done above for Windows platforms
 				break;
-			case MACOSX:
-				// TODO Find a way to dynamically poll the keyboard as is done above for Windows platforms
-				break;
+			}
 			case UNKNOWN:
-			default:
+			default: {
 				return false;
+			}
 			}
 			
 			long now = System.currentTimeMillis();
@@ -639,6 +757,79 @@ public class Keyboard {
 			Integer k = Integer.valueOf(key);
 			String name = keyDefinitions.get(k);
 			return name == null ? k.toString().concat("(Undefined)") : name;
+		}
+		
+		/** Returns the scan-code of the key whose field name matches the
+		 * specified name.
+		 *
+		 * @param name The field name of the desired key
+		 * @return The corresponding scan-code for the given key name, or
+		 *         <tt>0</tt> if the specified name does not have a key */
+		public static final int getKeyFromName(String name) {
+			for(Entry<Integer, String> entry : keyDefinitions.entrySet()) {
+				if(entry.getValue().equalsIgnoreCase(name)) {
+					return entry.getKey().intValue();
+				}
+			}
+			return 0;
+		}
+		
+		public static final boolean isLeftKey(int key) {
+			String name = getNameForKey(key);
+			if(name.startsWith("VK_L")) {
+				String check = "VK_".concat(name.substring(4));
+				return getKeyFromName(check) != 0;
+			}
+			return false;
+		}
+		
+		public static final boolean isRightKey(int key) {
+			String name = getNameForKey(key);
+			if(name.startsWith("VK_R")) {
+				String check = "VK_".concat(name.substring(4));
+				return getKeyFromName(check) != 0;
+			}
+			return false;
+		}
+		
+		public static final boolean isNumpadKey(int key) {
+			switch(key) {
+			case VK_NUMPAD0:
+			case VK_NUMPAD1:
+			case VK_NUMPAD2:
+			case VK_NUMPAD3:
+			case VK_NUMPAD4:
+			case VK_NUMPAD5:
+			case VK_NUMPAD6:
+			case VK_NUMPAD7:
+			case VK_NUMPAD8:
+			case VK_NUMPAD9:
+			case VK_MULTIPLY:
+			case VK_ADD:
+			case VK_SEPARATOR:
+			case VK_SUBTRACT:
+			case VK_DECIMAL:
+			case VK_DIVIDE:
+				return true;
+			default:
+				return false;
+			}
+		}
+		
+		public static final int getLocationForKey(int key) {
+			if(keyDefinitions.get(Integer.valueOf(key)) != null) {
+				if(isLeftKey(key)) {
+					return KeyEvent.KEY_LOCATION_LEFT;
+				}
+				if(isRightKey(key)) {
+					return KeyEvent.KEY_LOCATION_RIGHT;
+				}
+				if(isNumpadKey(key)) {
+					return KeyEvent.KEY_LOCATION_NUMPAD;
+				}
+				return KeyEvent.KEY_LOCATION_STANDARD;
+			}
+			return KeyEvent.KEY_LOCATION_UNKNOWN;
 		}
 		
 	}
