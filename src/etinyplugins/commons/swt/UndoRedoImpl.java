@@ -13,18 +13,12 @@ import org.eclipse.swt.events.KeyListener;
 /** Adds the Undo-Redo functionality (working Ctrl+Z and Ctrl+Y) to an instance
  * of {@link StyledText}.
  * 
- * @author <a href=
- *         "https://sourceforge.net/p/etinyplugins/blog/2013/02/add-undoredo-support-to-your-swt-styledtext-s/">Petr
- *         Bodnar</a>
- * @author Brian_Entei (Added {@link #setStack(String)}, {@link #canUndo()},
- *         {@link #canRedo()} to allow for multiple separate histories with a
- *         single styled text)
- * @see {@linkplain <a href=
- *      "http://www.java2s.com/Code/Java/SWT-JFace-Eclipse/SWTUndoRedo.htm">inspiration
- *      for this code, though not really functioning - it mainly shows which
- *      listeners to use...</a>}
- * @see {@linkplain <a href=
- *      "http://stackoverflow.com/questions/7179464/swt-how-to-recreate-a-default-context-menu-for-text-fields">SWT's
+ * @author <a href= "https://sourceforge.net/p/etinyplugins/blog/2013/02/add-undoredo-support-to-your-swt-styledtext-s/">Petr Bodnar</a>
+ * @author Brian_Entei &lt;br45entei&#064;gmail.com&gt; (Added {@link #setStack(String)}, {@link #canUndo()}, {@link #canRedo()} to allow
+ *         for multiple separate histories with a single styled text)
+ * @see {@linkplain <a href= "http://www.java2s.com/Code/Java/SWT-JFace-Eclipse/SWTUndoRedo.htm">Inspiration for this code, though not
+ *      really functioning - it mainly shows which listeners to use...</a>}
+ * @see {@linkplain <a href="http://stackoverflow.com/questions/7179464/swt-how-to-recreate-a-default-context-menu-for-text-fields">SWT's
  *      StyledText doesn't support Undo-Redo out-of-the-box</a>} */
 @SuppressWarnings("javadoc")
 public class UndoRedoImpl implements KeyListener, ExtendedModifyListener {

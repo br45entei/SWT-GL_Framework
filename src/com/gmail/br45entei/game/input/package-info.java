@@ -24,5 +24,5 @@
 /** Package containing input-related classes and interfaces.
  *
  * @since 1.0
- * @author Brian_Entei */
+ * @author Brian_Entei &lt;br45entei&#064;gmail.com&gt; */
 package com.gmail.br45entei.game.input;

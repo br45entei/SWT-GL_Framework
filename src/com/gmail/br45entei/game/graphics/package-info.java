@@ -21,6 +21,8 @@
  * SOFTWARE.
  * 
  *******************************************************************************/
-/** @since 1.0
- * @author Brian_Entei */
+/** Package containing graphics-related classes.
+ *
+ * @since 1.0
+ * @author Brian_Entei &lt;br45entei&#064;gmail.com&gt; */
 package com.gmail.br45entei.game.graphics;

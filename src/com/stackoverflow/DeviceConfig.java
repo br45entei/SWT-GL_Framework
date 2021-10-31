@@ -5,11 +5,10 @@ import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
 import java.awt.Rectangle;
 
-/** This class allows you to search for the {@link GraphicsDevice} and
- * {@link GraphicsConfiguration} that best matches where your window is located.
+/** This class allows you to search for the {@link GraphicsDevice} and {@link GraphicsConfiguration} that best matches where your window is
+ * located.
  * 
- * @author <a href="https://stackoverflow.com/a/33799118/2398263">Roman
- *         Horváth</a> */
+ * @author <a href="https://stackoverflow.com/a/33799118/2398263">Roman HorvÃ¡th</a> */
 public class DeviceConfig {
 	
 	/** This method finds the graphics device and configuration by the location
@@ -30,14 +29,14 @@ public class DeviceConfig {
 		
 		GraphicsDevice[] graphicsDevices = graphicsEnvironment.getScreenDevices();
 		
-		// Search through all devices…
+		// Search through all devicesï¿½
 		for(int i = 0; i < graphicsDevices.length; ++i) {
 			GraphicsDevice graphicsDevice = graphicsDevices[i];
 			
 			GraphicsConfiguration[] graphicsConfigurations = graphicsDevice.getConfigurations();
 			
 			// It is possible that your device will have only one configuration,
-			// but you cannot rely on this(!)…
+			// but you cannot rely on this(!)ï¿½
 			for(int j = 0; j < graphicsConfigurations.length; ++j) {
 				GraphicsConfiguration graphicsConfiguration = graphicsConfigurations[j];
 				

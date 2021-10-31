@@ -48,7 +48,7 @@ import org.eclipse.swt.graphics.Rectangle;
  * Window's display thread or vice versa), or exceptions may be thrown.
  *
  * @since 1.0
- * @author Brian_Entei */
+ * @author Brian_Entei &lt;br45entei&#064;gmail.com&gt; */
 @UsedBy({ThreadType.UI, ThreadType.OpenGL, ThreadType.CONTROLLER})
 public interface Game extends Renderer, InputCallback {
 	
@@ -62,7 +62,8 @@ public interface Game extends Renderer, InputCallback {
 	 * of the methods defined by {@link Game} <em>except</em> for the above
 	 * named methods, which <em>must</em> be implemented.
 	 *
-	 * @author Brian_Entei */
+	 * @since 1.0
+	 * @author Brian_Entei &lt;br45entei&#064;gmail.com&gt; */
 	public static interface GameAdapter extends Game {
 		
 		@Override
