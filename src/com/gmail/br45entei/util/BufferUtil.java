@@ -1,6 +1,6 @@
 /*******************************************************************************
  * 
- * Copyright © 2021 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2022 Brian_Entei (br45entei@gmail.com)
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -43,7 +43,7 @@ import sun.misc.Unsafe;
  * destroying {@link Buffer}s.
  *
  * @since 1.0
- * @author Brian_Entei */
+ * @author Brian_Entei &ltbr45entei&#064;gmail.com&gt; */
 public class BufferUtil {
 	
 	private static final sun.misc.Unsafe unsafe = AccessController.doPrivileged(new PrivilegedAction<sun.misc.Unsafe>() {
@@ -830,7 +830,7 @@ public class BufferUtil {
 	 * 
 	 * @param <T> The buffer's subclass
 	 * @since 1.0
-	 * @author Brian_Entei */
+	 * @author Brian_Entei &ltbr45entei&#064;gmail.com&gt; */
 	public static final class DirectBuffer<T extends Buffer> implements AutoCloseable {
 		private volatile ByteBuffer directBuffer;
 		private volatile T bufferView;

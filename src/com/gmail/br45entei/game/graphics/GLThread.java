@@ -1,6 +1,6 @@
 /*******************************************************************************
  * 
- * Copyright © 2021 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2022 Brian_Entei (br45entei@gmail.com)
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -58,7 +58,7 @@ import org.lwjgl.util.vector.Vector4f;
 /** This class is the main OpenGL thread.
  *
  * @since 1.0
- * @author Brian_Entei */
+ * @author Brian_Entei &ltbr45entei&#064;gmail.com&gt; */
 public final class GLThread extends Thread {
 	
 	protected volatile Window window;
@@ -69,6 +69,7 @@ public final class GLThread extends Thread {
 	protected volatile boolean vsync = false, lastVsync = false;
 	protected volatile int lastSwap = 0;
 	protected volatile boolean isVsyncAvailable = false;
+	protected volatile boolean pauseRendering = false;
 	protected volatile boolean logFPS = true;
 	protected final FrequencyTimer timer = new FrequencyTimer(Window.getDefaultRefreshRate(), 1000.0D);
 	protected volatile double lastSetFrequency = this.timer.getTargetFrequency();
@@ -550,7 +551,8 @@ public final class GLThread extends Thread {
 			name = renderer.getName();
 			handled = renderer.handleException(ex, method, params);
 		} catch(Throwable ex1) {
-			ex.addSuppressed(ex1);
+			ex1.addSuppressed(ex);
+			ex = ex1;
 			handled = false;
 		}
 		if(!handled) {
@@ -571,7 +573,7 @@ public final class GLThread extends Thread {
 			}
 			String parameters = sb.toString();
 			System.err.print(String.format("Renderer \"%s\" threw an exception while executing method %s(%s): ", name, method, parameters));
-			ex.printStackTrace(System.err);
+			System.err.println(StringUtil.throwableToStr(ex));
 			System.err.flush();
 			if(ex instanceof ThreadDeath) {
 				ThreadDeath death = new ThreadDeath();
@@ -676,6 +678,9 @@ public final class GLThread extends Thread {
 				this.glCanvas.swapBuffers();
 			}
 			
+			int lastWidth = this.lastWidth;
+			int lastHeight = this.lastHeight;
+			
 			// (Run Tasks) Attempt to set the new renderer
 			final Renderer oldRenderer = this.renderer;
 			if(renderer != null) {
@@ -716,7 +721,7 @@ public final class GLThread extends Thread {
 				}
 				
 				Rectangle oldViewport = new Rectangle(0, 0, 0, 0);
-				Rectangle newViewport = new Rectangle(0, 0, this.lastWidth, this.lastHeight);
+				Rectangle newViewport = new Rectangle(0, 0, lastWidth, lastHeight);
 				try {
 					renderer.onViewportChanged(oldViewport, newViewport);
 				} catch(Throwable ex) {
@@ -737,9 +742,9 @@ public final class GLThread extends Thread {
 			// (Display) ... and then render if applicable:
 			if(renderer != null) {
 				try {
-					renderer.render(ΔTime);
+					renderer.render(ΔTime, lastWidth, lastHeight);
 				} catch(Throwable ex) {
-					handleRendererException(renderer, ex, "render", Double.valueOf(ΔTime));
+					handleRendererException(renderer, ex, "render", Double.valueOf(ΔTime), Integer.valueOf(lastWidth), Integer.valueOf(lastHeight));
 					return false;
 				}
 			}
@@ -1056,6 +1061,9 @@ public final class GLThread extends Thread {
 	}
 	
 	private final void _display() {
+		if(this.pauseRendering) {
+			return;
+		}
 		if(this.window == null) {
 			this.window = Window.getCurrent();
 			/*if(this.window == null) {
@@ -1110,11 +1118,12 @@ public final class GLThread extends Thread {
 					try {
 						handled = renderer.handleException(ex, "onViewportChanged", oldViewport, newViewport);
 					} catch(Throwable ex1) {
-						ex.addSuppressed(ex1);
+						ex1.addSuppressed(ex);
+						ex = ex1;
 						handled = false;
 					}
 					if(!handled) {
-						ex.printStackTrace();
+						System.err.println(StringUtil.throwableToStr(ex));
 						this.renderer = null;
 						return;
 					}
@@ -1123,17 +1132,18 @@ public final class GLThread extends Thread {
 			
 			double δTime = this.δTimer.getΔTime(true);
 			try {
-				renderer.render(δTime);
+				renderer.render(δTime, width, height);
 			} catch(Throwable ex) {
 				boolean handled = false;
 				try {
-					handled = renderer.handleException(ex, "render", Double.valueOf(δTime));
+					handled = renderer.handleException(ex, "render", Double.valueOf(δTime), Integer.valueOf(width), Integer.valueOf(height));
 				} catch(Throwable ex1) {
-					ex.addSuppressed(ex1);
+					ex1.addSuppressed(ex);
+					ex = ex1;
 					handled = false;
 				}
 				if(!handled) {
-					ex.printStackTrace();
+					System.err.println(StringUtil.throwableToStr(ex));
 					this.renderer = null;
 					return;
 				}
@@ -1399,8 +1409,35 @@ public final class GLThread extends Thread {
 	
 	//===========================================================================================================================
 	
+	public boolean isRenderingPaused() {
+		return this.pauseRendering;
+	}
+	
+	public boolean setRenderingPaused(boolean pauseRendering) {
+		boolean wasPaused = this.pauseRendering;
+		this.pauseRendering = pauseRendering;
+		return wasPaused;
+	}
+	
+	public GLThread pauseRendering() {
+		this.pauseRendering = true;
+		return this;
+	}
+	
+	public GLThread resumeRendering() {
+		this.pauseRendering = false;
+		return this;
+	}
+	
+	public GLThread toggleRenderingPaused() {
+		this.pauseRendering = !this.pauseRendering;
+		return this;
+	}
+	
+	//===========================================================================================================================
+	
 	/** @since 1.0
-	 * @author Brian_Entei */
+	 * @author Brian_Entei &ltbr45entei&#064;gmail.com&gt; */
 	public static abstract class InitializationProgress {
 		
 		protected InitializationProgress() {
@@ -1491,7 +1528,7 @@ public final class GLThread extends Thread {
 			this.setRendererBeingInitialized(null);
 			
 			if(!this.glThread.getGLData().forwardCompatible) {
-				this.font = FontRender.createFont("Consolas", 12, false, false, true, true);
+				this.font = FontRender.createFont("Consolas", 12, false, false, true, true, false, false);
 				GL11.glClearColor(0, 0, 0, 1);
 				GL11.glClear(GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT);
 				GL11.glMatrixMode(GL11.GL_PROJECTION);
@@ -1887,7 +1924,7 @@ public final class GLThread extends Thread {
 	 * drawn, but before the front and back color buffers are swapped.
 	 *
 	 * @since 1.0
-	 * @author Brian_Entei */
+	 * @author Brian_Entei &ltbr45entei&#064;gmail.com&gt; */
 	@FunctionalInterface
 	public static interface PreSwapBuffersTask extends Runnable {
 		
@@ -1895,7 +1932,7 @@ public final class GLThread extends Thread {
 		 * extends {@link PolledTask}.
 		 *
 		 * @since 1.0
-		 * @author Brian_Entei */
+		 * @author Brian_Entei &ltbr45entei&#064;gmail.com&gt; */
 		@FunctionalInterface
 		public static interface PolledPreSwapBuffersTask extends PreSwapBuffersTask, PolledTask {
 		}
@@ -1906,7 +1943,7 @@ public final class GLThread extends Thread {
 	 * been drawn and the front and back color buffers have been swapped.
 	 *
 	 * @since 1.0
-	 * @author Brian_Entei */
+	 * @author Brian_Entei &ltbr45entei&#064;gmail.com&gt; */
 	@FunctionalInterface
 	public static interface PostSwapBuffersTask extends Runnable {
 		
@@ -1914,7 +1951,7 @@ public final class GLThread extends Thread {
 		 * also extends {@link PolledTask}.
 		 *
 		 * @since 1.0
-		 * @author Brian_Entei */
+		 * @author Brian_Entei &ltbr45entei&#064;gmail.com&gt; */
 		@FunctionalInterface
 		public static interface PolledPostSwapBuffersTask extends PostSwapBuffersTask, PolledTask {
 		}

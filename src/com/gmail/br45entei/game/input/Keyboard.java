@@ -1,6 +1,6 @@
 /*******************************************************************************
  * 
- * Copyright © 2021 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2022 Brian_Entei (br45entei@gmail.com)
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -44,7 +44,7 @@ import org.eclipse.swt.widgets.Display;
 /** This class provides a simple way to retrieve input from the keyboard.
  *
  * @since 1.0
- * @author Brian_Entei */
+ * @author Brian_Entei &ltbr45entei&#064;gmail.com&gt; */
 public class Keyboard {
 	
 	protected static volatile boolean[] lastKeyboardButtonStates = new boolean[256];
@@ -420,7 +420,7 @@ public class Keyboard {
 	 * "https://docs.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes">Microsoft
 	 * website</a>.
 	 * 
-	 * @author Brian_Entei */
+	 * @author Brian_Entei &ltbr45entei&#064;gmail.com&gt; */
 	@SuppressWarnings("javadoc")
 	public static final class Keys {
 		
@@ -450,6 +450,7 @@ public class Keyboard {
 		//public static final int VK_ = 10;//							Undefined, but the ASCII value is '\n'
 		//public static final int VK_ = 11;//							Undefined
 		//public static final int VK_ = 12;//							Undefined
+		/** Either one of the two enter keys */
 		public static final int VK_RETURN = 13;//						ASCII value is '\r'
 		public static final int VK_VERTICAL_TAB = 14;
 		//public static final int VK_ = 15;								Undefined

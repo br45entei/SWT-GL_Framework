@@ -1,6 +1,6 @@
 /*******************************************************************************
  * 
- * Copyright © 2021 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2022 Brian_Entei (br45entei@gmail.com)
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -33,7 +33,11 @@ import java.lang.reflect.Array;
 import java.nio.ByteBuffer;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
@@ -45,7 +49,7 @@ import org.apache.commons.text.similarity.LevenshteinDistance;
  * anywhere else.
  *
  * @since 1.0
- * @author Brian_Entei */
+ * @author Brian_Entei &ltbr45entei&#064;gmail.com&gt; */
 public class CodeUtil {
 	
 	/** Retrieves the specified system property with the proper authority.
@@ -91,7 +95,7 @@ public class CodeUtil {
 	/** Enum class differentiating types of operating systems
 	 * 
 	 * @deprecated Use {@link Platform} and {@link Architecture} instead
-	 * @author Brian_Entei */
+	 * @author Brian_Entei &ltbr45entei&#064;gmail.com&gt; */
 	@Deprecated
 	public static enum EnumOS {
 		/** Unix operating systems */
@@ -739,6 +743,19 @@ public class CodeUtil {
 			}
 		}
 		return rtrn;
+	}
+	
+	/** Sorts through the given array's elements (skipping <tt><b>null</b></tt> elements) and returns a new array containing the resulting
+	 * elements.
+	 *
+	 * @param <T> The arrays' class
+	 * @param a The array whose elements will be cleaned
+	 * @return A new array containing non-<tt><b>null</b></tt> elements */
+	@SuppressWarnings("unchecked")
+	public static final <T> T[] clean(T[] a) {
+		List<T> list = new ArrayList<>(Arrays.asList(a));
+		list.removeAll(Collections.singleton(null));
+		return list.toArray((T[]) Array.newInstance(a.getClass().getComponentType(), list.size()));
 	}
 	
 	//=======================================================================================================================================================

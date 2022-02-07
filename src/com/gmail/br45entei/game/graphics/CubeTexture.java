@@ -1,6 +1,6 @@
 /*******************************************************************************
  * 
- * Copyright © 2021 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2022 Brian_Entei (br45entei@gmail.com)
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -31,7 +31,7 @@ import org.lwjgl.opengl.GL11;
 import org.lwjgl.util.vector.Vector3f;
 
 /** @since 1.0
- * @author Brian_Entei */
+ * @author Brian_Entei &ltbr45entei&#064;gmail.com&gt; */
 public strictfp class CubeTexture {
 	
 	private final Texture[] textures = new Texture[6];

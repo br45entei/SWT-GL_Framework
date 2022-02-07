@@ -1,6 +1,6 @@
 /*******************************************************************************
  * 
- * Copyright © 2021 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2022 Brian_Entei (br45entei@gmail.com)
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -275,7 +275,7 @@ public class StringUtil {
 	}
 	
 	/** @return The stack trace element of the code that ran this method
-	 * @author Brian_Entei */
+	 * @author Brian_Entei &ltbr45entei&#064;gmail.com&gt; */
 	public static final StackTraceElement getCurrentStackTraceElement() {
 		return ___gjdgerjkgnmFf_Xaf();
 	}
@@ -286,7 +286,7 @@ public class StringUtil {
 	 * @return The stack trace element of the code that called the method that
 	 *         called the method that called this method(Should only be called
 	 *         by getCallingStackTraceElement()).
-	 * @author Brian_Entei */
+	 * @author Brian_Entei &ltbr45entei&#064;gmail.com&gt; */
 	private static final StackTraceElement ___gjdgerjkgnmFf_Xaf() {
 		StackTraceElement[] elements = Thread.currentThread().getStackTrace();
 		int index = -1;
@@ -303,7 +303,7 @@ public class StringUtil {
 	}
 	
 	/** @return The stack trace element of the code that ran this method
-	 * @author Brian_Entei */
+	 * @author Brian_Entei &ltbr45entei&#064;gmail.com&gt; */
 	public static final StackTraceElement getCallingStackTraceElement() {
 		return ___ghdTdjsgd7t5c_Xaf();
 	}
@@ -314,7 +314,7 @@ public class StringUtil {
 	 * @return The stack trace element of the code that called the method that
 	 *         called the method that called this method(Should only be called
 	 *         by getCallingStackTraceElement()).
-	 * @author Brian_Entei */
+	 * @author Brian_Entei &ltbr45entei&#064;gmail.com&gt; */
 	private static final StackTraceElement ___ghdTdjsgd7t5c_Xaf() {
 		StackTraceElement[] elements = Thread.currentThread().getStackTrace();
 		int index = -1;
@@ -331,7 +331,7 @@ public class StringUtil {
 	}
 	
 	/** @return The line number of the code that ran this method
-	 * @author Brian_Entei */
+	 * @author Brian_Entei &ltbr45entei&#064;gmail.com&gt; */
 	public static final int getLineNumber() {
 		return ___8drrd3148796d_Xaf();
 	}
@@ -341,7 +341,7 @@ public class StringUtil {
 	 * 
 	 * @return The line number of the code that called the method that called
 	 *         this method(Should only be called by getLineNumber()).
-	 * @author Brian_Entei */
+	 * @author Brian_Entei &ltbr45entei&#064;gmail.com&gt; */
 	private static final int ___8drrd3148796d_Xaf() {
 		StackTraceElement[] elements = Thread.currentThread().getStackTrace();
 		int index = -1;
@@ -359,7 +359,7 @@ public class StringUtil {
 	
 	/** @return The method name of the code that ran the code that ran this
 	 *         method
-	 * @author Brian_Entei */
+	 * @author Brian_Entei &ltbr45entei&#064;gmail.com&gt; */
 	public static final String getMethodName() {
 		return ___fbhfRghjprgGF_Xaf();
 	}
@@ -370,7 +370,7 @@ public class StringUtil {
 	 * @return The method name of the code that called the method that called
 	 *         the method that called this method(Should only be called by
 	 *         getMethodName()).
-	 * @author Brian_Entei */
+	 * @author Brian_Entei &ltbr45entei&#064;gmail.com&gt; */
 	private static final String ___fbhfRghjprgGF_Xaf() {
 		StackTraceElement[] elements = Thread.currentThread().getStackTrace();
 		int index = -1;

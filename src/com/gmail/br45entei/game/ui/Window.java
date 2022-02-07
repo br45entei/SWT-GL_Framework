@@ -1,6 +1,6 @@
 /*******************************************************************************
  * 
- * Copyright © 2021 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2022 Brian_Entei (br45entei@gmail.com)
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -44,6 +44,7 @@ import com.gmail.br45entei.util.CodeUtil;
 import com.gmail.br45entei.util.FileUtil;
 import com.gmail.br45entei.util.Platform;
 import com.gmail.br45entei.util.SWTUtil;
+import com.gmail.br45entei.util.StringUtil;
 
 import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
@@ -219,6 +220,7 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 	protected volatile int glWidth = this.glTargetWidth;
 	protected volatile int glHeight = this.glTargetHeight;
 	protected volatile double framerate = 60.0D;
+	protected static volatile int defaultRefreshRate = 60;
 	
 	protected volatile long nanoTime = System.nanoTime();
 	protected volatile long lastFrameTime = this.nanoTime;
@@ -230,7 +232,7 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 	
 	protected volatile long lastMenuInteraction = 0L;
 	
-	private final FrequencyTimer timer = new FrequencyTimer(120.0, 1000.0);
+	private final FrequencyTimer timer = new FrequencyTimer(60.0, 1000.0);
 	
 	protected volatile Display display;
 	protected volatile Shell shell;
@@ -240,6 +242,7 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 	protected volatile boolean alwaysOnTopEnabled = true;
 	protected volatile Boolean alwaysOnTopFullscreenOrWindowed = Boolean.TRUE;//TRUE: Fullscreen; FALSE: Windowed; null: (Always)
 	protected volatile boolean hasOpenedYet = false;
+	protected volatile boolean closeWindowOnEscape = true;
 	
 	protected volatile String[] lastSetIconImages = null;
 	
@@ -311,7 +314,7 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 	 * 
 	 * @return The current display mode's refresh rate. */
 	public static final int getDefaultRefreshRate() {
-		return GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice().getDisplayMode().getRefreshRate();
+		return defaultRefreshRate;
 	}
 	
 	/** Returns a new {@link GLData} with the default settings for creating a
@@ -1013,6 +1016,15 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		return this.setAlwaysOnTop(alwaysOnTop, null);
 	}
 	
+	public boolean shouldCloseWindowOnEscape() {
+		return this.closeWindowOnEscape;
+	}
+	
+	public Window setCloseWindowOnEscape(boolean closeWindowOnEscape) {
+		this.closeWindowOnEscape = closeWindowOnEscape;
+		return this;
+	}
+	
 	@SuppressWarnings("unused")
 	protected synchronized void createMenus() {
 		this.updateMenuBar = false;
@@ -1204,6 +1216,7 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 				Window.this.alwaysOnTopFullscreenOrWindowed = Boolean.TRUE;
 			}
 		});
+		menu_4.setDefaultItem(mntmEnabledfullscreen);
 		
 		MenuItem mntmEnabledwindowedOnly = new MenuItem(menu_4, SWT.RADIO);
 		mntmEnabledwindowedOnly.setSelection(this.alwaysOnTopEnabled && this.alwaysOnTopFullscreenOrWindowed == Boolean.FALSE);
@@ -1622,80 +1635,87 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 	 * @return Whether or not this Window {@link #shouldContinueRunning() should
 	 *         continue running} */
 	public boolean pollKeyboardAndMouse() {
-		this.shellActive = Window.isShellActive(this.shell);
-		if(!this.shouldContinueRunning()) {
-			return false;
-		}
-		Mouse.poll();
-		this.shellActive = Window.isShellActive(this.shell);
-		if(!this.shouldContinueRunning()) {
-			return false;
-		}
-		Keyboard.poll();
-		if(!this.shouldContinueRunning()) {
-			return false;
-		}
-		Renderer activeRenderer = this.getActiveRenderer();
-		
-		final double deltaTime = this.ΔTime;
-		final Double dt = Double.valueOf(deltaTime);
-		long startTime = System.currentTimeMillis();
-		List<InputCallback> inputListeners = this.getAvailableInputCallbacks();
-		
-		for(InputCallback listener : inputListeners) {
-			if(listener instanceof Renderer && listener != activeRenderer) {
-				continue;
+		try {
+			this.shellActive = Window.isShellActive(this.shell);
+			if(!this.shouldContinueRunning()) {
+				return false;
 			}
-			try {
-				listener.input(deltaTime);
-			} catch(Throwable ex) {
-				if(!handleListenerException(listener, ex, "input", dt)) {
-					this.unregisterInputCallback(listener);
+			Mouse.poll();
+			this.shellActive = Window.isShellActive(this.shell);
+			if(!this.shouldContinueRunning()) {
+				return false;
+			}
+			Keyboard.poll();
+			if(!this.shouldContinueRunning()) {
+				return false;
+			}
+			Renderer activeRenderer = this.getActiveRenderer();
+			
+			final double deltaTime = this.ΔTime;
+			final Double dt = Double.valueOf(deltaTime);
+			long startTime = System.currentTimeMillis();
+			List<InputCallback> inputListeners = this.getAvailableInputCallbacks();
+			
+			for(InputCallback listener : inputListeners) {
+				if(listener instanceof Renderer && listener != activeRenderer) {
+					continue;
+				}
+				try {
+					listener.input(deltaTime);
+				} catch(Throwable ex) {
+					if(!handleListenerException(listener, ex, "input", dt)) {
+						this.unregisterInputCallback(listener);
+					}
+				}
+				
+				if(System.currentTimeMillis() - startTime >= 4L) {
+					while(this.display.readAndDispatch()) {
+					}
+					CodeUtil.sleep(1L);
+					startTime = System.currentTimeMillis();
+					if(this.shell.isDisposed()) {
+						break;
+					}
+				}
+			}
+			startTime = System.currentTimeMillis();
+			for(InputCallback listener : inputListeners) {
+				if(listener instanceof Renderer && listener != activeRenderer) {
+					continue;
+				}
+				try {
+					listener.update(deltaTime);
+				} catch(Throwable ex) {
+					if(!handleListenerException(listener, ex, "update", dt)) {
+						this.unregisterInputCallback(listener);
+					}
+				}
+				
+				if(System.currentTimeMillis() - startTime >= 4L) {
+					while(this.display.readAndDispatch()) {
+					}
+					CodeUtil.sleep(1L);
+					startTime = System.currentTimeMillis();
+					if(this.shell.isDisposed()) {
+						break;
+					}
 				}
 			}
 			
-			if(System.currentTimeMillis() - startTime >= 4L) {
-				while(this.display.readAndDispatch()) {
-				}
-				CodeUtil.sleep(1L);
-				startTime = System.currentTimeMillis();
-				if(this.shell.isDisposed()) {
-					break;
-				}
-			}
-		}
-		startTime = System.currentTimeMillis();
-		for(InputCallback listener : inputListeners) {
-			if(listener instanceof Renderer && listener != activeRenderer) {
-				continue;
-			}
-			try {
-				listener.update(deltaTime);
-			} catch(Throwable ex) {
-				if(!handleListenerException(listener, ex, "update", dt)) {
-					this.unregisterInputCallback(listener);
+			// XXX Fix for when the cursor is captured and the user right clicks, causing the
+			// cursor to suddenly become visible for a split second in an attempt to bring up the popup menu
+			if((Mouse.isCaptured() && !Mouse.isModal()) || this.getAvailableMenuProviders().isEmpty()) {
+				this.destroyGLCanvasPopupMenu();
+			} else {
+				if(this.glCanvas.getMenu() == null) {
+					this.createGLCanvasPopupMenu();
 				}
 			}
-			
-			if(System.currentTimeMillis() - startTime >= 4L) {
-				while(this.display.readAndDispatch()) {
-				}
-				CodeUtil.sleep(1L);
-				startTime = System.currentTimeMillis();
-				if(this.shell.isDisposed()) {
-					break;
-				}
-			}
-		}
-		
-		// XXX Fix for when the cursor is captured and the user right clicks, causing the
-		// cursor to suddenly become visible for a split second in an attempt to bring up the popup menu
-		if(this.getAvailableMenuProviders().isEmpty() || (Mouse.isCaptured() && !Mouse.isModal())) {
-			this.destroyGLCanvasPopupMenu();
-		} else {
-			if(this.glCanvas.getMenu() == null) {
-				this.createGLCanvasPopupMenu();
-			}
+		} catch(Throwable ex) {
+			System.out.flush();
+			System.err.println("An exception occurred while polling the system mouse and keyboard:");
+			ex.printStackTrace(System.err);
+			System.err.flush();
 		}
 		return this.shouldContinueRunning();
 	}
@@ -1786,6 +1806,8 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 	}
 	
 	protected void updateUI() {
+		defaultRefreshRate = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice().getDisplayMode().getRefreshRate();
+		
 		if(this.isFullscreen()) {
 			this.updateMenuBar = false;
 			if(!Window.isShellActive(this.shell)) {//if(this.display.getActiveShell() != this.shell) {
@@ -1901,7 +1923,15 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 	 * @see #shouldContinueRunning()
 	 * @see #waitingForGLThreadToShutDown() */
 	public final boolean isShuttingDown() {
-		return !this.running && this.display != null && !this.display.isDisposed() && this.display.getThread().isAlive();
+		try {
+			return !this.running && this.display != null && !this.display.isDisposed() && this.display.getThread().isAlive();
+		} catch(SWTException ex) {
+			String msg = ex.getMessage();
+			if(msg != null && msg.equals("Device is disposed")) {
+				return true;
+			}
+			throw ex;
+		}
 	}
 	
 	/** @return True if this {@link Window} is currently shutting down (after
@@ -1919,14 +1949,15 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 	 * 
 	 * @return Whether or not this {@link Window} should continue running */
 	public boolean swtLoop() {
-		while(this.display.readAndDispatch()) {
+		/*while(this.display.readAndDispatch()) {
 		}
-		this.timer.frequencySleep();
+		this.timer.frequencySleep();*/
 		if(this.shouldContinueRunning() || (!this.shell.isDisposed() && this.glThread != null && this.glThread.isRunning())) {
 			this.updateUI();
 		}
 		this.updateFrameTime();
-		this.display.readAndDispatch();
+		/*while(this.display.readAndDispatch()) {
+		}*/
 		if(this.shouldContinueRunning() || (!this.shell.isDisposed() && this.glThread != null && this.glThread.isRunning())) {
 			return this.pollInputDevices();
 		}
@@ -2216,6 +2247,16 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		return !this.shell.isDisposed() && this.shellVisible;
 	}
 	
+	public final boolean readAndDispatch() {
+		if(this.swtLoop()) {
+			while(this.display.readAndDispatch()) {
+			}
+			this.display.sleep();
+			return true;
+		}
+		return false;
+	}
+	
 	/** Opens this window.<br>
 	 * This method blocks until the window has been closed. */
 	public void open() {
@@ -2239,6 +2280,7 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 			this.show();
 			this.shellHandle = SWTUtil.getHandle(this.shell);
 			this.setGLCanvasSize(this.glTargetWidth, this.glTargetHeight);
+			SWTUtil.centerShellOnPrimaryMonitor(this.shell);
 			
 			if(this.activeRendererToSetOnStartup != null) {
 				this.setActiveRenderer(this.activeRendererToSetOnStartup);
@@ -2247,6 +2289,9 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 			
 			this.glThread.start();
 			while(this.swtLoop() && this.glThread.getState() == Thread.State.NEW) {
+				while(this.display.readAndDispatch()) {
+				}
+				this.display.sleep();
 			}
 			this.fpsLogThread.start();
 			if(this.pollControllersAsynchronously && this.controllerManager != null && !this.controllerManager.isDisposed()) {
@@ -2256,6 +2301,15 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 			for(Renderer failedRenderer : this.glThread.initializeRenderers(this.getAvailableRenderers(), true)) {
 				this.unregisterRenderer(failedRenderer);
 			}
+			
+			Thread periodicWakeThread = new Thread(() -> {
+				while(this.running && !this.display.isDisposed()) {
+					this.display.wake();
+					this.timer.frequencySleep();
+				}
+			}, "PeriodicWakeSWTThread");
+			periodicWakeThread.setDaemon(true);
+			periodicWakeThread.start();
 			
 			this.hasOpenedYet = true;
 			while(this.swtLoop()) {
@@ -2285,6 +2339,10 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 					loc.y += dxy.y;
 					this.shell.setLocation(loc);
 				}*/
+				
+				while(this.display.readAndDispatch()) {
+				}
+				this.display.sleep();
 			}
 			
 			this.glThread.setRenderer(null);
@@ -2436,7 +2494,7 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 	}
 	
 	/** Returns whether or not this {@link Window} has been
-	 * {@link Window#close() closed}.
+	 * {@link Window#close() closed} (or <em>disposed</em>).
 	 * 
 	 * @return Whether or not this Window has been {@link Window#close()
 	 *         closed} */
@@ -2635,7 +2693,8 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 		try {
 			handled = listener.handleException(ex, method, params);
 		} catch(Throwable ex1) {
-			ex.addSuppressed(ex1);
+			ex1.addSuppressed(ex);
+			ex = ex1;
 			handled = false;
 		}
 		if(!handled) {
@@ -2656,7 +2715,7 @@ public class Window {// TODO Implement InputCallback.isModal() within the Mouse 
 			}
 			String parameters = sb.toString();
 			System.err.print(String.format("Listener \"%s\" threw an exception while executing method %s(%s): ", name, method, parameters));
-			ex.printStackTrace(System.err);
+			System.err.println(StringUtil.throwableToStr(ex));
 			System.err.flush();
 		}
 		return handled;

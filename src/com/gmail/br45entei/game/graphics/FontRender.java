@@ -19,7 +19,6 @@
 
 package com.gmail.br45entei.game.graphics;
 
-import com.gmail.br45entei.game.ui.Window;
 import com.gmail.br45entei.util.CodeUtil;
 
 import java.awt.Color;
@@ -33,6 +32,7 @@ import java.awt.color.ColorSpace;
 import java.awt.font.FontRenderContext;
 import java.awt.font.GlyphVector;
 import java.awt.font.LineMetrics;
+import java.awt.geom.AffineTransform;
 import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
 import java.awt.image.ColorModel;
@@ -67,10 +67,42 @@ import org.lwjgl.util.glu.GLU;
  * support shaders, but it is on a dead USB flash drive right now...
  * 
  * @since 1.0
- * @author <a href="https://github.com/davidB/jmbullet/blob/master/src/test/java/com/bulletphysics/demos/opengl/FontRender.java">jezek2</a><br>
+ * @author <a href=
+ *         "https://github.com/davidB/jmbullet/blob/master/src/test/java/com/bulletphysics/demos/opengl/FontRender.java">jezek2</a><br>
  *         <b>Modified and expanded upon by Brian_Entei &lt;br45entei&#064;gmail.com&gt; </b> */
 @SuppressWarnings("javadoc")
 public class FontRender {
+	
+	private static volatile String fallbackFontFamily = "Consolas";
+	
+	public static final String setFallbackFontFamily(String family) {
+		String oldFallback = fallbackFontFamily;
+		if(family != null && !family.isBlank()) {
+			fallbackFontFamily = family;
+			family.isBlank();
+		}
+		return oldFallback;
+	}
+	
+	public static void main(String[] args) {
+		// With an Eclipse IDE, press F11 to launch this class, then make the nearestPowerOf2() method return 64 and click save and see what happens :)
+		while(true) {
+			int check = nearestPowerOf2(127);
+			if(check == 64) {
+				break;
+			}
+			System.out.println(check);
+			CodeUtil.sleep(10L);
+		}
+		System.out.println(nearestPowerOf2(95));// 64
+		System.out.println(nearestPowerOf2(96));// 128
+		System.out.println(nearestPowerOf2(127));// 128
+		System.out.println(nearestPowerOf2(128));// 128
+		System.out.println(nearestPowerOf2(129));// 128
+		System.out.println(nearestPowerOf2(191));// 128
+		System.out.println(nearestPowerOf2(192));// 256
+		// ...
+	}
 	
 	/*public static final int charBegin = 0;//32
 	public static final int charEnd = 256;//128
@@ -125,11 +157,7 @@ public class FontRender {
 	public static class GLFont {
 		
 		public final Font baseFont;
-		public final int charLength;
-		public final int charBegin;
-		public final int charEnd;
 		public final String unknownCharacterSymbol;
-		public final boolean codePointsOrCharacters;
 		
 		protected static final ConcurrentLinkedDeque<GLFont> instances = new ConcurrentLinkedDeque<>();
 		
@@ -138,46 +166,112 @@ public class FontRender {
 		public final boolean italic;
 		public final boolean antialiasing;
 		public final boolean usesFractionalMetrics;
+		public final FontRenderContext frc;
 		
 		protected int texture = -1;
 		protected int width, height;
-		protected final Glyph[] glyphs;
+		protected final Glyph[] glyphs = new Glyph[65536];
+		protected final int unknownGlyphIndex;
 		protected final int[] supportedCodePoints;
 		public final boolean widerGlyphs;
+		public final boolean scaleTextSizeToMatchNativeRenderingSize;
 		
 		public final int size;
+		private volatile boolean disposed = false;
 		
-		public GLFont(String name, Font baseFont, int charBegin, int charEnd, int unknownCharSym, boolean codePointsOrCharacters, int size, boolean bold, boolean italic, boolean antialiasing, boolean usesFractionalMetrics, boolean widerGlyphs) {
+		public GLFont(String name, Font baseFont, int unknownCharSym, int size, boolean bold, boolean italic, boolean antialiasing, boolean usesFractionalMetrics, boolean widerGlyphs) {
+			this(name, baseFont, unknownCharSym, size, bold, italic, antialiasing, usesFractionalMetrics, widerGlyphs, true);
+		}
+		
+		public GLFont(String name, Font baseFont, int unknownCharSym, int size, boolean bold, boolean italic, boolean antialiasing, boolean usesFractionalMetrics, boolean widerGlyphs, boolean scaleTextSizeToMatchNativeRenderingSize) {
 			this.name = name;
 			this.baseFont = baseFont;
 			
-			this.charBegin = charBegin;
-			this.charEnd = charEnd;
-			this.charLength = charEnd - charBegin;
-			this.glyphs = new Glyph[this.charLength];
-			this.supportedCodePoints = getSupportedCodePointsFor(baseFont, charBegin, charEnd);
-			this.unknownCharacterSymbol = codePointsOrCharacters ? new String(new int[] {unknownCharSym}, 0, 1) : new String(new char[] {(char) unknownCharSym});
-			this.codePointsOrCharacters = codePointsOrCharacters;
+			this.supportedCodePoints = getSupportedCodePointsFor(baseFont, 0, 65536);
+			this.unknownCharacterSymbol = new String(new int[] {unknownCharSym}, 0, 1);
 			
 			this.size = size;
 			this.bold = bold;
 			this.italic = italic;
 			this.antialiasing = antialiasing;
 			this.usesFractionalMetrics = usesFractionalMetrics;
+			final double awtToGLScalar = 9.0 / 7.0;// Fonts drawn in OpenGL seem to be smaller than they should be (as compared to fonts of the same size rendered in the OS or by native applications)
+			AffineTransform af = scaleTextSizeToMatchNativeRenderingSize ? AffineTransform.getScaleInstance(awtToGLScalar, awtToGLScalar) : null;
+			this.frc = new FontRenderContext(af, antialiasing, usesFractionalMetrics);
+			final Glyph unsupportedGlyph = new Glyph(this.unknownCharacterSymbol);
+			this.glyphs[unknownCharSym] = unsupportedGlyph;
+			this.unknownGlyphIndex = unknownCharSym;
+			/*int unknownGlyphIndex = -1;
 			for(int i = 0; i < this.glyphs.length; i++) {
-				this.glyphs[i] = codePointsOrCharacters ? new Glyph(charBegin + i) : new Glyph((char) i);
+				if(i < this.supportedCodePoints.length) {
+					this.glyphs[i] = new Glyph(this.supportedCodePoints[i]);
+					if(this.supportedCodePoints[i] == unknownCharSym) {
+						unknownGlyphIndex = i;
+					}
+				} else {
+					this.glyphs[i] = unsupportedGlyph;
+					if(unknownGlyphIndex == -1) {
+						unknownGlyphIndex = i;
+					}
+				}
+			}*/
+			for(int cp : this.supportedCodePoints) {
+				if(cp < 0 || cp >= this.glyphs.length || cp == this.unknownGlyphIndex) {
+					continue;
+				}
+				if(this.glyphs[cp] != null) {
+					throw new IllegalArgumentException("Duplicate supported code point detected: \\u".concat(Integer.toHexString(cp)));
+				}
+				this.glyphs[cp] = new Glyph(cp);
+				System.out.println("FontRender.GLFont<init>: Code Point #".concat(Integer.toString(cp)).concat(" (\"\\u".concat(Integer.toHexString(cp)).concat("\")")));
 			}
+			for(int i = 0; i < this.glyphs.length; i++) {
+				if(this.glyphs[i] == null) {
+					this.glyphs[i] = unsupportedGlyph;
+				}
+			}
+			//this.unknownGlyphIndex = unknownGlyphIndex;
 			this.widerGlyphs = widerGlyphs;
+			this.scaleTextSizeToMatchNativeRenderingSize = scaleTextSizeToMatchNativeRenderingSize;
 			instances.add(this);
 		}
 		
 		public GLFont(String name, Font baseFont, int size, boolean bold, boolean italic, boolean antialiasing, boolean usesFractionalMetrics) {
-			this(name, baseFont, 0, 256, '?', false, size, bold, italic, antialiasing, usesFractionalMetrics, false);
+			this(name, baseFont, '?', size, bold, italic, antialiasing, usesFractionalMetrics, false);
 		}
 		
 		public GLFont(String name, Font baseFont, int size, boolean bold, boolean italic, boolean antialiasing, boolean usesFractionalMetrics, InputStream in) throws IOException {
 			this(name, baseFont, size, bold, italic, antialiasing, usesFractionalMetrics);
 			load(in);
+		}
+		
+		public Glyph getUnknownGlyph() {
+			return this.glyphs[this.unknownGlyphIndex];
+		}
+		
+		/*public Glyph getGlyphFor(int codePoint) {
+			for(Glyph g : this.glyphs) {
+				if(g.c.codePointAt(0) == codePoint) {
+					return g;
+				}
+			}
+			return this.getUnknownGlyph();
+		}*/
+		
+		public Rectangle2D getStringBounds(String str) {
+			return this.baseFont.getStringBounds(str, this.frc);
+		}
+		
+		protected Glyph getGlyphForCodePoint(int codePoint) {
+			if(codePoint < 0 || codePoint >= this.glyphs.length) {
+				codePoint = this.unknownCharacterSymbol.codePointAt(0);
+			}
+			return this.glyphs[codePoint];
+		}
+		
+		public float[] getGlyphBounds(int codePoint) {
+			Glyph g = this.getGlyphForCodePoint(codePoint);
+			return new float[] {0, 0, g.w, g.h};
 		}
 		
 		public int[] getSupportedCodePoints() {
@@ -207,11 +301,19 @@ public class FontRender {
 		}
 		
 		protected double getLineHeightRender() {
-			return this.size - (this.size * 0.094875);//0.098
+			return this.size;// - (this.size * 0.094875);//0.098
 		}
 		
 		public void destroy() {
-			GL11.glDeleteTextures(this.texture);
+			if(this.texture != 0) {
+				GL11.glDeleteTextures(this.texture);
+				this.texture = 0;
+			}
+			this.disposed = true;
+		}
+		
+		public boolean isDisposed() {
+			return this.disposed;
 		}
 		
 		protected void save(File f) throws IOException {
@@ -330,7 +432,7 @@ public class FontRender {
 		}
 		int style = glFont.bold ? Font.BOLD : Font.PLAIN;
 		style = glFont.italic ? style | Font.ITALIC : style;
-		final BufferedImage img = renderFont(glFont.baseFont.deriveFont(style, glFont.size), glFont.glyphs, glFont.codePointsOrCharacters, glFont.unknownCharacterSymbol.codePointAt(0), glFont.antialiasing, glFont.usesFractionalMetrics, glFont.widerGlyphs);
+		final BufferedImage img = renderFont(glFont.baseFont.deriveFont(style, glFont.size), glFont, glFont.unknownCharacterSymbol.codePointAt(0), glFont.widerGlyphs);
 		glFont.texture = createTexture(img, false);
 		glFont.width = img.getWidth();
 		glFont.height = img.getHeight();
@@ -341,6 +443,9 @@ public class FontRender {
 		final int oldTex = glFont.texture;
 		try {
 			renderFont(glFont);
+			if(oldTex > 0) {
+				GL11.glDeleteTextures(oldTex);
+			}
 		} catch(Throwable ex) {
 			glFont.texture = oldTex;
 			//ex.printStackTrace();
@@ -348,11 +453,11 @@ public class FontRender {
 		}
 	}
 	
-	public static GLFont importTrueTypeFont(Font baseFont, int startingCodePoint, int endingCodePoint, int unknownCharSym, boolean codePointsOrCharacters, int size, boolean bold, boolean italic, boolean antialiasing, boolean usesFractionalMetrics, boolean widerGlyphs) {
-		final GLFont gf = new GLFont(baseFont.getFamily(), baseFont, startingCodePoint, endingCodePoint, unknownCharSym, codePointsOrCharacters, size, bold, italic, antialiasing, usesFractionalMetrics, widerGlyphs);
+	public static GLFont importTrueTypeFont(Font baseFont, int unknownCharSym, int size, boolean bold, boolean italic, boolean antialiasing, boolean usesFractionalMetrics, boolean widerGlyphs, boolean scaleTextSizeToMatchNativeRenderingSize) {
+		final GLFont gf = new GLFont(baseFont.getFamily(), baseFont, unknownCharSym, size, bold, italic, antialiasing, usesFractionalMetrics, widerGlyphs, scaleTextSizeToMatchNativeRenderingSize);
 		/*int style = bold ? Font.BOLD : Font.PLAIN;
 		style = italic ? style | Font.ITALIC : style;
-		final BufferedImage img = renderFont(baseFont.deriveFont(style, size), gf.glyphs, codePointsOrCharacters, unknownCharSym, antialiasing, usesFractionalMetrics, widerGlyphs);
+		final BufferedImage img = renderFont(baseFont.deriveFont(style, size), gf, unknownCharSym, antialiasing, usesFractionalMetrics, widerGlyphs);
 		gf.texture = createTexture(img, false);
 		gf.width = img.getWidth();
 		gf.height = img.getHeight();*/
@@ -360,27 +465,31 @@ public class FontRender {
 		return gf;
 	}
 	
-	public static GLFont importTrueTypeFont(InputStream in, int startingCodePoint, int endingCodePoint, int unknownCharSym, boolean codePointsOrCharacters, int size, boolean bold, boolean italic, boolean antialiasing, boolean usesFractionalMetrics, boolean widerGlyphs) throws IOException {
-		return importTrueTypeFont(importTrueTypeFont(in), startingCodePoint, endingCodePoint, unknownCharSym, codePointsOrCharacters, size, bold, italic, antialiasing, usesFractionalMetrics, widerGlyphs);
+	public static GLFont importTrueTypeFont(InputStream ttfIn, int unknownCharSym, int size, boolean bold, boolean italic, boolean antialiasing, boolean usesFractionalMetrics, boolean widerGlyphs, boolean scaleTextSizeToMatchNativeRenderingSize) throws IOException {
+		return importTrueTypeFont(importTrueTypeFont(ttfIn), unknownCharSym, size, bold, italic, antialiasing, usesFractionalMetrics, widerGlyphs, scaleTextSizeToMatchNativeRenderingSize);
+	}
+	
+	public static GLFont importTrueTypeFont(InputStream ttfIn, int unknownCharSym, int size, boolean bold, boolean italic, boolean antialiasing, boolean usesFractionalMetrics, boolean widerGlyphs) throws IOException {
+		return importTrueTypeFont(importTrueTypeFont(ttfIn), unknownCharSym, size, bold, italic, antialiasing, usesFractionalMetrics, widerGlyphs, true);
 	}
 	
 	public static GLFont importTrueTypeFont(InputStream ttfIn, int size, boolean bold, boolean italic, boolean antialiasing, boolean usesFractionalMetrics) throws IOException {
-		return importTrueTypeFont(importTrueTypeFont(ttfIn), 0, 256, '?', false, size, bold, italic, antialiasing, usesFractionalMetrics, false);
+		return importTrueTypeFont(ttfIn, '?', size, bold, italic, antialiasing, usesFractionalMetrics, false);
 	}
 	
-	public static GLFont createFont(String family, int startingCodePoint, int endingCodePoint, int unknownCharSym, boolean codePointsOrCharacters, int size, boolean bold, boolean italic, boolean antialiasing, boolean usesFractionalMetrics, boolean widerGlyphs) {
+	public static GLFont createFont(String family, int unknownCharSym, int size, boolean bold, boolean italic, boolean antialiasing, boolean usesFractionalMetrics, boolean widerGlyphs, boolean scaleTextSizeToMatchNativeRenderingSize) {
 		int style = bold ? Font.BOLD : Font.PLAIN;
 		style = italic ? style | Font.ITALIC : style;
 		
 		Font font = new Font(family, style, size);
-		GLFont gf = new GLFont(family, font, startingCodePoint, endingCodePoint, unknownCharSym, codePointsOrCharacters, size, bold, italic, antialiasing, usesFractionalMetrics, widerGlyphs);
+		GLFont gf = new GLFont(family, font, unknownCharSym, size, bold, italic, antialiasing, usesFractionalMetrics, widerGlyphs, scaleTextSizeToMatchNativeRenderingSize);
 		/*File f = new File(cacheDir, getFontFileName(family, size, bold));
 		if (f.exists()) {
 			gf.load(f);
 			return gf;
 		}*/
 		
-		BufferedImage img = renderFont(font, gf.glyphs, gf.codePointsOrCharacters, unknownCharSym, antialiasing, usesFractionalMetrics, widerGlyphs);
+		BufferedImage img = renderFont(font, gf, unknownCharSym, widerGlyphs);
 		gf.texture = createTexture(img, false);
 		gf.width = img.getWidth();
 		gf.height = img.getHeight();
@@ -388,16 +497,43 @@ public class FontRender {
 		return gf;
 	}
 	
-	public static GLFont createFont(String family, int size, boolean bold, boolean italic, boolean antialiasing, boolean usesFractionalMetrics) {
-		return createFont(family, 0, 256, '?', false, size, bold, italic, antialiasing, usesFractionalMetrics, false);
+	public static GLFont createFont(String family, int unknownCharSym, int size, boolean bold, boolean italic, boolean antialiasing, boolean usesFractionalMetrics, boolean widerGlyphs) {
+		return createFont(family, unknownCharSym, size, bold, italic, antialiasing, usesFractionalMetrics, widerGlyphs, true);
 	}
 	
-	public static final int nearestPowerOf2(int i) {
+	public static GLFont createFont(String family, int size, boolean bold, boolean italic, boolean antialiasing, boolean usesFractionalMetrics, boolean widerGlyphs, boolean scaleTextSizeToMatchNativeRenderingSize) {
+		return createFont(family, '?', size, bold, italic, antialiasing, usesFractionalMetrics, widerGlyphs, scaleTextSizeToMatchNativeRenderingSize);
+	}
+	
+	public static GLFont createFont(String family, int size, boolean bold, boolean italic, boolean antialiasing, boolean usesFractionalMetrics, boolean widerGlyphs) {
+		return createFont(family, '?', size, bold, italic, antialiasing, usesFractionalMetrics, widerGlyphs);
+	}
+	
+	public static GLFont createFont(String family, int size, boolean bold, boolean italic, boolean antialiasing, boolean usesFractionalMetrics) {
+		return createFont(family, '?', size, bold, italic, antialiasing, usesFractionalMetrics, false);
+	}
+	
+	public static final int nextPowerOf2(int i) {
 		int j = 2;
 		while(j < i) {
 			j *= 2;
 		}
 		return j;
+	}
+	
+	public static final int nearestPowerOf2(int i) {
+		int j = 2;
+		int lastJ = j;
+		while(j < i) {
+			lastJ = j;
+			j *= 2;
+		}
+		int diff1 = Math.abs(j - i);
+		int diff2 = Math.abs(lastJ - i);
+		if(diff1 == 0 || diff1 <= diff2) {
+			return j;
+		}
+		return lastJ;
 	}
 	
 	/** Returns the glyph's actual bounds.
@@ -409,72 +545,103 @@ public class FontRender {
 	 * @credit <a href=
 	 *         "https://coderanch.com/t/672937/java/Writing-text-AWT-bounds#:~:text=width%20in%20FontMetrics.-,Chris%20Poe,-Greenhorn">Chris
 	 *         Poe</a> */
-	public static int[] getActualGlyphBounds(Font font, FontRenderContext frc, String s) {
-		final GlyphVector gv = font.createGlyphVector(frc, s);
-		final Rectangle2D stringBoundsForPosition = gv.getOutline().getBounds2D();
-		return new int[] {Long.valueOf(Math.round(Math.floor(stringBoundsForPosition.getX()))).intValue(), Long.valueOf(Math.round(Math.floor(stringBoundsForPosition.getY()))).intValue(), Long.valueOf(Math.round(Math.ceil(stringBoundsForPosition.getWidth()))).intValue(), Long.valueOf(Math.round(Math.ceil(stringBoundsForPosition.getHeight()))).intValue()};
+	public static double[] getActualGlyphBounds(Font font, FontRenderContext frc, String s) {
+		final GlyphVector gv = font.createGlyphVector(frc, s);// Chris Poe
+		final Rectangle2D rect = gv.getOutline().getBounds2D();// Chris Poe
+		AffineTransform af = frc.getTransform();// Brian_Entei
+		double scaleX = af.getScaleX();// Brian_Entei
+		double scaleY = af.getScaleY();// Brian_Entei
+		return new double[] {rect.getX() * scaleX, rect.getY() * scaleY, rect.getWidth() * scaleX, rect.getHeight() * scaleY};
 	}
 	
-	public static BufferedImage renderFont(Font font, Glyph[] glyphs, boolean codePointsOrCharacters, int unknownCharSym, boolean antialiasing, boolean usesFractionalMetrics, boolean widerGlyphs) {
-		int charLength = glyphs.length;
-		FontRenderContext frc = new FontRenderContext(null, antialiasing, usesFractionalMetrics);
+	/** Returns the glyph's actual bounds.
+	 *
+	 * @param font The font
+	 * @param frc The FontRenderContext
+	 * @param s The string containing the glyph
+	 * @return The glyph's actual bounds
+	 * @credit <a href=
+	 *         "https://coderanch.com/t/672937/java/Writing-text-AWT-bounds#:~:text=width%20in%20FontMetrics.-,Chris%20Poe,-Greenhorn">Chris
+	 *         Poe</a> */
+	public static int[] getActualGlyphBoundsI(Font font, FontRenderContext frc, String s) {
+		double[] bounds = getActualGlyphBounds(font, frc, s);
+		return new int[] {Long.valueOf(Math.round(Math.floor(bounds[0]))).intValue(), Long.valueOf(Math.round(Math.floor(bounds[1]))).intValue(), Long.valueOf(Math.round(Math.ceil(bounds[2]))).intValue(), Long.valueOf(Math.round(Math.ceil(bounds[3]))).intValue()};
+	}
+	
+	public static BufferedImage renderFont(final Font font, GLFont glFont, int unknownCharSym, boolean widerGlyphs) {
+		int[] supportedGlyphs = glFont.getSupportedCodePoints();
+		int charLength = supportedGlyphs.length;
+		System.out.println("[" + glFont.getName() + "] ================= " + charLength + " =================");
+		FontRenderContext frc = glFont.frc;//new FontRenderContext(null, antialiasing, usesFractionalMetrics);
+		boolean antialiasing = glFont.antialiasing;
+		boolean usesFractionalMetrics = glFont.usesFractionalMetrics;
 		
-		int cl = nearestPowerOf2(charLength);
-		int imgw = cl;
-		if(font.getSize() >= 36) imgw <<= 1;
-		if(font.getSize() >= 72) imgw <<= 1;
+		int imgw, imgh;
+		int cl = nextPowerOf2(charLength);
+		{
+			if(cl > 16384) {
+				//throw new IllegalArgumentException("glyphs.length must not be larger than 16384! glyphs.length: ".concat(Integer.toString(glyphs.length)));
+				System.err.println("[" + glFont.getName() + "] ================= " + cl + " --> 16384 =================");
+				cl = 16384;
+			}
+			imgw = cl;
+			if(font.getSize() >= 36) imgw <<= 1;
+			if(font.getSize() >= 72) imgw <<= 1;
+			
+			imgw = Math.min(imgw, 16384);
+			imgh = Math.min(imgw * 2, 16384);
+			
+			imgw = imgh == imgw ? imgw / 2 : imgw;
+		}
+		/*
+		
+		java.lang.IllegalArgumentException: Dimensions (width=65536 height=131072) are too large
+			at java.desktop/java.awt.image.SampleModel.<init>(SampleModel.java:130)
+			at java.desktop/java.awt.image.ComponentSampleModel.<init>(ComponentSampleModel.java:140)
+			at java.desktop/java.awt.image.PixelInterleavedSampleModel.<init>(PixelInterleavedSampleModel.java:87)
+			at java.desktop/java.awt.image.Raster.createInterleavedRaster(Raster.java:642)
+			at java.desktop/java.awt.image.Raster.createInterleavedRaster(Raster.java:278)
+			at java.desktop/java.awt.image.Raster.createInterleavedRaster(Raster.java:212)
+			at com.gmail.br45entei.game.graphics.FontRender.createImage(FontRender.java:941)
+		
+		 */
 		
 		//BufferedImage img = new BufferedImage(imgw, charLength * 8, BufferedImage.TYPE_INT_ARGB);
-		BufferedImage img = createImage(imgw, cl * 2, true);
+		BufferedImage img = createImage(imgw, imgh, true);
 		Graphics2D g = (Graphics2D) img.getGraphics();
+		AffineTransform af = frc.getTransform();
 		
 		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, antialiasing ? RenderingHints.VALUE_TEXT_ANTIALIAS_ON : RenderingHints.VALUE_TEXT_ANTIALIAS_OFF);
 		g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, usesFractionalMetrics ? RenderingHints.VALUE_FRACTIONALMETRICS_ON : RenderingHints.VALUE_FRACTIONALMETRICS_OFF);
+		g.transform(af);
 		g.setColor(Color.WHITE);
 		g.setFont(font);
 		
-		int x = 0, y = 0, columnSize = 0;
-		Glyph unknownCharSymGlyph = null;
-		for(int i = 0; i < glyphs.length; i++) {
-			Glyph glyph = glyphs[i];
-			
-			String s = glyph.c;
-			final int cp = s.codePointAt(0);
-			if(!font.canDisplay(cp) && cp != '\r' && cp != '\n' && cp != '\t' && cp != '\b' && cp != ' ') {
-				s = codePointsOrCharacters ? new String(new int[] {unknownCharSym}, 0, 1) : new String(new char[] {(char) unknownCharSym});
-			}
-			Rectangle2D rect = font.getStringBounds(s, frc);
-			if((rect.getWidth() == 0.0 || rect.getHeight() == 0.0) && cp != unknownCharSym && cp != '\r' && cp != '\n' && cp != '\t' && cp != '\b' && cp != ' ') {
-				if(Window.DEVELOPMENT_ENVIRONMENT) {
-					System.err.println("FontRender.renderFont(...): \"".concat(new String(new int[] {cp}, 0, 1)).concat("\" (\\u").concat(Integer.toHexString(cp)).concat(") has either a width or height that is zero!"));
-				}
-				glyphs[i] = unknownCharSymGlyph;
+		int x = 0, y = 0, largestRowSize = 0, largestColumnSize = 0;
+		double gw, gh;
+		float glyphXSpacing = (font.getSize2D() / 18.0f) * ((float) af.getScaleX());
+		for(int cp : glFont.supportedCodePoints) {
+			if(cp < 0 || cp >= glFont.glyphs.length) {
 				continue;
 			}
-			if(cp == unknownCharSym) {
-				unknownCharSymGlyph = glyph;
-			}
-			LineMetrics lm = font.getLineMetrics(s, frc);
-			int[] bounds = getActualGlyphBounds(font, frc, s);
-			int xOffset = Math.min(0, bounds[0]);
-			int w = (widerGlyphs ? Math.max(bounds[2], (int) rect.getWidth()) : (int) rect.getWidth()) + 2;
-			//int h = bounds[3];
-			//int w = (int) rect.getWidth() + 2;
-			int h = (int) rect.getHeight() + 2;
+			Glyph glyph = glFont.glyphs[cp];
+			Rectangle2D rect = font.getStringBounds(glyph.c, frc);
+			gw = rect.getWidth() * af.getScaleX();
+			gh = rect.getHeight() * af.getScaleY();
+			LineMetrics lm = font.getLineMetrics(glyph.c, frc);
+			int[] bounds = getActualGlyphBoundsI(font, frc, glyph.c);
+			//int xOffset = Math.min(0, Math.round(bounds[0]));
+			int xOffset = widerGlyphs ? Math.min(0, Math.round(bounds[0])) : 0;
+			float w = (widerGlyphs ? Math.max(bounds[2], (float) gw) : (float) gw) + 2;
+			float h = ((float) gh) + glyphXSpacing;
 			
-			if(x + 2 + w + (widerGlyphs ? 4 : 2) > img.getWidth()) {
+			if(x + glyphXSpacing + w + (widerGlyphs ? 4 : 2) > img.getWidth()) {
 				x = 0;
-				y += columnSize;
-				columnSize = 0;
+				y += largestColumnSize;
+				largestColumnSize = 0;
 			}
 			if(cp != '\r' && cp != '\n' && cp != '\t' && cp != '\b' && cp != ' ') {
-				/*int xDiff = (int) (rect.getCenterX() - rect.getMinX());
-				if(xDiff > 0) {
-					g.drawString(s, x + xDiff, y + (int) lm.getAscent() + 1);
-					w += xDiff;
-				} else {*/
-				g.drawString(s, x - xOffset, y + (int) lm.getAscent() + 1);
-				//}
+				g.drawString(glyph.c, x - xOffset, y + (int) lm.getAscent() + 1);
 			} else {// Whitespace characters (except for space) have no actual width or height
 				if(cp != ' ') {
 					w = 0;
@@ -482,9 +649,9 @@ public class FontRender {
 				}
 			}
 			
-			glyph.x = x;
-			glyph.y = y;
-			glyph.w = (w + (widerGlyphs ? 4 : 0)) * (s.equals("\t") ? 4.0f : 1.0f);
+			glyph.x = x * ((float) af.getScaleX());
+			glyph.y = y * ((float) af.getScaleY());
+			glyph.w = (w + (widerGlyphs ? 4 : 0)) * (glyph.c.equals("\t") ? 4.0f : 1.0f);
 			glyph.h = h;
 			
 			/*if(Window.DEVELOPMENT_ENVIRONMENT && widerGlyphs) {
@@ -493,22 +660,91 @@ public class FontRender {
 				}
 			}*/
 			
-			w += widerGlyphs ? 4 : 2;
-			h += 2;
+			w += widerGlyphs ? (glyphXSpacing * 2.0) : glyphXSpacing;
+			h += glyphXSpacing;
 			
-			x += w + 2;
-			columnSize = Math.max(columnSize, h);
-		}
-		for(int i = 0; i < glyphs.length; i++) {
-			if(glyphs[i] == null) {
-				glyphs[i] = unknownCharSymGlyph;
-			}
+			x += w + glyphXSpacing;
+			largestRowSize = Math.max(largestRowSize, x);
+			largestColumnSize = Math.max(largestColumnSize, Math.round((float) Math.ceil(h)));
 		}
 		
-		y += columnSize;
+		final Glyph unknownCharSymGlyph = glFont.getUnknownGlyph();//glFont.glyphs[glFont.unknownCharacterSymbol.codePointAt(0)];
+		if(!"".isBlank()) {
+			Font f;
+			for(int i = 0; i < glFont.glyphs.length; i++) {
+				f = font;
+				Glyph glyph = glFont.glyphs[i];
+				
+				String s = glyph.c;
+				final int cp = s.codePointAt(0);
+				/*if(!f.canDisplay(cp) && cp != '\r' && cp != '\n' && cp != '\t' && cp != '\b' && cp != ' ') {
+					if(cp >= 0 && cp < 256) {
+						f = new Font(fallbackFontFamily, font.getSize(), font.getStyle());
+					} else {
+						s = new String(new int[] {unknownCharSym}, 0, 1);
+					}
+					//glFont.glyphs[i] = unknownCharSymGlyph;
+					continue;
+				}*/
+				g.setFont(f);
+				Rectangle2D rect = f.getStringBounds(s, frc);
+				/*if((rect.getWidth() == 0.0 || rect.getHeight() == 0.0) && cp != unknownCharSym && cp != '\r' && cp != '\n' && cp != '\t' && cp != '\b' && cp != ' ') {
+					if(Window.DEVELOPMENT_ENVIRONMENT) {
+						System.err.println("FontRender.renderFont(...): \"".concat(new String(new int[] {cp}, 0, 1)).concat("\" (\\u").concat(Integer.toHexString(cp)).concat(") has either a width or height that is zero!"));
+					}
+					//glFont.glyphs[i] = unknownCharSymGlyph;
+					continue;
+				}*/
+				LineMetrics lm = f.getLineMetrics(s, frc);
+				int[] bounds = getActualGlyphBoundsI(f, frc, s);
+				int xOffset = Math.min(0, bounds[0]);
+				int w = (widerGlyphs ? Math.max(bounds[2], (int) rect.getWidth()) : (int) rect.getWidth()) + 2;
+				int h = (int) rect.getHeight() + 2;
+				
+				if(x + 2 + w + (widerGlyphs ? 4 : 2) > img.getWidth()) {
+					x = 0;
+					y += largestColumnSize;
+					largestColumnSize = 0;
+				}
+				if(cp != '\r' && cp != '\n' && cp != '\t' && cp != '\b' && cp != ' ') {
+					g.drawString(s, x - xOffset, y + (int) lm.getAscent() + 1);
+				} else {// Whitespace characters (except for space) have no actual width or height
+					if(cp != ' ') {
+						w = 0;
+						h = 0;
+					}
+				}
+				
+				glyph.x = x;
+				glyph.y = y;
+				glyph.w = (w + (widerGlyphs ? 4 : 0)) * (s.equals("\t") ? 4.0f : 1.0f);
+				glyph.h = h;
+				
+				/*if(Window.DEVELOPMENT_ENVIRONMENT && widerGlyphs) {
+					if(cp != '\r' && cp != '\n' && cp != '\t' && cp != '\b' && cp != ' ') {
+						g.drawRect(Math.round(glyph.x), Math.round(glyph.y), Math.round(glyph.w) - 2, Math.round(glyph.h) - 2);
+					}
+				}*/
+				
+				w += widerGlyphs ? 4 : 2;
+				h += 2;
+				
+				x += w + 2;
+				largestColumnSize = Math.max(largestColumnSize, h);
+			}
+			g.setFont(font);
+		}
+		
+		/*for(int i = 0; i < glFont.glyphs.length; i++) {
+			if(glFont.glyphs[i] == null) {
+				glFont.glyphs[i] = unknownCharSymGlyph;
+			}
+		}*/
+		
+		y += largestColumnSize;
 		g.dispose();
 		
-		if(y < cl) {
+		/*if(y < cl) {
 			img = img.getSubimage(0, 0, img.getWidth(), cl);
 		} else if(y < cl * 2) {
 			img = img.getSubimage(0, 0, img.getWidth(), cl * 2);
@@ -516,7 +752,18 @@ public class FontRender {
 			img = img.getSubimage(0, 0, img.getWidth(), cl * 4);
 		} else if(y < cl * 8) {
 			img = img.getSubimage(0, 0, img.getWidth(), cl * 8);
+		}*/
+		
+		/*int width = Math.min(img.getWidth(), largestRowSize);
+		int height = Math.min(img.getHeight(), y);
+		
+		if(width < img.getWidth() || height < img.getHeight()) {
+			img = img.getSubimage(0, 0, width, height);
+		}*/
+		if(y < img.getHeight()) {
+			img = img.getSubimage(0, 0, img.getWidth(), y);
 		}
+		
 		return img;
 	}
 	
@@ -627,24 +874,31 @@ public class FontRender {
 		double sizeWidth = 0;
 		double sizeHeight = font.getLineHeight();
 		
+		double standardCharWidth = (font.size + 0.0) * 0.75;
+		
 		double smallestWidth = 0;
 		double smallestHeight = 0;
 		double largestWidth = sizeWidth;
 		double largestHeight = sizeHeight;
+		double lastCharWidth = 0;
 		
 		for(int cp : s.codePoints().toArray()) {
 			String c = new String(new int[] {cp}, 0, 1);
 			//String c = font.codePointsOrCharacters ? new String(new int[] {cp}, 0, 1) : new String(new char[] {(char) cp});
-			if(cp < font.charBegin || cp >= font.charEnd) {
+			if(cp < 0 || cp >= font.glyphs.length) {
 				if(!c.equals("\r") && !c.equals("\n") && !c.equals("\b") && !c.equals("\t") && !c.equals(" ")) {
 					c = font.unknownCharacterSymbol;
 				}
 				cp = font.unknownCharacterSymbol.codePointAt(0);
 			}
-			Glyph g = font.glyphs[cp - font.charBegin];
+			if(cp < 0 || cp >= font.glyphs.length) {
+				cp = font.unknownCharacterSymbol.codePointAt(0);
+			}
+			Glyph g = font.glyphs[cp];
+			//Glyph g = font.getGlyphFor(cp);
 			double w = Math.round(g.w - (font.widerGlyphs ? -0.0 : g.w * 0.15));
 			if(c.equals("\b")) {
-				sizeWidth -= w * scaleX;
+				sizeWidth -= lastCharWidth;//w * scaleX;
 				if(sizeWidth < smallestWidth) {
 					smallestWidth = sizeWidth;
 				} else if(sizeWidth > largestWidth) {
@@ -658,13 +912,16 @@ public class FontRender {
 				}
 				sizeWidth = 0;
 			} else if(c.equals("\n")) {
-				sizeHeight += Math.round(font.getLineHeightRender()) * scaleY;
+				sizeHeight += Math.round(font.getLineHeight()) * scaleY;
 				if(sizeHeight < smallestHeight) {
 					smallestHeight = sizeHeight;
 				} else if(sizeHeight > largestHeight) {
 					largestHeight = sizeHeight;
 				}
 			} else if(c.equals("\t")) {
+				if(Math.round(w) == 0.0) {
+					w = Math.round(standardCharWidth * 4.0);//Math.round(font.size * 0.5625 * 5.3333333333333333);
+				}
 				sizeWidth += w * scaleX;
 				if(sizeWidth < smallestWidth) {
 					smallestWidth = sizeWidth;
@@ -678,6 +935,9 @@ public class FontRender {
 				} else if(sizeWidth > largestWidth) {
 					largestWidth = sizeWidth;
 				}
+			}
+			if(!c.equals("\b") && !c.equals("\r") && !c.equals("\n")) {
+				lastCharWidth = w * scaleX;
 			}
 		}
 		return new GLFontBounds(x, y, smallestWidth, smallestHeight, largestWidth, largestHeight);
@@ -713,10 +973,13 @@ public class FontRender {
 		double sizeWidth = 0;
 		double sizeHeight = font.getLineHeight();
 		
+		double standardCharWidth = (font.size + 0.0) * 0.75;
+		
 		double smallestWidth = 0;
 		double smallestHeight = 0;
 		double largestWidth = sizeWidth;
 		double largestHeight = sizeHeight;
+		double lastCharWidth = 0;
 		/*for(int i = 0, n = s.length(); i < n; i++) {
 			char c = s.charAt(i);
 			if(c < charBegin || c > charEnd) c = '?';
@@ -724,17 +987,21 @@ public class FontRender {
 		for(int cp : s.codePoints().toArray()) {
 			String c = new String(new int[] {cp}, 0, 1);
 			//String c = font.codePointsOrCharacters ? new String(new int[] {cp}, 0, 1) : new String(new char[] {(char) cp});
-			if(cp < font.charBegin || cp >= font.charEnd) {
+			if(cp < 0 || cp >= font.glyphs.length) {
 				if(!c.equals("\r") && !c.equals("\n") && !c.equals("\b") && !c.equals("\t") && !c.equals(" ")) {
 					c = font.unknownCharacterSymbol;
 				}
 				cp = font.unknownCharacterSymbol.codePointAt(0);
 			}
-			Glyph g = font.glyphs[cp - font.charBegin];
+			if(cp < 0 || cp >= font.glyphs.length) {
+				cp = font.unknownCharacterSymbol.codePointAt(0);
+			}
+			Glyph g = font.glyphs[cp];
+			//Glyph g = font.getGlyphFor(cp);
 			
 			double w = Math.round(g.w - (font.widerGlyphs ? -0.0 : g.w * 0.15));
 			if(c.equals("\b")) {
-				GL11.glTranslated(-w, 0, 0);
+				GL11.glTranslated(-lastCharWidth, 0, 0);
 				lineWidth -= w;
 				sizeWidth -= w;
 				if(sizeWidth < smallestWidth) {
@@ -752,7 +1019,7 @@ public class FontRender {
 				lineWidth = 0;
 				sizeWidth = 0;
 			} else if(c.equals("\n")) {
-				double h = Math.round(font.getLineHeightRender());
+				double h = Math.round(font.getLineHeight());
 				GL11.glTranslated(0, h, 0);
 				//lineHeight += h;
 				sizeHeight += h;
@@ -762,6 +1029,9 @@ public class FontRender {
 					largestHeight = sizeHeight;
 				}
 			} else if(c.equals("\t")) {
+				if(Math.round(w) == 0.0) {
+					w = Math.round(standardCharWidth * 4.0);//Math.round(font.size * 0.5625 * 5.3333333333333333);
+				}
 				GL11.glTranslated(w, 0, 0);
 				lineWidth += w;
 				sizeWidth += w;
@@ -781,6 +1051,9 @@ public class FontRender {
 					largestWidth = sizeWidth;
 				}
 			}
+			if(!c.equals("\b") && !c.equals("\r") && !c.equals("\n")) {
+				lastCharWidth = w;
+			}
 		}
 		GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
 		GL11.glDisable(GL11.GL_TEXTURE_2D);
@@ -793,6 +1066,8 @@ public class FontRender {
 		GLUtil.glPopCullMode();
 		return new GLFontBounds(x, y, smallestWidth, smallestHeight, largestWidth, largestHeight);
 	}
+	
+	protected static final int test = '\uE230';
 	
 	private static ColorModel glColorModel = new ComponentColorModel(ColorSpace.getInstance(ColorSpace.CS_sRGB), new int[] {8, 8, 8, 0}, false, false, Transparency.OPAQUE, DataBuffer.TYPE_BYTE);
 	private static ColorModel glColorModelAlpha = new ComponentColorModel(ColorSpace.getInstance(ColorSpace.CS_sRGB), new int[] {8, 8, 8, 8}, true, false, Transparency.OPAQUE, DataBuffer.TYPE_BYTE);

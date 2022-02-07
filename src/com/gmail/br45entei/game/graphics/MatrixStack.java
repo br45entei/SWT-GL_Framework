@@ -1,6 +1,6 @@
 /*******************************************************************************
  * 
- * Copyright © 2021 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2022 Brian_Entei (br45entei@gmail.com)
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -33,7 +33,7 @@ import org.lwjgl.opengl.GL11;
  * functions.
  * 
  * @since 1.0
- * @author Brian_Entei */
+ * @author Brian_Entei &ltbr45entei&#064;gmail.com&gt; */
 public strictfp class MatrixStack {
 	
 	/** Tests this {@link MatrixStack} class's various methods for accuracy.
@@ -883,7 +883,7 @@ public strictfp class MatrixStack {
 	
 	/** Enum class used to depict the various rotation orders used by
 	 *
-	 * @author Brian_Entei */
+	 * @author Brian_Entei &ltbr45entei&#064;gmail.com&gt; */
 	public static enum RotationOrder {
 		/** This rotates the existing matrix by pitch, then yaw, then roll. */
 		XYZ,

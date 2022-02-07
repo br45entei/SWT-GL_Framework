@@ -1,6 +1,6 @@
 /*******************************************************************************
  * 
- * Copyright © 2021 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2022 Brian_Entei (br45entei@gmail.com)
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -127,7 +127,7 @@ public class VideoHelper extends Thread {
 	/** Class used to store GL frame data and convert it into a BufferedImage
 	 * ready for encoding when run
 	 *
-	 * @author Brian_Entei */
+	 * @author Brian_Entei &ltbr45entei&#064;gmail.com&gt; */
 	protected static final class VideoFrameTask {
 		
 		private static volatile long lastGC = System.currentTimeMillis();

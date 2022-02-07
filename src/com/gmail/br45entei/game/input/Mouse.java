@@ -1,6 +1,6 @@
 /*******************************************************************************
  * 
- * Copyright © 2021 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2022 Brian_Entei (br45entei@gmail.com)
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -32,6 +32,7 @@ import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
 import java.awt.MouseInfo;
 import java.awt.Point;
+import java.awt.PointerInfo;
 import java.awt.Rectangle;
 import java.awt.Robot;
 import java.io.IOException;
@@ -47,13 +48,13 @@ import org.eclipse.swt.SWT;
 import org.eclipse.swt.SWTException;
 import org.eclipse.swt.events.ControlEvent;
 import org.eclipse.swt.events.ControlListener;
-import org.eclipse.swt.events.FocusEvent;
-import org.eclipse.swt.events.FocusListener;
 import org.eclipse.swt.events.MouseAdapter;
 import org.eclipse.swt.events.MouseEvent;
 import org.eclipse.swt.events.MouseListener;
 import org.eclipse.swt.events.MouseMoveListener;
 import org.eclipse.swt.events.MouseWheelListener;
+import org.eclipse.swt.events.ShellEvent;
+import org.eclipse.swt.events.ShellListener;
 import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.Cursor;
 import org.eclipse.swt.graphics.ImageData;
@@ -61,13 +62,14 @@ import org.eclipse.swt.graphics.PaletteData;
 import org.eclipse.swt.graphics.RGB;
 import org.eclipse.swt.widgets.Canvas;
 import org.eclipse.swt.widgets.Display;
+import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.TypedListener;
 
 /** This class provides a simple way to retrieve input from and manage the
  * mouse and system cursor.
  *
  * @since 1.0
- * @author Brian_Entei */
+ * @author Brian_Entei &ltbr45entei&#064;gmail.com&gt; */
 public class Mouse {
 	
 	/** The left mouse button */
@@ -365,10 +367,8 @@ public class Mouse {
 				Point newLoc = new Point(mLoc);
 				newLoc.x -= topLeft.x;
 				newLoc.y -= topLeft.y;
-				Integer oldX = Integer.valueOf(oldLoc.x),
-						oldY = Integer.valueOf(oldLoc.y);
-				Integer newX = Integer.valueOf(newLoc.x),
-						newY = Integer.valueOf(newLoc.y);
+				Integer oldX = Integer.valueOf(oldLoc.x), oldY = Integer.valueOf(oldLoc.y);
+				Integer newX = Integer.valueOf(newLoc.x), newY = Integer.valueOf(newLoc.y);
 				
 				for(InputCallback listener : listeners) {
 					try {
@@ -784,7 +784,7 @@ public class Mouse {
 			list.add(mouseVerticalWheelListener);
 			list.add(mouseHorizontalWheelListener);
 			
-			FocusListener focusListener = new FocusListener() {
+			/*FocusListener focusListener = new FocusListener() {
 				@Override
 				public void focusLost(FocusEvent e) {
 					cursorCanvasFocus = false;
@@ -798,7 +798,40 @@ public class Mouse {
 				}
 			};
 			canvas.addFocusListener(focusListener);
-			list.add(focusListener);
+			list.add(focusListener);*/
+			
+			Shell shell = canvas.getShell();
+			ShellListener shellListener = new ShellListener() {
+				
+				@Override
+				public void shellIconified(ShellEvent e) {
+				}
+				
+				@Override
+				public void shellDeiconified(ShellEvent e) {
+				}
+				
+				@Override
+				public void shellDeactivated(ShellEvent e) {
+					if(shell.getDisplay().getActiveShell() == shell || shell.isFocusControl()) {
+						return;
+					}
+					cursorCanvasFocus = false;
+					cursorCanvasFocusLostTime = System.currentTimeMillis();
+				}
+				
+				@Override
+				public void shellClosed(ShellEvent e) {
+				}
+				
+				@Override
+				public void shellActivated(ShellEvent e) {
+					cursorCanvasFocusGainedTime = System.currentTimeMillis();
+					cursorCanvasFocus = true;
+				}
+			};
+			shell.addShellListener(shellListener);
+			list.add(shellListener);
 			
 			ControlListener controlListener = new ControlListener() {
 				@Override
@@ -883,7 +916,14 @@ public class Mouse {
 	 * @return A point containing the location of the system cursor on screen
 	 *         (in screen-relative coordinates) */
 	public static final Point getLocation() {
-		return MouseInfo.getPointerInfo().getLocation();
+		PointerInfo info = MouseInfo.getPointerInfo();
+		if(info == null) {
+			if(captured) {
+				return getCursorCanvasCenter();
+			}
+			return new Point(lastFreeX, lastFreeY);
+		}
+		return info.getLocation();
 	}
 	
 	/** Returns the location of the system cursor on screen.

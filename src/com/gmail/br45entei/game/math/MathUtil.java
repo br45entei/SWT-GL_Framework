@@ -1,6 +1,6 @@
 /*******************************************************************************
  * 
- * Copyright © 2021 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2022 Brian_Entei (br45entei@gmail.com)
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -39,7 +39,7 @@ import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
 
 /** @since 1.0
- * @author Brian_Entei */
+ * @author Brian_Entei &ltbr45entei&#064;gmail.com&gt; */
 public final strictfp class MathUtil {
 	
 	/** Allows you to round decimals to the nearest thousandth(0.00) */
@@ -196,11 +196,12 @@ public final strictfp class MathUtil {
 		if(Double.doubleToLongBits(decimal) == Double.doubleToLongBits(-0.0)) {
 			return "-0" + (numOfPlaces != 0 ? "." + padStr : "");
 		}
-		numOfPlaces += 1;
+		//numOfPlaces += 1;// Why is this here???
 		String whole = Double.isFinite(decimal) ? StringUtil.getWholePartOf(decimal) : Double.isInfinite(decimal) ? "Infinity" : "NaN";
 		if(numOfPlaces == 0) {
 			return whole;
 		}
+		numOfPlaces += 1;// Why does this need to be incremented?
 		
 		if(pad) {
 			int checkWholeLength = whole.length();
@@ -261,7 +262,7 @@ public final strictfp class MathUtil {
 			d = d.substring(0, numOfPlaces - 1);
 		}
 		//System.out.println("\"" + whole + "." + d + "\"");
-		return whole + "." + d;//(d.isEmpty() ? "" : ("." + d));
+		return whole + (numOfPlaces != 0 ? ("." + d) : "");//(d.isEmpty() ? "" : ("." + d));
 	}
 	
 	/** @param decimal The decimal to limit

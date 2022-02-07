@@ -1,6 +1,6 @@
 /*******************************************************************************
  * 
- * Copyright © 2021 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2022 Brian_Entei (br45entei@gmail.com)
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -1676,6 +1676,18 @@ public class GLUtil {
 	
 	public static final strictfp double[] modulus(double[] v1, double[] v2) {
 		return modulus(v1, v2, false);
+	}
+	
+	public static final strictfp double modulus(double a, double b, boolean copySign) {
+		double result = a % b;
+		if(copySign) {
+			if(b > 0 && result < 0) {
+				result += b;
+			} else if(b < 0 && result > 0) {
+				result -= b;
+			}
+		}
+		return result;
 	}
 	
 	public static final strictfp double[] modulus(double[] v, double value, boolean copySign) {

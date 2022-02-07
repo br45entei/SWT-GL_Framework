@@ -4,7 +4,7 @@ import org.lwjgl.util.vector.Vector3f;
 import org.lwjgl.util.vector.Vector4f;
 
 /** @author theBennyBox
- * @author Brian_Entei */
+ * @author Brian_Entei &ltbr45entei&#064;gmail.com&gt; */
 @SuppressWarnings("javadoc")
 public final strictfp class Quaternion {
 	private float x;

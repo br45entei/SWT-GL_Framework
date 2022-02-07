@@ -1,6 +1,6 @@
 /*******************************************************************************
  * 
- * Copyright © 2021 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2022 Brian_Entei (br45entei@gmail.com)
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -61,8 +61,7 @@ public class YPRCamera {
 	public volatile int vpX = 0, vpY = 0, vpWidth = 800, vpHeight = 600;
 	private volatile double fovy = 45.0/*70.0*/;
 	public volatile double zNear = 0.01, zFar = 1000.0;
-	private volatile double lastFovy = this.fovy, lastZNear = this.zNear,
-			lastZFar = this.zFar;
+	private volatile double lastFovy = this.fovy, lastZNear = this.zNear, lastZFar = this.zFar;
 	public volatile double x, y, z, zDist;
 	public volatile double vX, vY, vZ, aX, aY, aZ;
 	public volatile double tX = 75, tY = 75, tZ = 75;
@@ -520,6 +519,14 @@ public class YPRCamera {
 		this.zFar = 1000.0f;
 		this.fovy = this.fovy == this.targetFovy || this.fovy == this.zoomFovy ? this.fovy : this.targetFovy;
 		return this;
+	}
+	
+	/** Convenience method.<br>
+	 * Returns this camera's rotation angles (yaw, pitch, and roll, in that order).
+	 *
+	 * @return This camera's rotation */
+	public final double[] getRotation() {
+		return new double[] {this.yaw, this.pitch, this.roll};
 	}
 	
 	/** @return This camera's field of view setting */

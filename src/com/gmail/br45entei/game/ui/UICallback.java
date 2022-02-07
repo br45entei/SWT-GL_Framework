@@ -1,6 +1,6 @@
 /*******************************************************************************
  * 
- * Copyright © 2021 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2022 Brian_Entei (br45entei@gmail.com)
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -29,6 +29,7 @@ import com.gmail.br45entei.game.input.InputCallback;
 import com.gmail.br45entei.game.input.Keyboard;
 import com.gmail.br45entei.game.input.Keyboard.Keys;
 import com.gmail.br45entei.game.input.Mouse;
+import com.gmail.br45entei.util.StringUtil;
 
 import java.util.Objects;
 
@@ -171,38 +172,45 @@ public class UICallback implements InputCallback {
 		if(this.window.isClosed() || !Mouse.shouldIListenToClickEvents()) {
 			return;
 		}
-		if(key == Keys.VK_ESCAPE) {
-			if(Mouse.isCaptured()) {
-				Mouse.setCaptured(false);
-			} else if(Mouse.getTimeSinceReleased() > 160) {
-				if(this.window.isFullscreen()) {
-					this.window.setFullscreen(false);
+		if(key == Keys.VK_PAUSE_BREAK) {
+			this.window.getGLThread().toggleRenderingPaused();
+		}
+		if(!Keyboard.isKeyDown(Keys.VK_ALT)) {
+			if(key == Keys.VK_ESCAPE) {
+				if(Mouse.isCaptured()) {
+					Mouse.setCaptured(false);
+				} else if(Mouse.getTimeSinceReleased() > 160) {
+					if(this.window.isFullscreen()) {
+						this.window.setFullscreen(false);
+					} else {
+						if(this.window.shouldCloseWindowOnEscape()) {
+							this.window.close();
+						}
+					}
+				}
+				return;
+			}
+			if(key == Keys.VK_F2) {
+				if(Keyboard.isKeyDown(Keys.VK_SHIFT)) {
+					if(this.window.glThread.isRecording() || this.window.glThread.isRecordingStartingUp()) {
+						this.window.glThread.stopRecording((v) -> Boolean.valueOf(this.window.swtLoop()));
+					} else {
+						this.window.glThread.startRecording(this.window.getViewport());
+					}
 				} else {
-					this.window.close();
-					return;
+					this.window.glThread.takeScreenshot();
 				}
 			}
-		}
-		if(key == Keys.VK_F2) {
-			if(Keyboard.isKeyDown(Keys.VK_SHIFT)) {
-				if(this.window.glThread.isRecording() || this.window.glThread.isRecordingStartingUp()) {
-					this.window.glThread.stopRecording((v) -> Boolean.valueOf(this.window.swtLoop()));
-				} else {
-					this.window.glThread.startRecording(this.window.getViewport());
-				}
-			} else {
-				this.window.glThread.takeScreenshot();
+			if(key == Keys.VK_F11) {
+				this.window.toggleFullscreen();
 			}
-		}
-		if(key == Keys.VK_F11) {
-			this.window.toggleFullscreen();
-		}
-		
-		if(key == Keys.VK_V) {
-			if(Keyboard.isKeyDown(Keys.VK_SHIFT)) {
-				//TODO add dialog for adjusting frequency from the LWJGL_SWT_Demo
-			} else {
-				this.window.toggleVsyncEnabled();
+			
+			if(key == Keys.VK_V) {
+				if(Keyboard.isKeyDown(Keys.VK_SHIFT)) {
+					//TODO add dialog for adjusting frequency from the LWJGL_SWT_Demo
+				} else {
+					this.window.toggleVsyncEnabled();
+				}
 			}
 		}
 		
@@ -319,7 +327,7 @@ public class UICallback implements InputCallback {
 		}
 		String parameters = sb.toString();
 		System.err.println(String.format("The Window's built-in InputCallback threw an exception while executing method %s(%s): ", method, parameters));
-		ex.printStackTrace(System.err);
+		System.err.println(StringUtil.throwableToStr(ex));
 		System.err.flush();
 		return true;
 	}

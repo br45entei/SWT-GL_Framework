@@ -12,7 +12,7 @@ import org.lwjgl.util.vector.Vector3f;
  *
  * @since 1.0
  * @author theBennyBox
- * @author Brian_Entei */
+ * @author Brian_Entei &ltbr45entei&#064;gmail.com&gt; */
 @Deprecated
 public final strictfp class Matrix4f {
 	private float[][] m;

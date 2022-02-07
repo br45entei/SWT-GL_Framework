@@ -1,6 +1,6 @@
 /*******************************************************************************
  * 
- * Copyright © 2021 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2022 Brian_Entei (br45entei@gmail.com)
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -28,12 +28,14 @@ import com.gmail.br45entei.game.ui.MenuProvider;
 import com.gmail.br45entei.game.ui.Window;
 import com.gmail.br45entei.thread.ThreadType;
 import com.gmail.br45entei.thread.UsedBy;
+import com.gmail.br45entei.util.StringUtil;
 
 import java.util.Objects;
 
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Menu;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.swt.GLCanvas;
 
 /** Renderer is an interface which defines OpenGL related methods which are
  * then called by the {@link GLThread}'s render loop.
@@ -91,9 +93,11 @@ public interface Renderer {
 	 * @param deltaTime The delta time of the current frame from the last
 	 *            (with a framerate of <tt>60.0</tt>, this would typically
 	 *            be around <tt>0.0166667</tt>)
+	 * @param width The {@link GLCanvas}'s current {@link Window#getWidth() width}
+	 * @param height The {@link GLCanvas}'s current {@link Window#getHeight() height}
 	 * @see ThreadType#OpenGL */
 	@UsedBy(ThreadType.OpenGL)
-	public void render(double deltaTime);
+	public void render(double deltaTime, int width, int height);
 	
 	/** Called by the {@link GLThread} when this {@link Renderer} has been
 	 * unselected for rendering.
@@ -102,7 +106,9 @@ public interface Renderer {
 	@UsedBy(ThreadType.OpenGL)
 	public void onDeselected();
 	
-	/** Called by the {@link GLThread} when it is about to stop running, and is
+	/** &#064;{@link UsedBy}({@link UsedBy#value() value}={{@link ThreadType#OpenGL OpenGL}})<br>
+	 * <br>
+	 * Called by the {@link GLThread} when it is about to stop running, and is
 	 * getting ready to destroy the GL context.<br>
 	 * <br>
 	 * After this method has been called, {@link #isInitialized()} should return
@@ -143,6 +149,7 @@ public interface Renderer {
 		}
 		String parameters = sb.toString();
 		System.err.println(String.format("The renderer \"%s\" threw an exception while executing method %s(%s)!", this.getName(), method, parameters));
+		System.err.println(StringUtil.throwableToStr(ex));
 		System.err.flush();
 		return false;
 	}*///@formatter:on
@@ -158,7 +165,7 @@ public interface Renderer {
 	 * unless you are absolutely sure vertical sync is enabled (with a refresh
 	 * rate of at most 60).
 	 *
-	 * @author Brian_Entei */
+	 * @author Brian_Entei &ltbr45entei&#064;gmail.com&gt; */
 	public static class ColorDemo implements Renderer, MenuProvider {
 		
 		boolean initialized = false;
@@ -200,7 +207,7 @@ public interface Renderer {
 		}
 		
 		@Override
-		public void render(double deltaTime) {
+		public void render(double deltaTime, int width, int height) {
 			/*if((System.currentTimeMillis() % 1000) <= 16) {
 				Window.getWindow().getGLThread().fpsLog.addLast(String.format("deltaTime: %s", CodeUtil.limitDecimalNoRounding(deltaTime, 9, true)));
 			}*/
@@ -315,8 +322,8 @@ public interface Renderer {
 				sb.append(toString).append(i + 1 == params.length ? "" : ", ");
 			}
 			String parameters = sb.toString();
-			System.err.print(String.format("The ColorDemo renderer threw an exception while executing method %s(%s): ", method, parameters));
-			ex.printStackTrace(System.err);
+			System.err.print(String.format("The ColorDemo renderer threw an exception while executing method %s(%s):", method, parameters));
+			System.err.println(StringUtil.throwableToStr(ex));
 			System.err.flush();
 			return true;
 		}

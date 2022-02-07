@@ -1,6 +1,6 @@
 /*******************************************************************************
  * 
- * Copyright © 2021 Brian_Entei (br45entei@gmail.com)
+ * Copyright © 2022 Brian_Entei (br45entei@gmail.com)
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -49,7 +49,7 @@ import org.lwjgl.opengl.GL11;
  * screenshot while also taking some of the load off of the OpenGL thread.
  * 
  * @since 1.0
- * @author Brian_Entei */
+ * @author Brian_Entei &ltbr45entei&#064;gmail.com&gt; */
 public class ScreenshotHelper extends Thread {
 	
 	private static final File saveFolder;
@@ -218,7 +218,7 @@ public class ScreenshotHelper extends Thread {
 	
 	/** Class used to store screenshot data and save it when run
 	 *
-	 * @author Brian_Entei */
+	 * @author Brian_Entei &ltbr45entei&#064;gmail.com&gt; */
 	public static final class ScreenshotTask implements Runnable {
 		
 		private static volatile ArrayList<ScreenshotTask> instances = new ArrayList<>();
